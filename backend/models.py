@@ -77,3 +77,16 @@ class SkillsGapIn(BaseModel):
     college_tier: str = ""
     branch: str = ""
     cgpa: float = 0.0
+
+
+class CompanyMatchIn(BaseModel):
+    college: str = ""
+    college_tier: str = ""
+    branch: str = ""
+    cgpa: float = 0.0
+    skills: List[str] = []
+    target_role: str = ""
+    projects_count: str = "0"
+    has_internship: str = "no"
+    internship_months: str = ""
+    leetcode_count: str = "0"

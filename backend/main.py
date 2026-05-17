@@ -16,7 +16,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn
+from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn
 
 load_dotenv()
 
@@ -429,6 +429,98 @@ async def skills_gap(payload: SkillsGapIn):
         )
         raw = completion.choices[0].message.content or ""
         print(f"[DEBUG] Groq skill gap response: {raw[:500]!r}")
+        return parse_groq_json(raw)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/companies/match")
+async def companies_match(payload: CompanyMatchIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    skills_str = ", ".join(payload.skills) if payload.skills else "None listed"
+    internship_str = (
+        f"Yes ({payload.internship_months} months)"
+        if payload.has_internship == "yes"
+        else "No"
+    )
+
+    prompt = (
+        "You are a placement expert with deep knowledge of which companies hire from Indian engineering "
+        "colleges in 2025. You know their exact hiring criteria, CGPA cutoffs, and which college tiers "
+        "they visit.\n\n"
+        "Given this student profile, return a list of 15 companies they can realistically target — "
+        "mix of on-campus and off-campus.\n\n"
+        "Student Profile:\n"
+        f"- College: {payload.college}\n"
+        f"- College Tier: {payload.college_tier or 'Unknown'}\n"
+        f"- Branch: {payload.branch}\n"
+        f"- CGPA: {payload.cgpa}/10\n"
+        f"- Skills: {skills_str}\n"
+        f"- Target Role: {payload.target_role}\n"
+        f"- Projects: {payload.projects_count}\n"
+        f"- Internship: {internship_str}\n"
+        f"- LeetCode: {payload.leetcode_count} problems solved\n\n"
+        'Return a JSON object with exactly this structure:\n'
+        '{\n'
+        '  "companies": [\n'
+        '    {\n'
+        '      "name": "Company name",\n'
+        '      "type": "Service" or "Product" or "Startup",\n'
+        '      "match_score": integer 0-100,\n'
+        '      "cgpa_cutoff": "e.g. 6.0" or "No cutoff",\n'
+        '      "visits_college_tier": "Tier 1 only" or "Tier 1 & 2" or "All tiers",\n'
+        '      "likely_to_visit": boolean,\n'
+        '      "hiring_mode": "On Campus" or "Off Campus" or "Both",\n'
+        '      "role_offered": "specific role name e.g. Systems Engineer, SDE-1",\n'
+        '      "package_range": "e.g. 3.5-4.5 LPA",\n'
+        '      "why_match": "one sentence explaining why this student matches",\n'
+        '      "biggest_gap": "one sentence on what could disqualify them",\n'
+        '      "apply_link": "direct careers page URL"\n'
+        '    }\n'
+        '  ],\n'
+        '  "summary": "2-3 sentences on their overall company targeting strategy"\n'
+        '}\n\n'
+        "Rules:\n"
+        "- Be realistic about CGPA cutoffs — TCS, Infosys, Wipro require minimum 6.0-6.5. "
+        "Accenture requires 6.5+. Product companies generally require 7.5+.\n"
+        "- Match score should reflect how well their FULL profile matches — not just CGPA.\n"
+        "- Include a mix: 5-6 service companies, 4-5 mid-tier product companies, 3-4 startups.\n"
+        "- For Tier 2/3 colleges, be honest that FAANG is unlikely on-campus but possible "
+        "off-campus with strong DSA.\n"
+        "- Use real 2025 package ranges for Indian fresher market.\n"
+        "- Apply links must be real careers pages.\n\n"
+        "Match score rules — be harsh and realistic:\n"
+        "- Google/Microsoft/Amazon/Meta/Apple: max score 40 for Tier 2 students unless they "
+        "have LeetCode 200+, strong projects, and CGPA 8.5+. These are off-campus only for "
+        "Tier 2 and require exceptional profiles.\n"
+        "- Product companies (Flipkart, Swiggy, Razorpay, CRED, Zepto): max 60 for Tier 2 "
+        "students with average profiles. Need strong DSA + projects to score higher.\n"
+        "- Mid-tier product (Zoho, Freshworks, Chargebee, Postman): realistic for Tier 2, "
+        "score 50-75 based on skills match.\n"
+        "- Service companies (TCS, Infosys, Wipro, Accenture, HCL, Cognizant): most realistic "
+        "for Tier 2 students with 6.5+ CGPA, score 65-85.\n"
+        "- Startups: variable, score based on skill match only since they care less about CGPA "
+        "and college.\n"
+        "- If student CGPA is below the company cutoff, match score cannot exceed 35 regardless "
+        "of other factors.\n"
+        "- If student has 0 projects, reduce any product/startup score by 20 points.\n"
+        "- If student has LeetCode 0, reduce product company scores by 15 points.\n"
+        "- A match score of 90+ should be extremely rare and only for service companies where "
+        "the student clearly meets all criteria.\n\n"
+        "Only return valid JSON with no markdown formatting."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq company match response: {raw[:500]!r}")
         return parse_groq_json(raw)
     except Exception as e:
         traceback.print_exc()
