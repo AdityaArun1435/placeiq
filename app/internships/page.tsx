@@ -25,7 +25,10 @@ type Internship = {
   days_ago: number | null;
   hiring_status: string | null;
   match_score: number;
+  source: "Adzuna" | "Internshala" | "Wellfound";
 };
+
+type SourceCounts = { Adzuna?: number; Internshala?: number; Wellfound?: number };
 
 type Platform = {
   platform: string;
@@ -261,6 +264,12 @@ const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [
   },
 ];
 
+function sourceBadge(source: string) {
+  if (source === "Internshala") return "bg-orange-500/15 text-orange-400 border-orange-500/30";
+  if (source === "Wellfound")   return "bg-green-500/15 text-green-400 border-green-500/30";
+  return "bg-blue-500/15 text-blue-400 border-blue-500/30";
+}
+
 function matchColor(score: number) {
   if (score >= 60) return "bg-green-500";
   if (score >= 30) return "bg-yellow-500";
@@ -310,6 +319,7 @@ export default function Internships() {
 
   // Listings state
   const [internships, setInternships] = useState<Internship[]>([]);
+  const [sourceCounts, setSourceCounts] = useState<SourceCounts>({});
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
   const [filterRole, setFilterRole] = useState("");
@@ -348,6 +358,7 @@ export default function Internships() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setInternships(data.internships || []);
+      setSourceCounts(data.source_counts || {});
     } catch (e: unknown) {
       setListingsError(e instanceof Error ? e.message : "Failed to load internships");
     } finally {
@@ -516,7 +527,7 @@ export default function Internships() {
             {listingsLoading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-400 text-sm">Fetching live internship listings from Adzuna India...</p>
+                <p className="text-gray-400 text-sm">Fetching live internship listings from Adzuna, Internshala, and Wellfound...</p>
               </div>
             )}
 
@@ -528,16 +539,33 @@ export default function Internships() {
 
             {!listingsLoading && !listingsError && (
               <>
-                <p className="text-gray-400 text-sm mb-4">
-                  {filteredInternships.length} internship{filteredInternships.length !== 1 ? "s" : ""} found
-                  {internships.length !== filteredInternships.length ? ` (filtered from ${internships.length})` : ""}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <p className="text-gray-400 text-sm">
+                    {filteredInternships.length} internship{filteredInternships.length !== 1 ? "s" : ""} found
+                    {internships.length !== filteredInternships.length ? ` (filtered from ${internships.length})` : ""}
+                    {(sourceCounts.Internshala ?? 0) > 0 && ` — ${sourceCounts.Internshala} from Internshala`}
+                    {(sourceCounts.Adzuna ?? 0) > 0 && ` — ${sourceCounts.Adzuna} from Adzuna`}
+                    {(sourceCounts.Wellfound ?? 0) > 0 && ` — ${sourceCounts.Wellfound} from Wellfound`}
+                  </p>
+                </div>
+                {internships.length > 0 && (sourceCounts.Internshala ?? 0) === 0 && (sourceCounts.Wellfound ?? 0) === 0 && (
+                  <div className="mb-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3 text-sm text-yellow-400">
+                    Internshala and Wellfound are currently unavailable — showing Adzuna listings only.
+                  </div>
+                )}
                 <div className="grid gap-4">
                   {filteredInternships.map(job => (
                     <div key={job.id || job.redirect_url} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-white truncate">{job.title}</h3>
+                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                            <h3 className="font-semibold text-white truncate">{job.title}</h3>
+                            {job.source && (
+                              <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>
+                                {job.source}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
