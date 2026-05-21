@@ -7,3 +7,7 @@ python-multipart
 python-dotenv
 httpx
 apscheduler
+requests
+beautifulsoup4
+selenium
+webdriver-manager

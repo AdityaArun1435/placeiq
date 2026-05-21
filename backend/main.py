@@ -2085,13 +2085,8 @@ INTERNSHIP_ROLES = [
     "ML intern",
     "product management intern",
 ]
-INTERNSHALA_URLS = [
-    "https://internshala.com/internships/computer-science-internship/",
-    "https://internshala.com/internships/web-development-internship/",
-    "https://internshala.com/internships/python-internship/",
-    "https://internshala.com/internships/machine-learning-internship/",
-    "https://internshala.com/internships/data-science-internship/",
-]
+_INTERNSHALA_TERMS = ["computer-science", "web-development", "python", "machine-learning", "data-science"]
+_INTERNSHALA_AJAX_TERMS = ["computer+science", "web+development", "python", "machine+learning", "data+science"]
 _SCRAPER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -2189,131 +2184,317 @@ async def _fetch_adzuna_internships() -> list[dict]:
     return results
 
 
-def _scrape_internshala_category(url: str) -> list[dict]:
-    try:
-        import requests as _req
-        from bs4 import BeautifulSoup
-
-        resp = _req.get(url, headers=_SCRAPER_HEADERS, timeout=10)
-        if resp.status_code != 200:
-            return []
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        results: list[dict] = []
-
-        for card in soup.select(".individual_internship"):
-            try:
-                title_el = card.select_one(".profile")
-                company_el = card.select_one(".company-name")
-                location_el = card.select_one(".location_link, .location")
-                stipend_el = card.select_one(".stipend")
-                duration_el = card.select_one(".duration-container, .duration_container")
-                link_el = card.select_one("a.view_detail_button, a[href*='/internship/']")
-
-                title = title_el.get_text(strip=True) if title_el else ""
-                company = company_el.get_text(strip=True) if company_el else "Unknown"
-                if not title:
-                    continue
-
-                href = link_el.get("href", "") if link_el else ""
-                apply_url = f"https://internshala.com{href}" if href.startswith("/") else href
-                duration_text = duration_el.get_text(strip=True) if duration_el else ""
-
-                results.append({
-                    "id": f"is_{abs(hash(title + company))}",
-                    "title": title,
-                    "company": company,
-                    "location": location_el.get_text(strip=True) if location_el else "India",
-                    "description": f"Duration: {duration_text}" if duration_text else "",
-                    "salary": stipend_el.get_text(strip=True) if stipend_el else "",
-                    "redirect_url": apply_url,
-                    "created": "",
-                    "days_ago": None,
-                    "hiring_status": "Active",
-                    "source": "Internshala",
-                })
-            except Exception:
+def _parse_internshala_html(html: str) -> list[dict]:
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    results: list[dict] = []
+    for card in soup.select(".individual_internship"):
+        try:
+            title_el = card.select_one(".profile")
+            company_el = card.select_one(".company-name")
+            location_el = card.select_one(".location_link, .location")
+            stipend_el = card.select_one(".stipend")
+            duration_el = card.select_one(".duration-container, .duration_container")
+            link_el = card.select_one("a.view_detail_button, a[href*='/internship/']")
+            title = title_el.get_text(strip=True) if title_el else ""
+            company = company_el.get_text(strip=True) if company_el else "Unknown"
+            if not title:
                 continue
+            href = link_el.get("href", "") if link_el else ""
+            apply_url = f"https://internshala.com{href}" if href.startswith("/") else href
+            duration_text = duration_el.get_text(strip=True) if duration_el else ""
+            results.append({
+                "id": f"is_{abs(hash(title + company))}",
+                "title": title,
+                "company": company,
+                "location": location_el.get_text(strip=True) if location_el else "India",
+                "description": f"Duration: {duration_text}" if duration_text else "",
+                "salary": stipend_el.get_text(strip=True) if stipend_el else "",
+                "redirect_url": apply_url,
+                "created": "",
+                "days_ago": None,
+                "hiring_status": "Active",
+                "source": "Internshala",
+            })
+        except Exception:
+            continue
+    return results
 
+
+def _scrape_internshala_selenium(terms: list[str]) -> list[dict]:
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        import time
+
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument(f"user-agent={_SCRAPER_HEADERS['User-Agent']}")
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        seen: set = set()
+        results: list[dict] = []
+        try:
+            for term in terms[:3]:
+                try:
+                    driver.get(f"https://internshala.com/internships/{term}-internship/")
+                    time.sleep(3)
+                    for item in _parse_internshala_html(driver.page_source):
+                        key = (item["title"].lower(), item["company"].lower())
+                        if key not in seen:
+                            seen.add(key)
+                            results.append(item)
+                except Exception:
+                    continue
+        finally:
+            driver.quit()
         return results
     except Exception as e:
-        print(f"[Internshala] Scrape failed for {url}: {e}")
+        print(f"[Internshala/Selenium] Failed: {e}")
+        return []
+
+
+def _scrape_internshala_ajax(term: str) -> list[dict]:
+    try:
+        import requests as _req
+        resp = _req.get(
+            "https://internshala.com/internships/ajax/search_data",
+            params={
+                "search_fields[]": ["profile", "city"],
+                "value": term.replace("+", " "),
+                "duration": "",
+                "stipend": "",
+                "work_from_home": "",
+            },
+            headers=_SCRAPER_HEADERS,
+            timeout=12,
+        )
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        html = data.get("internships_list", "") or data.get("listing", "")
+        return _parse_internshala_html(html) if html else []
+    except Exception as e:
+        print(f"[Internshala/AJAX] Failed for '{term}': {e}")
         return []
 
 
 def _scrape_internshala_all() -> list[dict]:
-    results: list[dict] = []
+    # Try Selenium (handles JS rendering)
+    results = _scrape_internshala_selenium(_INTERNSHALA_TERMS)
+    if results:
+        print(f"[Internshala] Selenium: {len(results)} results")
+        return results
+    # Fall back to AJAX API
     seen: set = set()
-    for url in INTERNSHALA_URLS:
-        for item in _scrape_internshala_category(url):
+    all_results: list[dict] = []
+    for term in _INTERNSHALA_AJAX_TERMS:
+        for item in _scrape_internshala_ajax(term):
             key = (item["title"].lower(), item["company"].lower())
             if key not in seen:
                 seen.add(key)
-                results.append(item)
-    return results
+                all_results.append(item)
+    print(f"[Internshala] AJAX: {len(all_results)} results")
+    return all_results
 
 
-def _scrape_wellfound() -> list[dict]:
+def _scrape_wellfound_graphql() -> list[dict]:
     try:
         import requests as _req
-        from bs4 import BeautifulSoup
-
-        resp = _req.get(
-            "https://wellfound.com/jobs?role=engineer&location=india&jobType=intern",
-            headers=_SCRAPER_HEADERS,
-            timeout=10,
+        query = {
+            "query": (
+                "{ jobListings(filters: { remote: false, jobTypes: [INTERNSHIP] }, first: 50)"
+                " { edges { node { title description jobType"
+                " compensation { min max currencyCode } } } } }"
+            )
+        }
+        resp = _req.post(
+            "https://api.wellfound.com/graphql",
+            json=query,
+            headers={**_SCRAPER_HEADERS, "Content-Type": "application/json"},
+            timeout=12,
         )
         if resp.status_code != 200:
             return []
+        edges = (resp.json().get("data") or {}).get("jobListings", {}).get("edges", [])
+        results: list[dict] = []
+        for edge in edges:
+            node = edge.get("node", {})
+            title = node.get("title", "")
+            if not title:
+                continue
+            comp = node.get("compensation") or {}
+            sal_min = comp.get("min")
+            sal_max = comp.get("max")
+            salary_str = f"₹{sal_min:,}–{sal_max:,}/month" if sal_min and sal_max else ""
+            results.append({
+                "id": f"wf_{abs(hash(title))}",
+                "title": title,
+                "company": "Unknown",
+                "location": "India",
+                "description": (node.get("description") or "")[:350],
+                "salary": salary_str,
+                "redirect_url": "https://wellfound.com/jobs",
+                "created": "",
+                "days_ago": None,
+                "hiring_status": "Active",
+                "source": "Wellfound",
+            })
+        return results
+    except Exception as e:
+        print(f"[Wellfound/GraphQL] Failed: {e}")
+        return []
 
+
+def _scrape_wellfound_rss() -> list[dict]:
+    try:
+        import requests as _req
+        import xml.etree.ElementTree as ET
+        resp = _req.get(
+            "https://angel.co/job_listings.rss?job_type=internship&location_slug=india",
+            headers=_SCRAPER_HEADERS,
+            timeout=12,
+        )
+        if resp.status_code != 200:
+            return []
+        root = ET.fromstring(resp.text)
+        channel = root.find("channel")
+        if channel is None:
+            return []
+        results: list[dict] = []
+        for item in channel.findall("item"):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            desc = (item.findtext("description") or "").strip()
+            if not title:
+                continue
+            results.append({
+                "id": f"wf_{abs(hash(title + link))}",
+                "title": title,
+                "company": "Unknown",
+                "location": "India",
+                "description": desc[:350],
+                "salary": "",
+                "redirect_url": link,
+                "created": "",
+                "days_ago": None,
+                "hiring_status": "Active",
+                "source": "Wellfound",
+            })
+        return results
+    except Exception as e:
+        print(f"[Wellfound/RSS] Failed: {e}")
+        return []
+
+
+def _scrape_wellfound() -> list[dict]:
+    results = _scrape_wellfound_graphql()
+    if results:
+        print(f"[Wellfound] GraphQL: {len(results)} results")
+        return results
+    results = _scrape_wellfound_rss()
+    print(f"[Wellfound] RSS: {len(results)} results")
+    return results
+
+
+def _scrape_yc_jobs() -> list[dict]:
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+        resp = _req.get("https://www.ycombinator.com/jobs", headers=_SCRAPER_HEADERS, timeout=12)
+        if resp.status_code != 200:
+            return []
         soup = BeautifulSoup(resp.text, "html.parser")
         results: list[dict] = []
-
-        selectors = [
-            "div[class*='JobListing']",
-            "div[data-testid*='job']",
-            "li[class*='job']",
-        ]
-        cards = []
-        for sel in selectors:
-            cards = soup.select(sel)
-            if cards:
-                break
-
-        for card in cards:
+        for card in soup.select("[class*='job'], [class*='JobListing'], article, li[class*='Job']"):
             try:
                 title_el = card.select_one("h2, h3, [class*='title'], [class*='Title']")
-                company_el = card.select_one("[class*='company'], [class*='Company']")
+                company_el = card.select_one("[class*='company'], [class*='Company'], [class*='startup']")
                 location_el = card.select_one("[class*='location'], [class*='Location']")
-                salary_el = card.select_one("[class*='salary'], [class*='compensation']")
-                link_el = card.select_one("a[href*='/jobs/'], a[href*='/company/']")
-
+                link_el = card.select_one("a[href]")
                 title = title_el.get_text(strip=True) if title_el else ""
                 if not title or len(title) > 120:
                     continue
-
+                if "intern" not in title.lower():
+                    continue
+                location = location_el.get_text(strip=True) if location_el else ""
+                if location and "india" not in location.lower() and "remote" not in location.lower():
+                    continue
+                company = company_el.get_text(strip=True) if company_el else "YC Company"
                 href = link_el.get("href", "") if link_el else ""
-                apply_url = f"https://wellfound.com{href}" if href.startswith("/") else href
-
+                apply_url = f"https://www.ycombinator.com{href}" if href.startswith("/") else href
                 results.append({
-                    "id": f"wf_{abs(hash(title + (company_el.get_text(strip=True) if company_el else '')))}",
+                    "id": f"yc_{abs(hash(title + company))}",
                     "title": title,
-                    "company": company_el.get_text(strip=True) if company_el else "Unknown",
-                    "location": location_el.get_text(strip=True) if location_el else "India",
+                    "company": company,
+                    "location": location or "Remote/India",
                     "description": "",
-                    "salary": salary_el.get_text(strip=True) if salary_el else "",
+                    "salary": "",
                     "redirect_url": apply_url,
                     "created": "",
                     "days_ago": None,
                     "hiring_status": "Active",
-                    "source": "Wellfound",
+                    "source": "Y Combinator",
                 })
             except Exception:
                 continue
-
+        print(f"[YC Jobs] {len(results)} results")
         return results
     except Exception as e:
-        print(f"[Wellfound] Scrape failed: {e}")
+        print(f"[YC Jobs] Failed: {e}")
+        return []
+
+
+def _generate_ai_internships(role: str = "software engineering") -> list[dict]:
+    if _groq is None:
+        return []
+    try:
+        import re
+        prompt = (
+            f"Generate 10 realistic current Indian internship listings for {role} in JSON format. "
+            "Each listing must have these exact keys: title, company, location, stipend, duration, apply_url, days_ago. "
+            "Use real Indian tech companies (Zomato, Swiggy, Razorpay, CRED, Meesho, PhonePe, Paytm, Ola, Groww, Zepto, etc) "
+            "and realistic stipends between 5000 and 25000 per month. "
+            "Only return a valid JSON array, no markdown, no explanation."
+        )
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        raw = completion.choices[0].message.content or ""
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if not match:
+            return []
+        listings = json.loads(match.group())
+        results: list[dict] = []
+        for i, item in enumerate(listings[:10]):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "Software Engineering Intern"))
+            company = str(item.get("company", "Indian Startup"))
+            days = item.get("days_ago")
+            results.append({
+                "id": f"ai_{abs(hash(title + company + str(i)))}",
+                "title": title,
+                "company": company,
+                "location": str(item.get("location", "India")),
+                "description": f"Duration: {item.get('duration', '3 months')}",
+                "salary": str(item.get("stipend", "₹10,000/month")),
+                "redirect_url": str(item.get("apply_url", "https://internshala.com")),
+                "created": "",
+                "days_ago": int(days) if isinstance(days, (int, float)) else 7,
+                "hiring_status": "Active",
+                "source": "AI Generated",
+            })
+        print(f"[AI Fallback] Generated {len(results)} internship listings")
+        return results
+    except Exception as e:
+        print(f"[AI Fallback] Failed: {e}")
         return []
 
 
@@ -2327,14 +2508,19 @@ async def internships_list(skills: str = ""):
         raw_internships = cached.get("internships", [])
         source_counts = cached.get("source_counts", {})
     else:
-        adzuna, internshala, wellfound = await _asyncio.gather(
+        adzuna, internshala, wellfound, yc = await _asyncio.gather(
             _fetch_adzuna_internships(),
             _asyncio.to_thread(_scrape_internshala_all),
             _asyncio.to_thread(_scrape_wellfound),
+            _asyncio.to_thread(_scrape_yc_jobs),
         )
 
+        ai_generated: list[dict] = []
+        if not (adzuna or internshala or wellfound or yc):
+            ai_generated = await _asyncio.to_thread(_generate_ai_internships)
+
         seen_keys: set = set()
-        for job in adzuna + internshala + wellfound:
+        for job in adzuna + internshala + wellfound + yc + ai_generated:
             key = (job.get("title", "").lower().strip(), job.get("company", "").lower().strip())
             if key not in seen_keys:
                 seen_keys.add(key)
@@ -2344,7 +2530,11 @@ async def internships_list(skills: str = ""):
             "Adzuna": len(adzuna),
             "Internshala": len(internshala),
             "Wellfound": len(wellfound),
+            "Y Combinator": len(yc),
         }
+        if ai_generated:
+            source_counts["AI Generated"] = len(ai_generated)
+
         cache_payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "internships": raw_internships,
@@ -2707,12 +2897,11 @@ async def startups_list(page: int = 1, search: str = "", industry: str = "", cit
     if cached:
         raw = cached.get("startups", [])
     else:
-        adzuna_r, internshala_r, wellfound_r = await _asyncio.gather(
+        adzuna_r, yc_r = await _asyncio.gather(
             _fetch_adzuna_startup_listings(),
-            _asyncio.to_thread(_scrape_internshala_all),
-            _asyncio.to_thread(_scrape_wellfound),
+            _asyncio.to_thread(_scrape_yc_jobs),
         )
-        combined = adzuna_r + internshala_r + wellfound_r
+        combined = adzuna_r + yc_r
         seen: set = set()
         for job in combined:
             key = (job.get("company", "").lower().strip(), job.get("title", "").lower().strip())
