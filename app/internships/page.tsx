@@ -25,10 +25,10 @@ type Internship = {
   days_ago: number | null;
   hiring_status: string | null;
   match_score: number;
-  source: "Adzuna" | "Internshala" | "Wellfound";
+  source: "Adzuna" | "Remotive" | "Arbeitnow" | "AI Generated";
 };
 
-type SourceCounts = { Adzuna?: number; Internshala?: number; Wellfound?: number };
+type SourceCounts = { Adzuna?: number; Remotive?: number; Arbeitnow?: number; "AI Generated"?: number; [key: string]: number | undefined };
 
 type Platform = {
   platform: string;
@@ -295,9 +295,10 @@ const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [
 ];
 
 function sourceBadge(source: string) {
-  if (source === "Internshala") return "bg-orange-500/15 text-orange-400 border-orange-500/30";
-  if (source === "Wellfound")   return "bg-green-500/15 text-green-400 border-green-500/30";
-  return "bg-blue-500/15 text-blue-400 border-blue-500/30";
+  if (source === "Remotive")      return "bg-green-500/10 text-green-400 border-green-500/20";
+  if (source === "Arbeitnow")     return "bg-orange-500/10 text-orange-400 border-orange-500/20";
+  if (source === "AI Generated")  return "bg-purple-500/10 text-purple-400 border-purple-500/20";
+  return "bg-blue-500/10 text-blue-400 border-blue-500/20";
 }
 
 function matchColor(score: number) {
@@ -403,8 +404,8 @@ export default function Internships() {
       const res = await fetch(`http://localhost:8000/api/internships/list?skills=${encodeURIComponent(skillsParam)}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setInternships(data.internships || []);
-      setSourceCounts(data.source_counts || {});
+      setInternships(data.jobs || []);
+      setSourceCounts(data.by_source || {});
     } catch (e: unknown) {
       setListingsError(e instanceof Error ? e.message : "Failed to load internships");
     } finally {
@@ -634,7 +635,7 @@ export default function Internships() {
             {listingsLoading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-400 text-sm">Fetching live internship listings from Adzuna, Internshala, and Wellfound...</p>
+                <p className="text-gray-400 text-sm">Fetching live internship listings from Adzuna, Remotive, and Arbeitnow...</p>
               </div>
             )}
 
@@ -646,19 +647,19 @@ export default function Internships() {
 
             {!listingsLoading && !listingsError && (
               <>
-                <div className="flex flex-wrap items-center gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-3 mb-1">
                   <p className="text-gray-400 text-sm">
                     {filteredInternships.length} internship{filteredInternships.length !== 1 ? "s" : ""} found
                     {internships.length !== filteredInternships.length ? ` (filtered from ${internships.length})` : ""}
-                    {(sourceCounts.Internshala ?? 0) > 0 && ` — ${sourceCounts.Internshala} from Internshala`}
+                    {(sourceCounts.Remotive ?? 0) > 0 && ` — ${sourceCounts.Remotive} from Remotive`}
                     {(sourceCounts.Adzuna ?? 0) > 0 && ` — ${sourceCounts.Adzuna} from Adzuna`}
-                    {(sourceCounts.Wellfound ?? 0) > 0 && ` — ${sourceCounts.Wellfound} from Wellfound`}
+                    {(sourceCounts.Arbeitnow ?? 0) > 0 && ` — ${sourceCounts.Arbeitnow} from Arbeitnow`}
                   </p>
                 </div>
-                {internships.length > 0 && (sourceCounts.Internshala ?? 0) === 0 && (sourceCounts.Wellfound ?? 0) === 0 && (
-                  <div className="mb-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3 text-sm text-yellow-400">
-                    Internshala and Wellfound are currently unavailable — showing Adzuna listings only.
-                  </div>
+                {(sourceCounts["AI Generated"] ?? 0) > 0 && (
+                  <p className="text-gray-500 text-xs mb-4">
+                    Some listings are AI-generated examples. Verify on the company&apos;s careers page.
+                  </p>
                 )}
                 <div className="grid gap-4">
                   {filteredInternships.map(job => (
