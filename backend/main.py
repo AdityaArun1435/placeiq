@@ -1087,6 +1087,23 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
         elif salary_min and salary_min > 0:
             salary_str = f"₹{round(salary_min / 100000, 1)}+ LPA"
 
+        # Hiring status based on posting age
+        days_ago_val: int | None = None
+        hiring_status_val: str | None = None
+        created_raw = job.get("created", "")
+        if created_raw:
+            try:
+                created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+                days_ago_val = (datetime.now(timezone.utc) - created_dt).days
+                if days_ago_val <= 7:
+                    hiring_status_val = "Actively Hiring"
+                elif days_ago_val <= 30:
+                    hiring_status_val = "Recently Posted"
+                else:
+                    hiring_status_val = "May Be Closed"
+            except Exception:
+                pass
+
         jobs.append({
             "id": job.get("id", ""),
             "title": job.get("title", ""),
@@ -1096,7 +1113,9 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
             "salary": salary_str,
             "match_score": match_score,
             "apply_link": job.get("redirect_url", ""),
-            "created": job.get("created", ""),
+            "created": created_raw,
+            "days_ago": days_ago_val,
+            "hiring_status": hiring_status_val,
         })
 
     jobs.sort(key=lambda x: x["match_score"], reverse=True)
@@ -1155,6 +1174,83 @@ async def generate_cold_email(payload: ColdEmailIn):
         raw = re.sub(r"^```(?:text|markdown|email)?\s*", "", raw.strip())
         raw = re.sub(r"\s*```$", "", raw)
         return {"email": raw.strip()}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── LinkedIn Profile Analyser ─────────────────────────────────────────────────
+
+class LinkedInAnalyseIn(BaseModel):
+    profile_text: str
+    target_role: str = "Software Engineer"
+
+
+@app.post("/api/linkedin/analyse")
+async def linkedin_analyse(payload: LinkedInAnalyseIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    if len(payload.profile_text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Profile text is too short. Please paste more content from your LinkedIn profile.")
+
+    truncated = payload.profile_text[:4000]
+
+    prompt = (
+        "You are a LinkedIn profile expert who knows exactly what Indian tech recruiters and hiring managers "
+        "look for in 2026. Analyse this LinkedIn profile text for an Indian engineering student targeting placements.\n\n"
+        f"Target Role: {payload.target_role}\n\n"
+        f"Profile Text:\n{truncated}\n\n"
+        "Return a JSON object with exactly these fields:\n"
+        "{\n"
+        '  "profile_score": integer 0-100,\n'
+        '  "headline_analysis": {\n'
+        '    "current": "their current headline or N/A if not found",\n'
+        '    "verdict": "good" or "bad" or "missing",\n'
+        '    "suggested": "a better headline optimised for recruiter searches for their target role"\n'
+        '  },\n'
+        '  "about_section": {\n'
+        '    "verdict": "good" or "bad" or "missing",\n'
+        '    "issues": ["specific issue 1", "specific issue 2"],\n'
+        '    "suggested_opening": "first 2 sentences of a stronger About section for this person"\n'
+        '  },\n'
+        '  "experience_gaps": ["specific gap 1", "specific gap 2"],\n'
+        '  "skills_section": {\n'
+        '    "missing_key_skills": ["skill 1", "skill 2"],\n'
+        '    "skills_to_remove": ["irrelevant skill 1", "irrelevant skill 2"]\n'
+        '  },\n'
+        '  "projects_section": {\n'
+        '    "verdict": "good" or "bad" or "missing",\n'
+        '    "improvements": ["specific improvement 1", "specific improvement 2"]\n'
+        '  },\n'
+        '  "quick_wins": [\n'
+        '    "specific fix they can do TODAY in under 10 minutes",\n'
+        '    "...", "...", "...", "..."\n'
+        '  ],\n'
+        '  "ats_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5",\n'
+        '                   "keyword6", "keyword7", "keyword8", "keyword9", "keyword10"],\n'
+        '  "overall_verdict": "2-3 brutal honest sentences on their LinkedIn profile strength for Indian placements"\n'
+        '}\n\n'
+        "Rules:\n"
+        "- profile_score: be realistic. Most Indian student profiles score 25-55. A truly strong profile scores 70+.\n"
+        "- headline_analysis.suggested: use format 'Role | Tech Stack | College' or 'Aspiring Role | Skill1 · Skill2 · Skill3' — what gets recruiter clicks.\n"
+        "- quick_wins: SPECIFIC and doable in under 10 minutes — e.g. 'Add Python to your Skills section' not 'Improve your skills'.\n"
+        "- ats_keywords: exact keywords recruiters search on LinkedIn for this target role in India in 2026.\n"
+        "- experience_gaps: missing quantified achievements, missing tech stack mentions, vague bullet descriptions.\n"
+        "- skills_to_remove: irrelevant skills (e.g. MS Word on a SWE profile) that dilute the profile.\n"
+        "- If a section is not in the pasted text, set verdict to 'missing' and give advice on what to write.\n"
+        "Only return valid JSON with no markdown formatting, no code fences, no explanation."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq linkedin response: {raw[:500]!r}")
+        return parse_groq_json(raw)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
