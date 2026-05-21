@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { label: "Resources", path: "/resources", active: true },
   { label: "Cold Email", path: "/coldemail" },
   { label: "Directory", path: "/company-directory" },
+  { label: "Internships", path: "/internships" },
 ];
 
 type Resource = { label: string; url: string; desc: string };

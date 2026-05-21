@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { label: "Cold Email", path: "/coldemail" },
   { label: "LinkedIn",   path: "/linkedin", active: true },
   { label: "Directory", path: "/company-directory" },
+  { label: "Internships", path: "/internships" },
 ];
 
 type HeadlineAnalysis = {

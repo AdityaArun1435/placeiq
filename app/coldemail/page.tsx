@@ -26,6 +26,7 @@ const NAV_LINKS = [
   { label: "Resources", path: "/resources" },
   { label: "Cold Email", path: "/coldemail", active: true },
   { label: "Directory", path: "/company-directory" },
+  { label: "Internships", path: "/internships" },
 ];
 
 export default function ColdEmail() {

@@ -186,6 +186,12 @@ export default function Dashboard() {
             <button onClick={() => router.push("/linkedin")} className="text-sm text-gray-400 hover:text-white transition">
               LinkedIn
             </button>
+            <button onClick={() => router.push("/pyq")} className="text-sm text-gray-400 hover:text-white transition">
+              PYQ
+            </button>
+            <button onClick={() => router.push("/internships")} className="text-sm text-gray-400 hover:text-white transition">
+              Internships
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-4">
