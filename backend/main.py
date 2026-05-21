@@ -22,7 +22,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn
+from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn, Alumni
 
 load_dotenv()
 
@@ -2272,6 +2272,120 @@ async def internships_ai_match(payload: InternshipsMatchIn):
         )
         raw = completion.choices[0].message.content or ""
         print(f"[DEBUG] Groq internships response: {raw[:500]!r}")
+        return parse_groq_json(raw)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Referral Radar (Alumni Network) ──────────────────────────────────────────
+
+class AlumniSubmitIn(BaseModel):
+    name: str
+    college: str
+    branch: str
+    graduation_year: str
+    company: str
+    role: str
+    linkedin_url: str
+    open_to_referrals: bool = True
+
+
+@app.post("/api/referral/submit")
+def referral_submit(payload: AlumniSubmitIn, db: Session = Depends(get_db)):
+    record = Alumni(
+        name=payload.name.strip(),
+        college=payload.college.strip(),
+        branch=payload.branch.strip(),
+        graduation_year=payload.graduation_year.strip(),
+        company=payload.company.strip(),
+        role=payload.role.strip(),
+        linkedin_url=payload.linkedin_url.strip(),
+        open_to_referrals=payload.open_to_referrals,
+        verified=False,
+        submitted_at=datetime.now(timezone.utc).isoformat(),
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {"id": record.id, "message": "Successfully added to alumni network"}
+
+
+@app.get("/api/referral/list")
+def referral_list(
+    college: str = "",
+    company: str = "",
+    branch: str = "",
+    db: Session = Depends(get_db),
+):
+    total = db.query(Alumni).count()
+    college_count = db.query(Alumni.college).distinct().count()
+
+    query = db.query(Alumni).filter(Alumni.open_to_referrals == True)  # noqa: E712
+    if college:
+        query = query.filter(Alumni.college == college)
+    if company:
+        query = query.filter(Alumni.company.ilike(f"%{company}%"))
+    if branch:
+        query = query.filter(Alumni.branch == branch)
+
+    records = query.order_by(Alumni.submitted_at.desc()).limit(50).all()
+
+    return {
+        "alumni": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "college": r.college,
+                "branch": r.branch,
+                "graduation_year": r.graduation_year,
+                "company": r.company,
+                "role": r.role,
+                "linkedin_url": r.linkedin_url,
+                "open_to_referrals": r.open_to_referrals,
+                "verified": r.verified,
+                "submitted_at": r.submitted_at,
+            }
+            for r in records
+        ],
+        "total": total,
+        "college_count": college_count,
+    }
+
+
+class ReferralMessageIn(BaseModel):
+    student_name: str
+    student_branch: str
+    student_college: str
+    target_role: str
+    alumni_name: str
+    alumni_role: str
+    alumni_company: str
+
+
+@app.post("/api/referral/message")
+async def referral_message(payload: ReferralMessageIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    prompt = (
+        "Generate a short, professional LinkedIn connection request message (under 300 characters) "
+        "from a student to an alumni asking for a referral. Be specific and genuine, not generic.\n\n"
+        f"Student: {payload.student_name} studying {payload.student_branch} at {payload.student_college}, "
+        f"targeting {payload.target_role}\n"
+        f"Alumni: {payload.alumni_name} working as {payload.alumni_role} at {payload.alumni_company}\n\n"
+        'Return JSON: {"message": "the connection request message"}\n'
+        "Only return valid JSON with no markdown."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq referral message response: {raw[:300]!r}")
         return parse_groq_json(raw)
     except Exception as e:
         traceback.print_exc()

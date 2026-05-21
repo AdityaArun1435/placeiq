@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, JSON, Text
+from sqlalchemy import Column, Integer, String, Float, JSON, Text, Boolean
 from pydantic import BaseModel, Field
 from typing import List
 from database import Base
@@ -113,3 +113,18 @@ class RoadmapChatIn(BaseModel):
     user_message: str
     current_roadmap: dict
     profile: dict
+
+
+class Alumni(Base):
+    __tablename__ = "alumni"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    college = Column(String, nullable=False)
+    branch = Column(String, nullable=False)
+    graduation_year = Column(String, nullable=False)
+    company = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    linkedin_url = Column(String, nullable=False)
+    open_to_referrals = Column(Boolean, default=True)
+    verified = Column(Boolean, default=False)
+    submitted_at = Column(String, nullable=False)
