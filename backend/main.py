@@ -2085,6 +2085,20 @@ INTERNSHIP_ROLES = [
     "ML intern",
     "product management intern",
 ]
+INTERNSHALA_URLS = [
+    "https://internshala.com/internships/computer-science-internship/",
+    "https://internshala.com/internships/web-development-internship/",
+    "https://internshala.com/internships/python-internship/",
+    "https://internshala.com/internships/machine-learning-internship/",
+    "https://internshala.com/internships/data-science-internship/",
+]
+_SCRAPER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def _load_internships_cache() -> dict | None:
@@ -2101,89 +2115,243 @@ def _load_internships_cache() -> dict | None:
     return None
 
 
+async def _fetch_adzuna_internships() -> list[dict]:
+    app_id = os.getenv("ADZUNA_APP_ID", "")
+    app_key = os.getenv("ADZUNA_APP_KEY", "")
+    if not app_id or not app_key:
+        return []
+
+    results: list[dict] = []
+    seen_ids: set = set()
+    async with httpx.AsyncClient(timeout=15) as client:
+        for role in INTERNSHIP_ROLES:
+            try:
+                resp = await client.get(
+                    "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                    params={
+                        "app_id": app_id,
+                        "app_key": app_key,
+                        "results_per_page": 50,
+                        "what": role,
+                        "where": "india",
+                        "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                for job in resp.json().get("results", []):
+                    jid = job.get("id", "")
+                    if jid and jid in seen_ids:
+                        continue
+                    if jid:
+                        seen_ids.add(jid)
+
+                    salary_min = job.get("salary_min")
+                    salary_max = job.get("salary_max")
+                    salary_str = ""
+                    if salary_min and salary_max and salary_min > 0:
+                        lpa_min = round(salary_min / 100000, 1)
+                        lpa_max = round(salary_max / 100000, 1)
+                        salary_str = f"₹{lpa_min}-{lpa_max} LPA"
+                    elif salary_min and salary_min > 0:
+                        salary_str = f"₹{round(salary_min / 100000, 1)}+ LPA"
+
+                    days_ago_val: int | None = None
+                    hiring_status_val: str | None = None
+                    created_raw = job.get("created", "")
+                    if created_raw:
+                        try:
+                            created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+                            days_ago_val = (datetime.now(timezone.utc) - created_dt).days
+                            if days_ago_val <= 7:
+                                hiring_status_val = "Actively Hiring"
+                            elif days_ago_val <= 30:
+                                hiring_status_val = "Recently Posted"
+                            else:
+                                hiring_status_val = "May Be Closed"
+                        except Exception:
+                            pass
+
+                    results.append({
+                        "id": jid,
+                        "title": job.get("title", ""),
+                        "company": job.get("company", {}).get("display_name", "Unknown"),
+                        "location": job.get("location", {}).get("display_name", "India"),
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": salary_str,
+                        "redirect_url": job.get("redirect_url", ""),
+                        "created": created_raw,
+                        "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val,
+                        "source": "Adzuna",
+                    })
+            except Exception as exc:
+                print(f"[Internships/Adzuna] Failed for role '{role}': {exc}")
+    return results
+
+
+def _scrape_internshala_category(url: str) -> list[dict]:
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+
+        resp = _req.get(url, headers=_SCRAPER_HEADERS, timeout=10)
+        if resp.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        results: list[dict] = []
+
+        for card in soup.select(".individual_internship"):
+            try:
+                title_el = card.select_one(".profile")
+                company_el = card.select_one(".company-name")
+                location_el = card.select_one(".location_link, .location")
+                stipend_el = card.select_one(".stipend")
+                duration_el = card.select_one(".duration-container, .duration_container")
+                link_el = card.select_one("a.view_detail_button, a[href*='/internship/']")
+
+                title = title_el.get_text(strip=True) if title_el else ""
+                company = company_el.get_text(strip=True) if company_el else "Unknown"
+                if not title:
+                    continue
+
+                href = link_el.get("href", "") if link_el else ""
+                apply_url = f"https://internshala.com{href}" if href.startswith("/") else href
+                duration_text = duration_el.get_text(strip=True) if duration_el else ""
+
+                results.append({
+                    "id": f"is_{abs(hash(title + company))}",
+                    "title": title,
+                    "company": company,
+                    "location": location_el.get_text(strip=True) if location_el else "India",
+                    "description": f"Duration: {duration_text}" if duration_text else "",
+                    "salary": stipend_el.get_text(strip=True) if stipend_el else "",
+                    "redirect_url": apply_url,
+                    "created": "",
+                    "days_ago": None,
+                    "hiring_status": "Active",
+                    "source": "Internshala",
+                })
+            except Exception:
+                continue
+
+        return results
+    except Exception as e:
+        print(f"[Internshala] Scrape failed for {url}: {e}")
+        return []
+
+
+def _scrape_internshala_all() -> list[dict]:
+    results: list[dict] = []
+    seen: set = set()
+    for url in INTERNSHALA_URLS:
+        for item in _scrape_internshala_category(url):
+            key = (item["title"].lower(), item["company"].lower())
+            if key not in seen:
+                seen.add(key)
+                results.append(item)
+    return results
+
+
+def _scrape_wellfound() -> list[dict]:
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+
+        resp = _req.get(
+            "https://wellfound.com/jobs?role=engineer&location=india&jobType=intern",
+            headers=_SCRAPER_HEADERS,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        results: list[dict] = []
+
+        selectors = [
+            "div[class*='JobListing']",
+            "div[data-testid*='job']",
+            "li[class*='job']",
+        ]
+        cards = []
+        for sel in selectors:
+            cards = soup.select(sel)
+            if cards:
+                break
+
+        for card in cards:
+            try:
+                title_el = card.select_one("h2, h3, [class*='title'], [class*='Title']")
+                company_el = card.select_one("[class*='company'], [class*='Company']")
+                location_el = card.select_one("[class*='location'], [class*='Location']")
+                salary_el = card.select_one("[class*='salary'], [class*='compensation']")
+                link_el = card.select_one("a[href*='/jobs/'], a[href*='/company/']")
+
+                title = title_el.get_text(strip=True) if title_el else ""
+                if not title or len(title) > 120:
+                    continue
+
+                href = link_el.get("href", "") if link_el else ""
+                apply_url = f"https://wellfound.com{href}" if href.startswith("/") else href
+
+                results.append({
+                    "id": f"wf_{abs(hash(title + (company_el.get_text(strip=True) if company_el else '')))}",
+                    "title": title,
+                    "company": company_el.get_text(strip=True) if company_el else "Unknown",
+                    "location": location_el.get_text(strip=True) if location_el else "India",
+                    "description": "",
+                    "salary": salary_el.get_text(strip=True) if salary_el else "",
+                    "redirect_url": apply_url,
+                    "created": "",
+                    "days_ago": None,
+                    "hiring_status": "Active",
+                    "source": "Wellfound",
+                })
+            except Exception:
+                continue
+
+        return results
+    except Exception as e:
+        print(f"[Wellfound] Scrape failed: {e}")
+        return []
+
+
 @app.get("/api/internships/list")
 async def internships_list(skills: str = ""):
     cached = _load_internships_cache()
     raw_internships: list = []
+    source_counts: dict = {}
 
     if cached:
         raw_internships = cached.get("internships", [])
+        source_counts = cached.get("source_counts", {})
     else:
-        app_id = os.getenv("ADZUNA_APP_ID", "")
-        app_key = os.getenv("ADZUNA_APP_KEY", "")
-        if not app_id or not app_key:
-            raise HTTPException(status_code=503, detail="Adzuna credentials not configured in .env")
+        adzuna, internshala, wellfound = await _asyncio.gather(
+            _fetch_adzuna_internships(),
+            _asyncio.to_thread(_scrape_internshala_all),
+            _asyncio.to_thread(_scrape_wellfound),
+        )
 
-        seen_ids: set = set()
-        async with httpx.AsyncClient(timeout=15) as client:
-            for role in INTERNSHIP_ROLES:
-                try:
-                    resp = await client.get(
-                        "https://api.adzuna.com/v1/api/jobs/in/search/1",
-                        params={
-                            "app_id": app_id,
-                            "app_key": app_key,
-                            "results_per_page": 50,
-                            "what": role,
-                            "where": "india",
-                            "content-type": "application/json",
-                        },
-                    )
-                    resp.raise_for_status()
-                    for job in resp.json().get("results", []):
-                        jid = job.get("id", "")
-                        if jid and jid in seen_ids:
-                            continue
-                        if jid:
-                            seen_ids.add(jid)
+        seen_keys: set = set()
+        for job in adzuna + internshala + wellfound:
+            key = (job.get("title", "").lower().strip(), job.get("company", "").lower().strip())
+            if key not in seen_keys:
+                seen_keys.add(key)
+                raw_internships.append(job)
 
-                        salary_min = job.get("salary_min")
-                        salary_max = job.get("salary_max")
-                        salary_str = ""
-                        if salary_min and salary_max and salary_min > 0:
-                            lpa_min = round(salary_min / 100000, 1)
-                            lpa_max = round(salary_max / 100000, 1)
-                            salary_str = f"₹{lpa_min}-{lpa_max} LPA"
-                        elif salary_min and salary_min > 0:
-                            salary_str = f"₹{round(salary_min / 100000, 1)}+ LPA"
-
-                        days_ago_val: int | None = None
-                        hiring_status_val: str | None = None
-                        created_raw = job.get("created", "")
-                        if created_raw:
-                            try:
-                                created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
-                                days_ago_val = (datetime.now(timezone.utc) - created_dt).days
-                                if days_ago_val <= 7:
-                                    hiring_status_val = "Actively Hiring"
-                                elif days_ago_val <= 30:
-                                    hiring_status_val = "Recently Posted"
-                                else:
-                                    hiring_status_val = "May Be Closed"
-                            except Exception:
-                                pass
-
-                        raw_internships.append({
-                            "id": jid,
-                            "title": job.get("title", ""),
-                            "company": job.get("company", {}).get("display_name", "Unknown"),
-                            "location": job.get("location", {}).get("display_name", "India"),
-                            "description": (job.get("description", "") or "")[:350],
-                            "salary": salary_str,
-                            "redirect_url": job.get("redirect_url", ""),
-                            "created": created_raw,
-                            "days_ago": days_ago_val,
-                            "hiring_status": hiring_status_val,
-                        })
-                except Exception as exc:
-                    print(f"[Internships] Failed for role '{role}': {exc}")
-
+        source_counts = {
+            "Adzuna": len(adzuna),
+            "Internshala": len(internshala),
+            "Wellfound": len(wellfound),
+        }
         cache_payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "internships": raw_internships,
+            "source_counts": source_counts,
         }
         INTERNSHIPS_CACHE_PATH.write_text(json.dumps(cache_payload, indent=2), encoding="utf-8")
-        print(f"[Internships] Cached {len(raw_internships)} listings")
+        print(f"[Internships] Cached {len(raw_internships)} from {source_counts}")
 
     user_skills_lower = [s.strip().lower() for s in skills.split(",") if s.strip()] if skills else []
     total_skills = max(len(user_skills_lower), 1)
@@ -2199,7 +2367,7 @@ async def internships_list(skills: str = ""):
         result.append({**job, "match_score": match_score})
 
     result.sort(key=lambda x: x["match_score"], reverse=True)
-    return {"internships": result, "total": len(result)}
+    return {"internships": result, "total": len(result), "source_counts": source_counts}
 
 
 class InternshipsMatchIn(BaseModel):
