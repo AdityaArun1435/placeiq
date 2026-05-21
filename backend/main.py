@@ -2558,3 +2558,194 @@ async def referral_message(payload: ReferralMessageIn):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Startups ──────────────────────────────────────────────────────────────────
+
+STARTUPS_CACHE_PATH = Path(__file__).parent / "startups_cache.json"
+STARTUPS_CACHE_TTL_DAYS = 7
+
+
+class StartupsFindIn(BaseModel):
+    skills: list[str] = []
+    branch: str = ""
+    target_role: str = ""
+    college_tier: str = "Tier 2"
+
+
+def _load_startups_cache() -> dict | None:
+    if not STARTUPS_CACHE_PATH.exists():
+        return None
+    try:
+        payload = json.loads(STARTUPS_CACHE_PATH.read_text(encoding="utf-8"))
+        ts = datetime.fromisoformat(payload["timestamp"])
+        if datetime.now(timezone.utc) - ts < timedelta(days=STARTUPS_CACHE_TTL_DAYS):
+            return payload
+        print("[Startups] Cache expired, will refresh")
+    except Exception:
+        pass
+    return None
+
+
+async def _fetch_adzuna_startup_listings() -> list[dict]:
+    app_id = os.getenv("ADZUNA_APP_ID", "")
+    app_key = os.getenv("ADZUNA_APP_KEY", "")
+    if not app_id or not app_key:
+        return []
+    results: list[dict] = []
+    seen_ids: set = set()
+    async with httpx.AsyncClient(timeout=15) as client:
+        for term in ["startup intern india", "startup software intern", "startup technology intern"]:
+            try:
+                resp = await client.get(
+                    "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                    params={
+                        "app_id": app_id,
+                        "app_key": app_key,
+                        "results_per_page": 30,
+                        "what": term,
+                        "content-type": "application/json",
+                    },
+                )
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                for job in data.get("results", []):
+                    jid = job.get("id", "")
+                    if jid and jid in seen_ids:
+                        continue
+                    seen_ids.add(jid)
+                    posted = job.get("created", "")
+                    days_ago = None
+                    hiring_status = None
+                    if posted:
+                        try:
+                            dt = datetime.fromisoformat(posted.replace("Z", "+00:00"))
+                            days_ago = (datetime.now(timezone.utc) - dt).days
+                            hiring_status = (
+                                "Actively Hiring" if days_ago <= 7
+                                else "Recently Posted" if days_ago <= 30
+                                else "May Be Closed"
+                            )
+                        except Exception:
+                            pass
+                    results.append({
+                        "id": jid or f"az_{abs(hash(job.get('title', '') + job.get('company', {}).get('display_name', '')))}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company", {}).get("display_name", ""),
+                        "location": job.get("location", {}).get("display_name", "India"),
+                        "description": job.get("description", "")[:300],
+                        "salary": (
+                            f"₹{job['salary_min']:,.0f}–{job.get('salary_max', job['salary_min']):,.0f}/year"
+                            if job.get("salary_min") else ""
+                        ),
+                        "redirect_url": job.get("redirect_url", ""),
+                        "created": posted,
+                        "days_ago": days_ago,
+                        "hiring_status": hiring_status,
+                        "source": "Adzuna",
+                    })
+            except Exception:
+                continue
+    return results
+
+
+@app.post("/api/startups/find")
+async def startups_find(payload: StartupsFindIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    skills_str = ", ".join(payload.skills) if payload.skills else "Not specified"
+    prompt = (
+        "You are an expert on the Indian startup ecosystem in 2026. Given this student profile, "
+        "suggest 20 Indian startups to target for internships. Focus on early-stage startups where "
+        "freshers have the highest chance of getting hired.\n\n"
+        "Student profile:\n"
+        f"- Skills: {skills_str}\n"
+        f"- Branch: {payload.branch}\n"
+        f"- Target role: {payload.target_role}\n"
+        f"- College tier: {payload.college_tier}\n\n"
+        "Return JSON:\n"
+        "{\n"
+        '  "startups": [\n'
+        '    {\n'
+        '      "name": "startup name",\n'
+        '      "industry": "Fintech/Edtech/SaaS/Healthtech/Ecommerce/Gaming/Other",\n'
+        '      "stage": "Seed/Pre-Series A/Series A",\n'
+        '      "why_good_fit": "one sentence specific to this student",\n'
+        '      "linkedin_url": "https://www.linkedin.com/company/startup-slug",\n'
+        '      "careers_url": "actual URL or null",\n'
+        '      "city": "city name",\n'
+        '      "hiring_likelihood": "High/Medium/Low",\n'
+        '      "how_to_apply": "specific actionable advice"\n'
+        '    }\n'
+        '  ],\n'
+        '  "pro_tip": "one specific actionable tip for Indian startup internships in 2026"\n'
+        "}\n"
+        "Only return valid JSON with no markdown."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq startups find: {raw[:500]!r}")
+        return parse_groq_json(raw)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/startups/list")
+async def startups_list(page: int = 1, search: str = "", industry: str = "", city: str = ""):
+    cached = _load_startups_cache()
+    raw: list = []
+
+    if cached:
+        raw = cached.get("startups", [])
+    else:
+        adzuna_r, internshala_r, wellfound_r = await _asyncio.gather(
+            _fetch_adzuna_startup_listings(),
+            _asyncio.to_thread(_scrape_internshala_all),
+            _asyncio.to_thread(_scrape_wellfound),
+        )
+        combined = adzuna_r + internshala_r + wellfound_r
+        seen: set = set()
+        for job in combined:
+            key = (job.get("company", "").lower().strip(), job.get("title", "").lower().strip())
+            if key not in seen:
+                seen.add(key)
+                raw.append(job)
+
+        STARTUPS_CACHE_PATH.write_text(
+            json.dumps(
+                {"timestamp": datetime.now(timezone.utc).isoformat(), "startups": raw},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"[Startups] Cached {len(raw)} listings")
+
+    filtered = raw
+    if search:
+        sl = search.lower()
+        filtered = [j for j in filtered if sl in j.get("title", "").lower() or sl in j.get("company", "").lower()]
+    if industry:
+        il = industry.lower()
+        filtered = [j for j in filtered if il in j.get("title", "").lower() or il in j.get("description", "").lower()]
+    if city:
+        cl = city.lower()
+        filtered = [j for j in filtered if cl in j.get("location", "").lower()]
+
+    total = len(filtered)
+    per_page = 30
+    start_idx = (page - 1) * per_page
+    return {
+        "startups": filtered[start_idx: start_idx + per_page],
+        "total_count": total,
+        "page": page,
+        "per_page": per_page,
+    }
