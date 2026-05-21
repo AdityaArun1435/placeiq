@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { label: "Cold Email", path: "/coldemail" },
   { label: "Directory", path: "/company-directory" },
   { label: "Internships", path: "/internships" },
+  { label: "Referral Radar", path: "/referral" },
 ];
 
 type Resource = { label: string; url: string; desc: string };

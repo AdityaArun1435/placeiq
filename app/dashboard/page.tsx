@@ -192,6 +192,9 @@ export default function Dashboard() {
             <button onClick={() => router.push("/internships")} className="text-sm text-gray-400 hover:text-white transition">
               Internships
             </button>
+            <button onClick={() => router.push("/referral")} className="text-sm text-gray-400 hover:text-white transition">
+              Referral Radar
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-4">

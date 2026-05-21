@@ -38,6 +38,7 @@ const NAV_LINKS = [
   { label: "Cold Email", path: "/coldemail" },
   { label: "Directory", path: "/company-directory", active: true },
   { label: "Internships", path: "/internships" },
+  { label: "Referral Radar", path: "/referral" },
 ];
 
 const INDUSTRIES = ["All", "IT Services", "IT Consulting", "SaaS/Product", "FinTech", "E-Commerce", "Food Tech", "Software/Cloud", "Technology", "Banking/Tech", "Product Engineering"];

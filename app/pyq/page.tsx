@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { label: "Directory",  path: "/company-directory" },
   { label: "PYQ",        path: "/pyq", active: true },
   { label: "Internships", path: "/internships" },
+  { label: "Referral Radar", path: "/referral" },
 ];
 
 const COMPANIES = [

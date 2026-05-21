@@ -75,6 +75,7 @@ const NAV_LINKS = [
   { label: "LinkedIn", path: "/linkedin" },
   { label: "PYQ", path: "/pyq" },
   { label: "Internships", path: "/internships", active: true },
+  { label: "Referral Radar", path: "/referral" },
 ];
 
 const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [

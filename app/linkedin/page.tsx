@@ -20,6 +20,7 @@ const NAV_LINKS = [
   { label: "LinkedIn",   path: "/linkedin", active: true },
   { label: "Directory", path: "/company-directory" },
   { label: "Internships", path: "/internships" },
+  { label: "Referral Radar", path: "/referral" },
 ];
 
 type HeadlineAnalysis = {
