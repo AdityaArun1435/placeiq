@@ -25,6 +25,7 @@ const NAV_LINKS = [
   { label: "Off Campus", path: "/offcampus" },
   { label: "Resources", path: "/resources" },
   { label: "Cold Email", path: "/coldemail", active: true },
+  { label: "Directory", path: "/company-directory" },
 ];
 
 export default function ColdEmail() {

@@ -67,6 +67,7 @@ const NAV_LINKS = [
   { label: "Off Campus", path: "/offcampus" },
   { label: "Resources", path: "/resources" },
   { label: "Cold Email", path: "/coldemail" },
+  { label: "Directory", path: "/company-directory" },
 ];
 
 export default function OnCampus() {
@@ -78,6 +79,27 @@ export default function OnCampus() {
   const [error, setError] = useState("");
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const days = daysUntilSeason();
+
+  type OnCampusIntel = { difficulty: string; avg_salary: string; topics: string[]; source: "ambitionbox" | "ai" };
+  type IntelEntry = { data: OnCampusIntel | null; status: "idle" | "loading" | "found" | "error" };
+  const [intel, setIntel] = useState<Record<string, IntelEntry>>({});
+
+  async function fetchIntel(company: string) {
+    if (intel[company]?.status === "found" || intel[company]?.status === "loading") return;
+    setIntel(prev => ({ ...prev, [company]: { data: null, status: "loading" } }));
+    try {
+      const res = await fetch("http://localhost:8000/api/oncampus/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setIntel(prev => ({ ...prev, [company]: { data, status: "found" } }));
+    } catch {
+      setIntel(prev => ({ ...prev, [company]: { data: null, status: "error" } }));
+    }
+  }
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -233,7 +255,11 @@ export default function OnCampus() {
                       {/* Company header */}
                       <button
                         className="w-full text-left px-6 py-5"
-                        onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+                        onClick={() => {
+                          const next = expandedIdx === idx ? null : idx;
+                          setExpandedIdx(next);
+                          if (next === idx) fetchIntel(co.name);
+                        }}
                       >
                         <div className="flex items-center justify-between gap-4 flex-wrap">
                           <div className="flex items-center gap-4">
@@ -310,6 +336,59 @@ export default function OnCampus() {
                               </a>
                             )}
                             <span className="text-xs text-gray-600 flex items-center">CGPA Cutoff: {co.cgpa_cutoff}</span>
+                          </div>
+
+                          {/* AmbitionBox Interview Intel */}
+                          <div className="md:col-span-2 bg-[#0d0d0d] border border-gray-800/60 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <p className="text-xs text-gray-500 uppercase tracking-widest">Interview Intel</p>
+                              {intel[co.name]?.data && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                                  intel[co.name].data!.source === "ambitionbox"
+                                    ? "bg-green-900/30 text-green-400 border-green-700/40"
+                                    : "bg-gray-800 text-gray-500 border-gray-700"
+                                }`}>
+                                  {intel[co.name].data!.source === "ambitionbox" ? "Live from AmbitionBox" : "AI Generated"}
+                                </span>
+                              )}
+                            </div>
+                            {intel[co.name]?.status === "loading" && (
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                Fetching real interview data...
+                              </div>
+                            )}
+                            {intel[co.name]?.status === "error" && (
+                              <p className="text-xs text-gray-600">Could not fetch intel — backend may be offline.</p>
+                            )}
+                            {intel[co.name]?.data && (
+                              <div className="flex flex-wrap gap-6 text-sm">
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Interview Difficulty</p>
+                                  <span className={`font-semibold ${
+                                    intel[co.name].data!.difficulty.toLowerCase().includes("hard") ? "text-red-400" :
+                                    intel[co.name].data!.difficulty.toLowerCase().includes("moderate") ? "text-yellow-400" :
+                                    "text-green-400"
+                                  }`}>{intel[co.name].data!.difficulty}</span>
+                                </div>
+                                {intel[co.name].data!.avg_salary && (
+                                  <div>
+                                    <p className="text-xs text-gray-500 mb-1">Avg Salary (AmbitionBox)</p>
+                                    <span className="text-green-400 font-semibold">{intel[co.name].data!.avg_salary}</span>
+                                  </div>
+                                )}
+                                {intel[co.name].data!.topics?.length > 0 && (
+                                  <div>
+                                    <p className="text-xs text-gray-500 mb-1">Key Topics</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {intel[co.name].data!.topics.map(t => (
+                                        <span key={t} className="bg-blue-900/20 text-blue-400 border border-blue-700/30 text-xs px-2 py-0.5 rounded-full">{t}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

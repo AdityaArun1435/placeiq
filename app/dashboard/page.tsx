@@ -180,6 +180,9 @@ export default function Dashboard() {
             <button onClick={() => router.push("/coldemail")} className="text-sm text-gray-400 hover:text-white transition">
               Cold Email
             </button>
+            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
+              Directory
+            </button>
             <button onClick={() => router.push("/linkedin")} className="text-sm text-gray-400 hover:text-white transition">
               LinkedIn
             </button>

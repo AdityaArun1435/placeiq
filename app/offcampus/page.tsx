@@ -19,6 +19,8 @@ type Job = {
   match_score: number;
   apply_link: string;
   created: string;
+  hiring_status: string | null;
+  days_ago: number | null;
 };
 
 const NAV_LINKS = [
@@ -33,6 +35,7 @@ const NAV_LINKS = [
   { label: "Off Campus", path: "/offcampus", active: true },
   { label: "Resources", path: "/resources" },
   { label: "Cold Email", path: "/coldemail" },
+  { label: "Directory", path: "/company-directory" },
 ];
 
 function matchColor(score: number) {
@@ -285,8 +288,21 @@ export default function OffCampus() {
                         )}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-xs font-medium mb-1 ${matchTextColor(job.match_score)}`}>{matchLabel(job.match_score)}</p>
+                    <div className="text-right shrink-0 space-y-2">
+                      {job.hiring_status && (
+                        <div>
+                          <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                            job.hiring_status === "Actively Hiring"
+                              ? "bg-green-900/30 text-green-400 border-green-700/40"
+                              : job.hiring_status === "Recently Posted"
+                              ? "bg-yellow-900/30 text-yellow-400 border-yellow-700/40"
+                              : "bg-gray-800 text-gray-500 border-gray-700"
+                          }`}>
+                            {job.hiring_status}
+                          </span>
+                        </div>
+                      )}
+                      <p className={`text-xs font-medium ${matchTextColor(job.match_score)}`}>{matchLabel(job.match_score)}</p>
                       <div className="flex items-center gap-2">
                         <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
                           <div className={`h-full rounded-full transition-all ${matchColor(job.match_score)}`} style={{ width: `${job.match_score}%` }} />
