@@ -90,3 +90,26 @@ class CompanyMatchIn(BaseModel):
     has_internship: str = "no"
     internship_months: str = ""
     leetcode_count: str = "0"
+    hackathons: str = "0"
+    github_active: str = "no"
+
+
+class RoadmapIn(BaseModel):
+    college: str = ""
+    college_tier: str = ""
+    branch: str = ""
+    cgpa: float = 0.0
+    skills: List[str] = []
+    target_role: str = ""
+    target_companies: List[str] = []
+    leetcode_count: str = "0"
+    projects_count: str = "0"
+    has_internship: str = "no"
+    internship_months: str = ""
+    must_have_missing: List[str] = []
+
+
+class RoadmapChatIn(BaseModel):
+    user_message: str
+    current_roadmap: dict
+    profile: dict

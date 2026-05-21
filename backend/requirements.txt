@@ -5,3 +5,5 @@ groq
 pdfplumber
 python-multipart
 python-dotenv
+httpx
+apscheduler

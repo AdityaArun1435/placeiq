@@ -2000,3 +2000,279 @@ async def linkedin_analyse(payload: LinkedInAnalyseIn):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── PYQ Generator ─────────────────────────────────────────────────────────────
+
+class PYQIn(BaseModel):
+    company: str
+    round_type: str
+    target_role: str = "Software Engineer"
+
+
+@app.post("/api/pyq/generate")
+async def pyq_generate(payload: PYQIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    prompt = (
+        "You are an expert on Indian campus placement interviews and aptitude tests in 2026. "
+        "Generate previous year questions for the specified company and round type.\n\n"
+        f"Input:\n"
+        f"- Company: {payload.company}\n"
+        f"- Round: {payload.round_type} (Aptitude/Coding/Technical/HR)\n"
+        f"- Role: {payload.target_role}\n\n"
+        "Return JSON:\n"
+        "{\n"
+        '  "company": "company name",\n'
+        '  "round": "round type",\n'
+        '  "questions": [\n'
+        '    {\n'
+        '      "question": "exact question text",\n'
+        '      "type": "MCQ/Coding/Subjective",\n'
+        '      "difficulty": "Easy/Medium/Hard",\n'
+        '      "answer": "correct answer or approach",\n'
+        '      "explanation": "why this is the answer, what concept it tests",\n'
+        '      "frequency": "Asked frequently/Sometimes asked/Rarely asked",\n'
+        '      "topic": "e.g. Time & Work, Arrays, OOP, HR Behavioural"\n'
+        '    }\n'
+        '  ],\n'
+        '  "exam_pattern": {\n'
+        '    "total_questions": number,\n'
+        '    "time_limit": "e.g. 60 minutes",\n'
+        '    "sections": ["list", "of", "section", "names"],\n'
+        '    "negative_marking": true or false,\n'
+        '    "difficulty_level": "Easy/Medium/Hard"\n'
+        '  },\n'
+        '  "pro_tips": ["tip 1", "tip 2", "tip 3", "tip 4"],\n'
+        '  "resources": [\n'
+        '    {\n'
+        '      "name": "resource name",\n'
+        '      "url": "actual working URL",\n'
+        '      "what_to_practice": "specific advice"\n'
+        '    }\n'
+        '  ]\n'
+        '}\n\n'
+        f"Generate 10 questions. Be specific to this company — TCS NQT questions are very different from "
+        f"Infosys InfyTQ which are different from Google interviews. "
+        "Only return valid JSON with no markdown."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq PYQ response: {raw[:500]!r}")
+        return parse_groq_json(raw)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Internships ───────────────────────────────────────────────────────────────
+
+INTERNSHIPS_CACHE_PATH = Path(__file__).parent / "internships_cache.json"
+INTERNSHIPS_CACHE_TTL_HOURS = 24
+INTERNSHIP_ROLES = [
+    "intern",
+    "software intern",
+    "data science intern",
+    "frontend intern",
+    "backend intern",
+    "ML intern",
+    "product management intern",
+]
+
+
+def _load_internships_cache() -> dict | None:
+    if not INTERNSHIPS_CACHE_PATH.exists():
+        return None
+    try:
+        payload = json.loads(INTERNSHIPS_CACHE_PATH.read_text(encoding="utf-8"))
+        ts = datetime.fromisoformat(payload["timestamp"])
+        if datetime.now(timezone.utc) - ts < timedelta(hours=INTERNSHIPS_CACHE_TTL_HOURS):
+            return payload
+        print("[Internships] Cache expired, will refresh")
+    except Exception:
+        pass
+    return None
+
+
+@app.get("/api/internships/list")
+async def internships_list(skills: str = ""):
+    cached = _load_internships_cache()
+    raw_internships: list = []
+
+    if cached:
+        raw_internships = cached.get("internships", [])
+    else:
+        app_id = os.getenv("ADZUNA_APP_ID", "")
+        app_key = os.getenv("ADZUNA_APP_KEY", "")
+        if not app_id or not app_key:
+            raise HTTPException(status_code=503, detail="Adzuna credentials not configured in .env")
+
+        seen_ids: set = set()
+        async with httpx.AsyncClient(timeout=15) as client:
+            for role in INTERNSHIP_ROLES:
+                try:
+                    resp = await client.get(
+                        "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                        params={
+                            "app_id": app_id,
+                            "app_key": app_key,
+                            "results_per_page": 50,
+                            "what": role,
+                            "where": "india",
+                            "content-type": "application/json",
+                        },
+                    )
+                    resp.raise_for_status()
+                    for job in resp.json().get("results", []):
+                        jid = job.get("id", "")
+                        if jid and jid in seen_ids:
+                            continue
+                        if jid:
+                            seen_ids.add(jid)
+
+                        salary_min = job.get("salary_min")
+                        salary_max = job.get("salary_max")
+                        salary_str = ""
+                        if salary_min and salary_max and salary_min > 0:
+                            lpa_min = round(salary_min / 100000, 1)
+                            lpa_max = round(salary_max / 100000, 1)
+                            salary_str = f"₹{lpa_min}-{lpa_max} LPA"
+                        elif salary_min and salary_min > 0:
+                            salary_str = f"₹{round(salary_min / 100000, 1)}+ LPA"
+
+                        days_ago_val: int | None = None
+                        hiring_status_val: str | None = None
+                        created_raw = job.get("created", "")
+                        if created_raw:
+                            try:
+                                created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+                                days_ago_val = (datetime.now(timezone.utc) - created_dt).days
+                                if days_ago_val <= 7:
+                                    hiring_status_val = "Actively Hiring"
+                                elif days_ago_val <= 30:
+                                    hiring_status_val = "Recently Posted"
+                                else:
+                                    hiring_status_val = "May Be Closed"
+                            except Exception:
+                                pass
+
+                        raw_internships.append({
+                            "id": jid,
+                            "title": job.get("title", ""),
+                            "company": job.get("company", {}).get("display_name", "Unknown"),
+                            "location": job.get("location", {}).get("display_name", "India"),
+                            "description": (job.get("description", "") or "")[:350],
+                            "salary": salary_str,
+                            "redirect_url": job.get("redirect_url", ""),
+                            "created": created_raw,
+                            "days_ago": days_ago_val,
+                            "hiring_status": hiring_status_val,
+                        })
+                except Exception as exc:
+                    print(f"[Internships] Failed for role '{role}': {exc}")
+
+        cache_payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "internships": raw_internships,
+        }
+        INTERNSHIPS_CACHE_PATH.write_text(json.dumps(cache_payload, indent=2), encoding="utf-8")
+        print(f"[Internships] Cached {len(raw_internships)} listings")
+
+    user_skills_lower = [s.strip().lower() for s in skills.split(",") if s.strip()] if skills else []
+    total_skills = max(len(user_skills_lower), 1)
+
+    result = []
+    for job in raw_internships:
+        if user_skills_lower:
+            text = (job.get("description", "") + " " + job.get("title", "") + " " + job.get("company", "")).lower()
+            matched = sum(1 for s in user_skills_lower if s in text)
+            match_score = min(100, int((matched / total_skills) * 100))
+        else:
+            match_score = 50
+        result.append({**job, "match_score": match_score})
+
+    result.sort(key=lambda x: x["match_score"], reverse=True)
+    return {"internships": result, "total": len(result)}
+
+
+class InternshipsMatchIn(BaseModel):
+    college: str
+    college_tier: str = "Tier 2"
+    branch: str
+    year: str
+    cgpa: float
+    skills: list[str]
+    target_role: str
+
+
+@app.post("/api/internships/ai-match")
+async def internships_ai_match(payload: InternshipsMatchIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    skills_str = ", ".join(payload.skills) if payload.skills else "Not specified"
+    prompt = (
+        "You are an internship placement expert for Indian engineering students in 2026. "
+        "Given this student profile, suggest the best internship strategies and companies.\n\n"
+        "Student profile:\n"
+        f"- College: {payload.college}\n"
+        f"- College Tier: {payload.college_tier}\n"
+        f"- Branch: {payload.branch}\n"
+        f"- Year: {payload.year}\n"
+        f"- CGPA: {payload.cgpa}\n"
+        f"- Skills: {skills_str}\n"
+        f"- Target Role: {payload.target_role}\n\n"
+        "Return JSON:\n"
+        "{\n"
+        '  "best_platforms": [\n'
+        '    {\n'
+        '      "platform": "platform name",\n'
+        '      "url": "actual URL",\n'
+        '      "why": "why this platform is best for this student specifically",\n'
+        '      "how_to_use": "specific tip for using this platform"\n'
+        '    }\n'
+        '  ],\n'
+        '  "recommended_internship_types": [\n'
+        '    {\n'
+        '      "type": "e.g. Open Source Contribution, Research Internship, Startup Internship, Big Tech Virtual",\n'
+        '      "difficulty": "Easy/Medium/Hard to get",\n'
+        '      "timeline": "how long to prepare",\n'
+        '      "why_good_for_them": "specific to their profile"\n'
+        '    }\n'
+        '  ],\n'
+        '  "virtual_internship_programs": [\n'
+        '    {\n'
+        '      "name": "program name e.g. Google STEP, Microsoft Engage, Goldman Sachs Insight",\n'
+        '      "company": "company",\n'
+        '      "url": "actual application URL",\n'
+        '      "eligibility": "who can apply",\n'
+        '      "deadline": "typical application window e.g. October-December",\n'
+        '      "stipend": "e.g. 50,000/month or unpaid",\n'
+        '      "difficulty": "Easy/Medium/Hard"\n'
+        '    }\n'
+        '  ],\n'
+        '  "action_plan": ["step 1", "step 2", "step 3", "step 4", "step 5"],\n'
+        '  "verdict": "2 sentences on their internship prospects being brutally honest"\n'
+        "}\n"
+        "Only return valid JSON with no markdown."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+        )
+        raw = completion.choices[0].message.content or ""
+        print(f"[DEBUG] Groq internships response: {raw[:500]!r}")
+        return parse_groq_json(raw)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
