@@ -168,6 +168,9 @@ export default function Dashboard() {
             <button onClick={() => router.push("/tracker")} className="text-sm text-gray-400 hover:text-white transition">
               Tracker
             </button>
+            <button onClick={() => router.push("/progress")} className="text-sm text-gray-400 hover:text-white transition">
+              Progress
+            </button>
             <button onClick={() => router.push("/oncampus")} className="text-sm text-gray-400 hover:text-white transition">
               On Campus
             </button>
