@@ -62,6 +62,35 @@ type AIStrategy = {
   verdict: string;
 };
 
+type Startup = {
+  name: string;
+  industry: string;
+  stage: string;
+  why_good_fit: string;
+  linkedin_url: string;
+  careers_url: string | null;
+  city: string;
+  hiring_likelihood: "High" | "Medium" | "Low";
+  how_to_apply: string;
+};
+
+type StartupsResult = {
+  startups: Startup[];
+  pro_tip: string;
+};
+
+type BrowseListing = {
+  id?: string;
+  title: string;
+  company: string;
+  location: string;
+  salary: string;
+  redirect_url: string;
+  days_ago: number | null;
+  hiring_status: string | null;
+  source: string;
+};
+
 const NAV_LINKS = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Skill Gap", path: "/skills" },
@@ -70,6 +99,7 @@ const NAV_LINKS = [
   { label: "Market", path: "/market" },
   { label: "Resume", path: "/resume" },
   { label: "Tracker", path: "/tracker" },
+  { label: "Progress", path: "/progress" },
   { label: "On Campus", path: "/oncampus" },
   { label: "Off Campus", path: "/offcampus" },
   { label: "Resources", path: "/resources" },
@@ -315,7 +345,8 @@ export default function Internships() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [tab, setTab] = useState<"listings" | "strategy" | "programs">("listings");
+  const [tab, setTab] = useState<"listings" | "startups" | "strategy" | "programs">("listings");
+  const [startupsTab, setStartupsTab] = useState<"ai_matched" | "browse">("ai_matched");
 
   // Listings state
   const [internships, setInternships] = useState<Internship[]>([]);
@@ -331,6 +362,21 @@ export default function Internships() {
   const [strategy, setStrategy] = useState<AIStrategy | null>(null);
   const [strategyLoading, setStrategyLoading] = useState(false);
   const [strategyError, setStrategyError] = useState("");
+
+  // Startups — AI matched
+  const [aiStartups, setAiStartups] = useState<StartupsResult | null>(null);
+  const [aiStartupsLoading, setAiStartupsLoading] = useState(false);
+  const [aiStartupsError, setAiStartupsError] = useState("");
+
+  // Startups — Browse All
+  const [browseListings, setBrowseListings] = useState<BrowseListing[]>([]);
+  const [browseTotal, setBrowseTotal] = useState(0);
+  const [browsePage, setBrowsePage] = useState(1);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState("");
+  const [browseSearch, setBrowseSearch] = useState("");
+  const [browseIndustry, setBrowseIndustry] = useState("");
+  const [browseCity, setBrowseCity] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -402,6 +448,67 @@ export default function Internships() {
     }
   }
 
+  useEffect(() => {
+    if (tab === "startups" && profile && !aiStartups && !aiStartupsLoading && !aiStartupsError) {
+      fetchAiStartups();
+    }
+  }, [tab, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchAiStartups() {
+    const cached = localStorage.getItem("placeiq_startups");
+    if (cached) {
+      try { setAiStartups(JSON.parse(cached)); return; } catch {}
+    }
+    if (!profile) return;
+    setAiStartupsLoading(true);
+    setAiStartupsError("");
+    try {
+      const res = await fetch("http://localhost:8000/api/startups/find", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skills: profile.skills || [],
+          branch: profile.branch,
+          target_role: profile.targetRole,
+          college_tier: profile.collegeTier || "Tier 2",
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data: StartupsResult = await res.json();
+      setAiStartups(data);
+      localStorage.setItem("placeiq_startups", JSON.stringify(data));
+    } catch (e: unknown) {
+      setAiStartupsError(e instanceof Error ? e.message : "Failed to load AI matched startups");
+    } finally {
+      setAiStartupsLoading(false);
+    }
+  }
+
+  async function fetchBrowseStartups(page = 1) {
+    setBrowseLoading(true);
+    setBrowseError("");
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (browseSearch) params.set("search", browseSearch);
+      if (browseIndustry) params.set("industry", browseIndustry);
+      if (browseCity) params.set("city", browseCity);
+      const res = await fetch(`http://localhost:8000/api/startups/list?${params}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (page === 1) {
+        setBrowseListings(data.startups || []);
+      } else {
+        setBrowseListings(prev => [...prev, ...(data.startups || [])]);
+      }
+      setBrowseTotal(data.total_count || 0);
+      setBrowsePage(page);
+    } catch (e: unknown) {
+      setBrowseError(e instanceof Error ? e.message : "Failed to load startup listings");
+    } finally {
+      setBrowseLoading(false);
+    }
+  }
+
   const filteredInternships = useMemo(() => {
     return internships.filter(j => {
       if (filterRole && !j.title.toLowerCase().includes(filterRole.toLowerCase())) return false;
@@ -458,7 +565,7 @@ export default function Internships() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-8 border-b border-gray-800 pb-0">
-          {(["listings", "strategy", "programs"] as const).map(t => (
+          {(["listings", "startups", "strategy", "programs"] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -468,7 +575,7 @@ export default function Internships() {
                   : "border-transparent text-gray-400 hover:text-white"
               }`}
             >
-              {t === "listings" ? "Live Listings" : t === "strategy" ? "AI Strategy" : "Programs"}
+              {t === "listings" ? "Live Listings" : t === "startups" ? "Startups" : t === "strategy" ? "AI Strategy" : "Programs"}
             </button>
           ))}
         </div>
@@ -620,6 +727,225 @@ export default function Internships() {
                   )}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ── Startups Tab ─────────────────────────────────────────────────── */}
+        {tab === "startups" && (
+          <div>
+            {/* Sub-tabs */}
+            <div className="flex gap-2 mb-6">
+              {(["ai_matched", "browse"] as const).map(st => (
+                <button
+                  key={st}
+                  onClick={() => {
+                    setStartupsTab(st);
+                    if (st === "browse" && browseListings.length === 0 && !browseLoading) {
+                      fetchBrowseStartups(1);
+                    }
+                  }}
+                  className={`px-4 py-2 text-sm rounded-lg transition font-medium border ${
+                    startupsTab === st
+                      ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                      : "text-gray-400 hover:text-white border-gray-800"
+                  }`}
+                >
+                  {st === "ai_matched" ? "AI Matched" : "Browse All"}
+                </button>
+              ))}
+            </div>
+
+            {/* AI Matched */}
+            {startupsTab === "ai_matched" && (
+              <div>
+                {aiStartupsLoading && (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-gray-400 text-sm">Finding startups most likely to hire you...</p>
+                  </div>
+                )}
+                {aiStartupsError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm mb-6 flex items-center justify-between">
+                    <span>{aiStartupsError}</span>
+                    <button onClick={fetchAiStartups} className="text-blue-400 hover:text-blue-300 text-sm ml-4">Retry</button>
+                  </div>
+                )}
+                {!aiStartupsLoading && aiStartups && (
+                  <div>
+                    <div className="grid md:grid-cols-2 gap-4 mb-6">
+                      {aiStartups.startups?.map((startup, i) => (
+                        <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-white">{startup.name}</h4>
+                              <p className="text-gray-500 text-xs mt-0.5">{startup.city}</p>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ml-3 ${
+                              startup.hiring_likelihood === "High" ? "bg-green-500/15 text-green-400 border-green-500/30" :
+                              startup.hiring_likelihood === "Medium" ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" :
+                              "bg-gray-700/50 text-gray-400 border-gray-600"
+                            }`}>
+                              {startup.hiring_likelihood} chance
+                            </span>
+                          </div>
+                          <div className="flex gap-2 mb-3 flex-wrap">
+                            <span className="text-xs px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">{startup.industry}</span>
+                            <span className="text-xs px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">{startup.stage}</span>
+                          </div>
+                          <p className="text-sm text-emerald-400 mb-2">✦ {startup.why_good_fit}</p>
+                          <p className="text-xs text-gray-500 border-t border-gray-800 pt-2 mt-2">
+                            <span className="text-blue-400 font-medium">How to apply: </span>{startup.how_to_apply}
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            {startup.linkedin_url && (
+                              <a href={startup.linkedin_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition">
+                                LinkedIn →
+                              </a>
+                            )}
+                            {startup.careers_url && (
+                              <a href={startup.careers_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs px-3 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:border-blue-400 transition">
+                                Apply →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {aiStartups.pro_tip && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5 mb-4">
+                        <p className="text-xs text-yellow-500 font-semibold uppercase tracking-wider mb-1">Pro Tip</p>
+                        <p className="text-gray-300 text-sm">{aiStartups.pro_tip}</p>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => { localStorage.removeItem("placeiq_startups"); setAiStartups(null); fetchAiStartups(); }}
+                      className="text-xs text-gray-600 hover:text-gray-400 transition"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                )}
+                {!aiStartupsLoading && !aiStartups && !aiStartupsError && (
+                  <div className="text-center py-20">
+                    <p className="text-gray-500 mb-4">Complete your profile to get AI-matched startup recommendations.</p>
+                    <button onClick={() => router.push("/onboarding")} className="text-sm text-blue-400 hover:text-blue-300 transition">
+                      Set up profile →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Browse All */}
+            {startupsTab === "browse" && (
+              <div>
+                <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1.5 block">Search</label>
+                      <input
+                        value={browseSearch}
+                        onChange={e => setBrowseSearch(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
+                        placeholder="Company or title..."
+                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1.5 block">Industry / Role</label>
+                      <input
+                        value={browseIndustry}
+                        onChange={e => setBrowseIndustry(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
+                        placeholder="e.g. Software, ML, Design"
+                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1.5 block">City</label>
+                      <input
+                        value={browseCity}
+                        onChange={e => setBrowseCity(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
+                        placeholder="e.g. Bangalore, Remote"
+                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => fetchBrowseStartups(1)}
+                    className="mt-4 text-sm bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg transition"
+                  >
+                    Search
+                  </button>
+                </div>
+
+                {browseLoading && browsePage === 1 && (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-gray-400 text-sm">Fetching startup listings...</p>
+                  </div>
+                )}
+                {browseError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm mb-6">{browseError}</div>
+                )}
+                {!browseLoading && browseListings.length > 0 && (
+                  <>
+                    <p className="text-gray-500 text-sm mb-4">{browseTotal} listings found</p>
+                    <div className="grid gap-4">
+                      {browseListings.map((job, idx) => (
+                        <div key={job.id || String(idx)} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+                          <div className="flex items-start justify-between gap-4 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                <h3 className="font-semibold text-white">{job.title}</h3>
+                                {job.source && (
+                                  <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>{job.source}</span>
+                                )}
+                              </div>
+                              <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              {hiringBadge(job.hiring_status)}
+                              {job.days_ago !== null && (
+                                <span className="text-xs text-gray-500">{job.days_ago === 0 ? "Today" : `${job.days_ago}d ago`}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm text-blue-400">{job.salary || "Stipend not mentioned"}</span>
+                            {job.redirect_url && (
+                              <a href={job.redirect_url} target="_blank" rel="noopener noreferrer"
+                                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition shrink-0">
+                                Apply →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {browseListings.length < browseTotal && (
+                      <div className="mt-6 text-center">
+                        <button
+                          onClick={() => fetchBrowseStartups(browsePage + 1)}
+                          disabled={browseLoading}
+                          className="text-sm text-blue-400 hover:text-blue-300 border border-blue-500/30 px-6 py-2 rounded-lg transition disabled:opacity-50"
+                        >
+                          {browseLoading ? "Loading..." : "Load More"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+                {!browseLoading && !browseError && browseListings.length === 0 && (
+                  <div className="text-center py-20 text-gray-500">
+                    <p>Use the filters above and click Search to browse startup listings.</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
