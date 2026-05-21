@@ -2160,6 +2160,7 @@ async def _fetch_adzuna_internships() -> list[dict]:
                     "days_ago": days_ago,
                     "hiring_status": _hiring_status(days_ago),
                     "source": "Adzuna",
+                    "tags": [],
                 })
         except Exception as exc:
             print(f"[Adzuna] Internships fetch failed: {exc}")
@@ -2207,6 +2208,7 @@ async def _fetch_remotive_internships() -> list[dict]:
                         "days_ago": days_ago,
                         "hiring_status": _hiring_status(days_ago),
                         "source": "Remotive",
+                        "tags": tags,
                     })
             except Exception as exc:
                 print(f"[Remotive] Failed for category '{cat}': {exc}")
@@ -2248,6 +2250,7 @@ async def _fetch_arbeitnow_internships() -> list[dict]:
                     "days_ago": days_ago,
                     "hiring_status": _hiring_status(days_ago),
                     "source": "Arbeitnow",
+                    "tags": tags,
                 })
             return results
     except Exception as e:
@@ -2298,6 +2301,7 @@ def _generate_ai_internships() -> list[dict]:
                 "days_ago": days_int,
                 "hiring_status": _hiring_status(days_int),
                 "source": "AI Generated",
+                "tags": [],
             })
         print(f"[AI Fallback] Generated {len(results)} listings")
         return results
