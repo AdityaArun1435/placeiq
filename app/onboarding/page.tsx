@@ -4,18 +4,41 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const COLLEGES = [
+  // IITs
   "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur",
-  "IIT Roorkee", "IIT Hyderabad", "IIT Bangalore", "NIT Trichy", "NIT Warangal",
-  "NIT Surathkal", "NIT Calicut", "BITS Pilani", "BITS Goa", "BITS Hyderabad",
-  "VIT Vellore", "VIT Chennai", "SRM Chennai", "Manipal Institute of Technology",
-  "Amrita Coimbatore", "PSG College of Technology", "CEG Anna University",
-  "Jadavpur University", "NSIT Delhi", "DTU Delhi", "IIIT Hyderabad",
-  "IIIT Bangalore", "IIIT Allahabad", "Thapar University", "Chandigarh University",
-  "LPU", "Christ University", "RV College of Engineering", "PES University",
-  "BMS College of Engineering", "MSRIT Bangalore", "Symbiosis Institute of Technology",
-  "MIT Pune", "COEP Pune", "VJTI Mumbai", "SPIT Mumbai", "KJ Somaiya",
-  "Nirma University", "DAIICT", "GEC Thrissur", "Model Engineering College",
-  "College of Engineering Trivandrum", "Other"
+  "IIT Roorkee", "IIT Hyderabad", "IIT Guwahati", "IIT BHU",
+  // NITs
+  "NIT Trichy", "NIT Warangal", "NIT Surathkal", "NIT Calicut",
+  // BITS
+  "BITS Pilani", "BITS Goa", "BITS Hyderabad",
+  // VIT campuses
+  "VIT Vellore", "VIT Chennai", "VIT Bhopal", "VIT AP",
+  // SRM campuses
+  "SRM KTR", "SRM Ramapuram", "SRM Vadapalani", "SRM Delhi-NCR", "SRM Sonepat",
+  // South India private — premium
+  "SSN College of Engineering", "SNU Chennai", "Amrita Coimbatore",
+  "Amrita Chennai", "Amrita Bengaluru",
+  // Bangalore autonomous
+  "PESU", "PESU Electronic City", "RV College of Engineering",
+  "BMS College of Engineering", "MSRIT",
+  // Coimbatore / Tamil Nadu
+  "PSG College of Technology", "Coimbatore Institute of Technology",
+  "Kongu Engineering College", "Sri Krishna College of Engineering",
+  "Bannari Amman Institute of Technology",
+  // Chennai private
+  "CEG Anna University", "MIT Campus Anna University",
+  "KCG College of Technology", "Rajalakshmi Engineering College",
+  "Saveetha Engineering College", "Panimalar Engineering College",
+  "Velammal Engineering College", "Hindustan Institute of Technology",
+  "Sri Venkateswara College of Engineering",
+  // Other Coimbatore
+  "Karpagam College of Engineering", "SNS College of Technology",
+  // Other well-known colleges
+  "Manipal Institute of Technology", "Thapar University", "Chandigarh University",
+  "IIIT Hyderabad", "IIIT Bangalore", "IIIT Allahabad",
+  "DTU Delhi", "NSIT Delhi", "Jadavpur University",
+  "VJTI Mumbai", "COEP Pune",
+  "Other"
 ];
 
 const SKILLS = [

@@ -47,13 +47,38 @@ const RATINGS = [
   { label: "3+ stars", value: 3 },
 ];
 
-function Stars({ rating }: { rating: number | null }) {
-  if (!rating) return <span className="text-gray-600 text-xs">No rating</span>;
+function ambitionboxSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function RatingDisplay({ rating, companyName }: { rating: number | null; companyName: string }) {
+  if (!rating || rating < 1 || rating > 5) return <span className="text-gray-600 text-xs">No rating yet</span>;
+
   const full = Math.floor(rating);
+  const stars = "★".repeat(full) + "☆".repeat(5 - full);
+  const color = rating >= 4.0 ? "text-green-400" : rating >= 3.0 ? "text-yellow-400" : "text-red-400";
+  const slug = ambitionboxSlug(companyName);
+  const url = `https://www.ambitionbox.com/overview/${slug}-overview`;
+
   return (
-    <span className="text-yellow-400 text-xs font-medium">
-      {"★".repeat(full)}{"☆".repeat(5 - full)} {rating.toFixed(1)}
-    </span>
+    <div className="relative group inline-flex items-center">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`text-xs font-medium flex items-center gap-1 ${color} hover:underline`}
+        onClick={e => e.stopPropagation()}
+      >
+        <span>{stars}</span>
+        <span>{rating.toFixed(1)}</span>
+        <span className="text-gray-600 mx-0.5">·</span>
+        <span className="text-gray-400">Employee Rating</span>
+      </a>
+      <div className="absolute bottom-full left-0 mb-2 z-20 w-64 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+        <p className="font-semibold text-white mb-1">Employee Rating (Ambitionbox)</p>
+        <p className="text-gray-400 leading-relaxed">Based on employee reviews on Ambitionbox — rates work culture, salary, and work-life balance</p>
+      </div>
+    </div>
   );
 }
 
@@ -282,7 +307,7 @@ export default function CompanyDirectoryPage() {
 
                   {/* Meta row */}
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
-                    <Stars rating={co.rating} />
+                    <RatingDisplay rating={co.rating} companyName={co.name} />
                     {co.headquarters !== "India" && (
                       <span className="text-gray-600 text-xs">{co.headquarters}</span>
                     )}
