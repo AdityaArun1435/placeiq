@@ -12,7 +12,7 @@ import pdfplumber
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from groq import Groq
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
@@ -56,6 +56,325 @@ _migrate()
 
 _groq_key = os.getenv("GROQ_API_KEY", "")
 _groq = Groq(api_key=_groq_key) if (_groq_key and _groq_key != "your_key_here") else None
+
+# ── College Database ──────────────────────────────────────────────────────────
+COLLEGE_DB: dict[str, dict] = {
+    "VIT Vellore": {
+        "short_name": "VIT Vellore", "city": "Vellore", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": 11, "placement_rate": "85%",
+        "avg_package": "6.8 LPA", "highest_package": "47 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Amazon", "Microsoft", "Zoho"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "Large campus drives; Amazon & Microsoft visit regularly; VIT scores highest among private colleges",
+    },
+    "VIT Chennai": {
+        "short_name": "VIT Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "68%",
+        "avg_package": "5.5 LPA", "highest_package": "28 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": True,
+        "known_for": "Smaller campus than Vellore; fewer product company visits; mainly service companies",
+    },
+    "VIT Bhopal": {
+        "short_name": "VIT Bhopal", "city": "Bhopal", "state": "Madhya Pradesh",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "62%",
+        "avg_package": "5.0 LPA", "highest_package": "22 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Capgemini", "Hexaware"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": True,
+        "known_for": "Newer campus; growing placement cell; predominantly service company offers",
+    },
+    "VIT AP": {
+        "short_name": "VIT AP", "city": "Amaravati", "state": "Andhra Pradesh",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "60%",
+        "avg_package": "4.8 LPA", "highest_package": "20 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Mphasis"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": True,
+        "known_for": "Newest VIT campus; building placement network; limited product company presence",
+    },
+    "SRM KTR": {
+        "short_name": "SRM KTR", "city": "Kattankulathur", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": 27, "placement_rate": "72%",
+        "avg_package": "6.0 LPA", "highest_package": "42 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Samsung", "Zoho", "Amazon"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "Main campus; Samsung R&D visits; Zoho regularly recruits; strong core engineering placements",
+    },
+    "SRM Ramapuram": {
+        "short_name": "SRM Ramapuram", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "58%",
+        "avg_package": "4.5 LPA", "highest_package": "18 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Smaller SRM campus; primarily service company placements; fewer product company drives",
+    },
+    "SRM Vadapalani": {
+        "short_name": "SRM Vadapalani", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "52%",
+        "avg_package": "4.0 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Capgemini", "Accenture"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Arts & Science focus; engineering placements limited; off-campus routes more common",
+    },
+    "SRM Delhi-NCR": {
+        "short_name": "SRM Delhi-NCR", "city": "Modinagar", "state": "Uttar Pradesh",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "55%",
+        "avg_package": "4.2 LPA", "highest_package": "16 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "North India SRM campus; limited company visits; students compete for off-campus opportunities",
+    },
+    "SRM Sonepat": {
+        "short_name": "SRM Sonepat", "city": "Sonepat", "state": "Haryana",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "50%",
+        "avg_package": "3.8 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Capgemini", "Tech Mahindra"],
+        "placement_season": "October–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Newest SRM campus; placement infrastructure still maturing; strong off-campus prep recommended",
+    },
+    "SSN College of Engineering": {
+        "short_name": "SSN College", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": 74, "placement_rate": "82%",
+        "avg_package": "6.5 LPA", "highest_package": "38 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Zoho", "Amazon", "Cognizant", "Hexaware"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "N. Sivakumar Trust college; known for strong Zoho recruitment; consistently high placement rates in Chennai",
+    },
+    "SNU Chennai": {
+        "short_name": "SNU Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "76%",
+        "avg_package": "7.5 LPA", "highest_package": "35 LPA",
+        "top_recruiters": ["Samsung", "Amazon", "TCS", "Infosys", "Wipro", "Capgemini"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Shiv Nadar University campus; research-oriented; Samsung is a key recruiter; higher avg package than most private colleges",
+    },
+    "Amrita Coimbatore": {
+        "short_name": "Amrita CBE", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 1", "nirf_rank": 7, "placement_rate": "83%",
+        "avg_package": "7.0 LPA", "highest_package": "44 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Amazon", "Zoho", "Cisco"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "NIRF rank 7 — highest-ranked private college in South India; research output is strong; Cisco and Amazon visit regularly",
+    },
+    "Amrita Chennai": {
+        "short_name": "Amrita Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "72%",
+        "avg_package": "6.0 LPA", "highest_package": "28 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "Smaller Amrita campus; fewer company visits than Coimbatore; students often transfer to Coimbatore campus for placements",
+    },
+    "Amrita Bengaluru": {
+        "short_name": "Amrita Bengaluru", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "70%",
+        "avg_package": "6.0 LPA", "highest_package": "30 LPA",
+        "top_recruiters": ["Infosys", "Wipro", "TCS", "Accenture", "Cognizant", "Bosch"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "Bangalore location gives proximity to IT companies; Bosch and Accenture visit; R&D opportunities from Bangalore ecosystem",
+    },
+    "PESU": {
+        "short_name": "PES University", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "83%",
+        "avg_package": "8.0 LPA", "highest_package": "52 LPA",
+        "top_recruiters": ["Amazon", "Microsoft", "Samsung", "Oracle", "Wipro", "Infosys", "Accenture"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "8.0",
+        "tpo_strict": True,
+        "known_for": "Ring Road campus; top private college in Karnataka; Amazon and Microsoft visit; highest avg package among Karnataka private colleges",
+    },
+    "PESU Electronic City": {
+        "short_name": "PESU EC", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "72%",
+        "avg_package": "6.5 LPA", "highest_package": "35 LPA",
+        "top_recruiters": ["Wipro", "Infosys", "TCS", "Accenture", "Capgemini", "Samsung"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "PES Electronic City campus; good placement but lower than Ring Road campus; proximity to Electronic City tech park helps",
+    },
+    "RV College of Engineering": {
+        "short_name": "RVCE", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": 46, "placement_rate": "87%",
+        "avg_package": "7.8 LPA", "highest_package": "48 LPA",
+        "top_recruiters": ["Amazon", "Infosys", "Wipro", "Cisco", "Samsung", "Bosch", "TCS"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "Top autonomous college in Karnataka; Cisco, Samsung, Bosch visit consistently; very high placement rate; strong alumni network",
+    },
+    "BMS College of Engineering": {
+        "short_name": "BMSCE", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "82%",
+        "avg_package": "7.0 LPA", "highest_package": "42 LPA",
+        "top_recruiters": ["Infosys", "Wipro", "Amazon", "Samsung", "Bosch", "TCS", "Accenture"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": True,
+        "known_for": "BMS Trust college; strong core and IT placements; good industry connections in Bengaluru; Bosch recruits heavily",
+    },
+    "MSRIT": {
+        "short_name": "MSRIT", "city": "Bengaluru", "state": "Karnataka",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "78%",
+        "avg_package": "6.5 LPA", "highest_package": "36 LPA",
+        "top_recruiters": ["Infosys", "Wipro", "TCS", "Amazon", "Accenture", "Capgemini"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "MS Ramaiah; autonomous college; less strict TPO; strong IT placements; students with good LeetCode skills get product company offers",
+    },
+    "PSG College of Technology": {
+        "short_name": "PSG Tech", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": 28, "placement_rate": "82%",
+        "avg_package": "6.5 LPA", "highest_package": "38 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Zoho", "Cognizant", "L&T Technology"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.5",
+        "tpo_strict": True,
+        "known_for": "PSG Sons & Charities; Zoho is a marquee recruiter; one of the best autonomous colleges in Tamil Nadu",
+    },
+    "Coimbatore Institute of Technology": {
+        "short_name": "CIT Coimbatore", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "73%",
+        "avg_package": "5.5 LPA", "highest_package": "24 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Government-aided; strong placement consistency; many alumni in TCS and Infosys; steady but not spectacular packages",
+    },
+    "Kongu Engineering College": {
+        "short_name": "KEC Erode", "city": "Erode", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "71%",
+        "avg_package": "5.0 LPA", "highest_package": "22 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Kongu Nadu Educational Trust; solid engineering programs; consistent TCS and Infosys recruitment; rural location means lower cost of living",
+    },
+    "Sri Krishna College of Engineering": {
+        "short_name": "SKCET", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "67%",
+        "avg_package": "4.5 LPA", "highest_package": "18 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Tech Mahindra"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Good mid-tier college in Coimbatore; strong electronics and mechanical placements; IT students compete well off-campus",
+    },
+    "KCG College of Technology": {
+        "short_name": "KCG Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "60%",
+        "avg_package": "4.0 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Accenture"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.0",
+        "tpo_strict": False,
+        "known_for": "Arts & Science background; engineering wing decent for service company placements; students advised to build strong off-campus profile",
+    },
+    "Rajalakshmi Engineering College": {
+        "short_name": "REC Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "65%",
+        "avg_package": "4.5 LPA", "highest_package": "18 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Established Chennai private college; consistent service company placement; students with projects get better off-campus opportunities",
+    },
+    "Saveetha Engineering College": {
+        "short_name": "Saveetha Engg", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "58%",
+        "avg_package": "3.8 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.0",
+        "tpo_strict": False,
+        "known_for": "Part of Saveetha group; placements are average; off-campus and AMCAT/Pool Campus routes more effective for students here",
+    },
+    "Panimalar Engineering College": {
+        "short_name": "Panimalar", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "60%",
+        "avg_package": "4.0 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Mphasis"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.0",
+        "tpo_strict": False,
+        "known_for": "Good student strength; placements driven by TCS and Infosys pool campus; students must actively prepare off-campus",
+    },
+    "Velammal Engineering College": {
+        "short_name": "Velammal Engg", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "65%",
+        "avg_package": "4.5 LPA", "highest_package": "20 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Velammal group; good sports and technical fest culture; IT placements steady; mechanical and ECE placements increasing",
+    },
+    "CEG Anna University": {
+        "short_name": "CEG Guindy", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 1", "nirf_rank": 35, "placement_rate": "84%",
+        "avg_package": "7.5 LPA", "highest_package": "45 LPA",
+        "top_recruiters": ["Zoho", "Amazon", "Cognizant", "TCS", "Infosys", "L&T", "Samsung"],
+        "placement_season": "August–March", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Oldest engineering college in Tamil Nadu (1794); government university; Zoho is top recruiter; no CGPA pressure as companies trust CEG brand",
+    },
+    "MIT Campus Anna University": {
+        "short_name": "MIT Anna Univ", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "72%",
+        "avg_package": "6.0 LPA", "highest_package": "28 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Madras Institute of Technology campus under Anna University; good academic reputation; autonomous status; auto and aero engineering well-placed",
+    },
+    "Hindustan Institute of Technology": {
+        "short_name": "HITS Chennai", "city": "Chennai", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "63%",
+        "avg_package": "4.5 LPA", "highest_package": "18 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "HCL", "Cognizant"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.5",
+        "tpo_strict": False,
+        "known_for": "Hindustan Group; decent placement for service companies; aviation and aerospace programs are a differentiator; IT placements average",
+    },
+    "Bannari Amman Institute of Technology": {
+        "short_name": "BIT Erode", "city": "Sathyamangalam", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "72%",
+        "avg_package": "5.0 LPA", "highest_package": "20 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": True,
+        "known_for": "BIT-Bannari; strong placement consistency for a semi-rural location; CGPA strictly enforced; mechanical and EEE placements solid",
+    },
+    "Sri Venkateswara College of Engineering": {
+        "short_name": "SVCE Sriperumbudur", "city": "Sriperumbudur", "state": "Tamil Nadu",
+        "tier": "Tier 2", "nirf_rank": None, "placement_rate": "70%",
+        "avg_package": "5.0 LPA", "highest_package": "22 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "HCL"],
+        "placement_season": "August–February", "cgpa_cutoff_most_companies": "7.0",
+        "tpo_strict": False,
+        "known_for": "Near Chennai's manufacturing corridor (SIPCOT); proximity to Hyundai and Saint-Gobain plants aids core placements; IT placement decent",
+    },
+    "Karpagam College of Engineering": {
+        "short_name": "KCE Coimbatore", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "58%",
+        "avg_package": "3.8 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Tech Mahindra"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.0",
+        "tpo_strict": False,
+        "known_for": "Karpagam Academy group; mid-tier Coimbatore college; placements through pool campus; LeetCode and certifications are a must for off-campus",
+    },
+    "SNS College of Technology": {
+        "short_name": "SNS Tech", "city": "Coimbatore", "state": "Tamil Nadu",
+        "tier": "Tier 3", "nirf_rank": None, "placement_rate": "58%",
+        "avg_package": "3.8 LPA", "highest_package": "14 LPA",
+        "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Accenture"],
+        "placement_season": "September–February", "cgpa_cutoff_most_companies": "6.0",
+        "tpo_strict": False,
+        "known_for": "SNS Institutions; decent student activities; service company placements; students encouraged to pursue off-campus for better packages",
+    },
+}
 
 MARKET_CACHE_PATH = Path(__file__).parent / "market_cache.json"
 MARKET_CACHE_TTL_HOURS = 24
@@ -336,26 +655,41 @@ def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
         else "No"
     )
 
+    college_info = COLLEGE_DB.get(payload.college, {})
+    college_context = ""
+    if college_info:
+        recruiters_str = ", ".join(college_info.get("top_recruiters", []))
+        college_context = (
+            f"\nVERIFIED DATA for {payload.college}:\n"
+            f"- Actual placement rate: {college_info['placement_rate']}\n"
+            f"- Average package: {college_info['avg_package']}\n"
+            f"- Highest package recorded: {college_info['highest_package']}\n"
+            f"- CGPA cutoff at this college (most companies): {college_info['cgpa_cutoff_most_companies']}\n"
+            f"- TPO strictly enforces CGPA cutoff: {'Yes' if college_info['tpo_strict'] else 'No'}\n"
+            f"- Top companies that visit this campus: {recruiters_str}\n"
+            f"- Known for: {college_info['known_for']}\n"
+        )
+
     prompt = (
         "You are a brutally honest placement prediction expert for Indian engineering students. "
         "You have deep knowledge of actual placement realities at Indian colleges.\n\n"
         "STRICT RULES you must follow:\n"
-        "- Most companies visiting Tier 2 colleges (VIT, SRM, Manipal, Amrita) have a CGPA cutoff of 7.5 or 8.0. "
-        "A student with CGPA below 7.5 at a Tier 2 college is filtered out before even getting an interview at most companies. "
-        "Their score should reflect this — typically 15-30% max.\n"
-        "- At Tier 1 colleges (IITs, NITs, BITS), CGPA matters less because the brand carries weight, "
+        "- Use the VERIFIED DATA section below as ground truth for this specific college. "
+        "If the student's CGPA is below the cutoff listed, their score must reflect that they will be filtered by TPO before interviews.\n"
+        "- Most companies visiting Tier 2 colleges have a CGPA cutoff of 7.0–8.0. "
+        "A student below the cutoff at a Tier 2 college should score 15–30% max on-campus.\n"
+        "- At Tier 1 colleges (IITs, NITs, BITS, Amrita Coimbatore, CEG), CGPA matters less because the brand carries weight, "
         "but below 6.5 is still a red flag.\n"
-        "- At Tier 3 colleges, on-campus placement itself is rare. Even strong students should not score above 60% "
-        "unless they have exceptional off-campus skills (strong LeetCode, internships, projects).\n"
-        "- Skills without projects to back them up add very little value. "
-        "Listing 10 skills with 0 projects should not give a high score.\n"
-        "- A student in 1st or 2nd year should score lower — placements are 2+ years away, too early to predict accurately.\n"
-        "- Internship experience is a strong positive signal — weight it heavily.\n"
-        "- LeetCode 200+ problems is a strong signal for SWE roles specifically.\n\n"
+        "- At Tier 3 colleges, on-campus placement is rare. Even strong students should not score above 60% "
+        "unless they have exceptional off-campus skills.\n"
+        "- Skills without projects add very little value. 10 skills + 0 projects should not score high.\n"
+        "- 1st or 2nd year students should score lower — placements are 2+ years away.\n"
+        "- Internship experience is a strong positive signal.\n"
+        "- LeetCode 200+ problems is a strong positive signal for SWE roles.\n\n"
         "Given this student profile, return a JSON object with exactly three fields:\n"
-        "- score (integer 0-100): brutally realistic placement probability at THEIR college\n"
-        "- reasoning (3-4 sentences being specific about what is hurting and helping their score, "
-        "mentioning their actual college name and CGPA cutoffs they may not meet)\n"
+        "- score (integer 0-100): brutally realistic placement probability at THEIR specific college\n"
+        "- reasoning (3-4 sentences specific about what is hurting and helping their score, "
+        "citing actual college name, CGPA cutoffs, and which companies they can/cannot reach)\n"
         "- college_tier (string: \"Tier 1\", \"Tier 2\", or \"Tier 3\")\n\n"
         "Only return valid JSON, nothing else.\n\n"
         f"Profile:\n"
@@ -372,6 +706,7 @@ def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
         f"- Open source contributions: {payload.openSource}\n"
         f"- Certifications: {payload.certifications}\n"
         f"- GitHub active: {payload.githubActive}"
+        f"{college_context}"
     )
 
     try:
@@ -1177,6 +1512,417 @@ async def generate_cold_email(payload: ColdEmailIn):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Career Link Verification ──────────────────────────────────────────────────
+
+import asyncio as _asyncio
+
+CAREERS_CACHE_PATH = Path(__file__).parent / "careers_cache.json"
+ONCAMPUS_DATA_CACHE_PATH = Path(__file__).parent / "oncampus_cache.json"
+COMPANY_DIR_PATH = Path(__file__).parent / "company_directory.json"
+
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_json(path: Path, data):
+    try:
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print(f"[Cache] Write failed {path}: {e}")
+
+
+@app.get("/api/resources/careers")
+async def verify_career_link(company: str):
+    key = company.lower().strip()
+    cache = _load_json(CAREERS_CACHE_PATH)
+
+    if key in cache:
+        entry = cache[key]
+        try:
+            ts = datetime.fromisoformat(entry["verified_at"])
+            if datetime.now(timezone.utc) - ts < timedelta(days=30):
+                return {"url": entry["url"], "from_cache": True}
+        except Exception:
+            pass
+
+    slug = re.sub(r"[^a-z0-9]", "", key.replace(" ", ""))
+    patterns = [
+        f"https://careers.{slug}.com",
+        f"https://www.{slug}.com/careers",
+        f"https://www.{slug}.com/jobs",
+        f"https://{slug}.com/careers",
+    ]
+
+    found_url: str | None = None
+    hdrs = {"User-Agent": _UA, "Accept": "text/html"}
+    async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
+        for url in patterns:
+            try:
+                resp = await client.get(url, headers=hdrs)
+                if resp.status_code == 200:
+                    found_url = url
+                    break
+            except Exception:
+                continue
+
+    cache[key] = {"url": found_url, "verified_at": datetime.now(timezone.utc).isoformat()}
+    _save_json(CAREERS_CACHE_PATH, cache)
+    return {"url": found_url, "from_cache": False}
+
+
+# ── OnCampus: Interview Intel ─────────────────────────────────────────────────
+
+def _ab_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower().strip()).strip("-")
+
+
+def _scrape_ab_interview(company: str) -> dict | None:
+    """Sync AmbitionBox scraper — runs via asyncio.to_thread."""
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+
+        slug = _ab_slug(company)
+        hdrs = {
+            "User-Agent": _UA,
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.5",
+        }
+        resp = _req.get(
+            f"https://www.ambitionbox.com/interviews/{slug}-interview-questions",
+            headers=hdrs, timeout=8,
+        )
+        if resp.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        body = soup.get_text(" ", strip=True).lower()
+
+        difficulty = "Moderate"
+        for kw, label in [("difficult", "Hard"), ("hard", "Hard"), ("easy", "Easy")]:
+            if kw in body[:2000]:
+                difficulty = label
+                break
+
+        salary = None
+        m = re.search(r"(?:rs\.?)\s*(\d+(?:\.\d+)?)\s*(?:l(?:pa)?|lakh)", body[:3000], re.I)
+        if m:
+            salary = f"Rs.{m.group(1)} LPA"
+
+        topics: list[str] = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            t = a.get_text(strip=True)
+            if "interview" in href.lower() and t and 3 < len(t) < 45 and slug not in href.lower():
+                topics.append(t)
+        topics = list(dict.fromkeys(topics))[:6]
+
+        return {"difficulty": difficulty, "avg_salary": salary or "N/A", "topics": topics, "source": "ambitionbox"}
+    except Exception as e:
+        print(f"[AmbitionBox] Scrape failed for '{company}': {e}")
+        return None
+
+
+class OnCampusDataIn(BaseModel):
+    company: str
+
+
+@app.post("/api/oncampus/data")
+async def oncampus_data(payload: OnCampusDataIn):
+    key = payload.company.lower().strip()
+    cache = _load_json(ONCAMPUS_DATA_CACHE_PATH)
+
+    if key in cache:
+        entry = cache[key]
+        try:
+            ts = datetime.fromisoformat(entry["cached_at"])
+            if datetime.now(timezone.utc) - ts < timedelta(days=7):
+                return entry["data"]
+        except Exception:
+            pass
+
+    result = await _asyncio.to_thread(_scrape_ab_interview, payload.company)
+
+    if not result and _groq:
+        try:
+            raw = _groq.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": (
+                    f"For '{payload.company}' recruiting freshers in India, give interview intelligence.\n"
+                    'Return ONLY JSON: {"difficulty":"Easy|Moderate|Hard","avg_salary":"e.g. 8-12 LPA",'
+                    '"topics":["topic1","topic2","topic3","topic4","topic5"]}\n'
+                    "topics = actual tech topics this company tests in fresher interviews."
+                )}],
+                temperature=0.3,
+            ).choices[0].message.content or ""
+            result = parse_groq_json(raw)
+            result["source"] = "ai"
+        except Exception as e:
+            print(f"[OnCampus] Groq fallback failed: {e}")
+
+    if not result:
+        result = {"difficulty": "Moderate", "avg_salary": "N/A", "topics": [], "source": "ai"}
+
+    cache[key] = {"data": result, "cached_at": datetime.now(timezone.utc).isoformat()}
+    _save_json(ONCAMPUS_DATA_CACHE_PATH, cache)
+    return result
+
+
+# ── Company Directory ─────────────────────────────────────────────────────────
+
+_SEED_COMPANIES = [
+    {"name": "TCS", "industry": "IT Services", "size": "500,000+", "headquarters": "Mumbai", "rating": 3.8, "description": "India's largest IT services company serving 150+ countries with 600,000+ employees.", "linkedin": "tata-consultancy-services"},
+    {"name": "Infosys", "industry": "IT Services", "size": "300,000+", "headquarters": "Bangalore", "rating": 3.7, "description": "Global leader in next-generation digital services and consulting for clients in 50+ countries.", "linkedin": "infosys"},
+    {"name": "Wipro", "industry": "IT Services", "size": "250,000+", "headquarters": "Bangalore", "rating": 3.6, "description": "Global information technology, consulting and business process services company.", "linkedin": "wipro"},
+    {"name": "HCL Technologies", "industry": "IT Services", "size": "220,000+", "headquarters": "Noida", "rating": 3.7, "description": "Next-generation global technology company helping enterprises reimagine their businesses.", "linkedin": "hcl-technologies"},
+    {"name": "Tech Mahindra", "industry": "IT Services", "size": "150,000+", "headquarters": "Pune", "rating": 3.5, "description": "Digital transformation, consulting and business re-engineering services company.", "linkedin": "tech-mahindra"},
+    {"name": "LTIMindtree", "industry": "IT Services", "size": "80,000+", "headquarters": "Mumbai", "rating": 3.7, "description": "Global technology consulting and digital solutions company.", "linkedin": "ltimindtree"},
+    {"name": "Mphasis", "industry": "IT Services", "size": "35,000+", "headquarters": "Bangalore", "rating": 3.6, "description": "Applied technology services company specializing in cloud and cognitive services.", "linkedin": "mphasis"},
+    {"name": "Persistent Systems", "industry": "IT Services", "size": "23,000+", "headquarters": "Pune", "rating": 3.8, "description": "Digital transformation and enterprise modernization services company.", "linkedin": "persistent-systems"},
+    {"name": "Coforge", "industry": "IT Services", "size": "25,000+", "headquarters": "Noida", "rating": 3.6, "description": "Digital services company focused on insurance, banking and travel verticals.", "linkedin": "coforge"},
+    {"name": "Hexaware", "industry": "IT Services", "size": "32,000+", "headquarters": "Mumbai", "rating": 3.7, "description": "Automation-led digital transformation services and solutions company.", "linkedin": "hexaware-technologies"},
+    {"name": "Accenture", "industry": "IT Consulting", "size": "300,000+", "headquarters": "Bangalore", "rating": 3.9, "description": "Global professional services company with capabilities in digital, cloud and security.", "linkedin": "accenture"},
+    {"name": "Cognizant", "industry": "IT Services", "size": "340,000+", "headquarters": "Chennai", "rating": 3.6, "description": "Leading provider of information technology, consulting and business process services.", "linkedin": "cognizant"},
+    {"name": "Capgemini", "industry": "IT Consulting", "size": "100,000+", "headquarters": "Mumbai", "rating": 3.7, "description": "Global leader in consulting, technology services and digital transformation.", "linkedin": "capgemini"},
+    {"name": "IBM India", "industry": "IT Services", "size": "100,000+", "headquarters": "Bangalore", "rating": 3.9, "description": "Leading provider of hybrid cloud, AI and consulting expertise.", "linkedin": "ibm"},
+    {"name": "Deloitte", "industry": "IT Consulting", "size": "100,000+", "headquarters": "Mumbai", "rating": 3.9, "description": "Global professional services firm providing audit, consulting and advisory services.", "linkedin": "deloitte"},
+    {"name": "Zoho", "industry": "SaaS/Product", "size": "15,000+", "headquarters": "Chennai", "rating": 4.0, "description": "Technology company making 55+ business software applications used by 100M+ users.", "linkedin": "zoho"},
+    {"name": "Freshworks", "industry": "SaaS/Product", "size": "5,500+", "headquarters": "Chennai", "rating": 4.2, "description": "Customer and employee experience software company serving 60,000+ businesses globally.", "linkedin": "freshworks"},
+    {"name": "Chargebee", "industry": "SaaS/Product", "size": "1,200+", "headquarters": "Chennai", "rating": 4.2, "description": "Revenue management platform powering subscription businesses worldwide.", "linkedin": "chargebee"},
+    {"name": "BrowserStack", "industry": "SaaS/Product", "size": "1,200+", "headquarters": "Mumbai", "rating": 4.3, "description": "Testing platform providing access to 3,000+ real devices and browsers.", "linkedin": "browserstack"},
+    {"name": "Razorpay", "industry": "FinTech", "size": "3,500+", "headquarters": "Bangalore", "rating": 4.3, "description": "Full-stack financial services company providing payment solutions and banking infrastructure.", "linkedin": "razorpay"},
+    {"name": "CRED", "industry": "FinTech", "size": "2,000+", "headquarters": "Bangalore", "rating": 4.1, "description": "Members-only credit card bill payments platform rewarding users for timely payments.", "linkedin": "cred-club"},
+    {"name": "PhonePe", "industry": "FinTech", "size": "5,000+", "headquarters": "Bangalore", "rating": 4.0, "description": "India's leading digital payments platform with 500M+ registered users.", "linkedin": "phonepe"},
+    {"name": "Groww", "industry": "FinTech", "size": "2,000+", "headquarters": "Bangalore", "rating": 4.0, "description": "India's largest discount broker for stocks, mutual funds and IPOs.", "linkedin": "groww"},
+    {"name": "Paytm", "industry": "FinTech", "size": "12,000+", "headquarters": "Noida", "rating": 3.5, "description": "Digital payments and financial services company with 300M+ registered users.", "linkedin": "one97-communications"},
+    {"name": "Swiggy", "industry": "Food Tech", "size": "6,000+", "headquarters": "Bangalore", "rating": 3.8, "description": "India's leading on-demand delivery platform for food, groceries and essentials.", "linkedin": "swiggy"},
+    {"name": "Zomato", "industry": "Food Tech", "size": "6,000+", "headquarters": "Gurugram", "rating": 3.7, "description": "Food services company providing restaurant discovery, online ordering and delivery.", "linkedin": "zomato"},
+    {"name": "Flipkart", "industry": "E-Commerce", "size": "30,000+", "headquarters": "Bangalore", "rating": 3.8, "description": "India's largest e-commerce marketplace, owned by Walmart since 2018.", "linkedin": "flipkart"},
+    {"name": "Meesho", "industry": "E-Commerce", "size": "3,500+", "headquarters": "Bangalore", "rating": 4.0, "description": "Social commerce platform enabling millions of small businesses to sell online.", "linkedin": "meesho"},
+    {"name": "Zepto", "industry": "E-Commerce", "size": "3,000+", "headquarters": "Mumbai", "rating": 3.9, "description": "Quick commerce company delivering groceries in 10 minutes across Indian cities.", "linkedin": "zepto"},
+    {"name": "Ola", "industry": "Mobility", "size": "5,000+", "headquarters": "Bangalore", "rating": 3.5, "description": "India's largest ride-hailing platform expanding into EVs and financial services.", "linkedin": "ola-cabs"},
+    {"name": "Microsoft India", "industry": "Software/Cloud", "size": "10,000+", "headquarters": "Hyderabad", "rating": 4.5, "description": "Global technology company enabling digital transformation with cloud, AI and software.", "linkedin": "microsoft"},
+    {"name": "Amazon India", "industry": "E-Commerce/Cloud", "size": "100,000+", "headquarters": "Hyderabad", "rating": 4.0, "description": "Global e-commerce and cloud computing company with major development centers in India.", "linkedin": "amazon"},
+    {"name": "Google India", "industry": "Technology", "size": "10,000+", "headquarters": "Hyderabad", "rating": 4.6, "description": "Global technology company with major R&D centers in Hyderabad and Bangalore.", "linkedin": "google"},
+    {"name": "Oracle India", "industry": "Software/Cloud", "size": "25,000+", "headquarters": "Bangalore", "rating": 4.0, "description": "Global technology company offering database, cloud and enterprise software solutions.", "linkedin": "oracle"},
+    {"name": "Adobe India", "industry": "Software", "size": "6,000+", "headquarters": "Noida", "rating": 4.4, "description": "Global software company creating digital media and marketing cloud solutions.", "linkedin": "adobe"},
+    {"name": "Salesforce India", "industry": "SaaS/CRM", "size": "12,000+", "headquarters": "Hyderabad", "rating": 4.3, "description": "Global leader in CRM software and cloud-based enterprise business applications.", "linkedin": "salesforce"},
+    {"name": "SAP India", "industry": "Enterprise Software", "size": "15,000+", "headquarters": "Bangalore", "rating": 4.1, "description": "Global enterprise software company providing ERP and business management solutions.", "linkedin": "sap"},
+    {"name": "Walmart Global Tech India", "industry": "Retail/Tech", "size": "12,000+", "headquarters": "Bangalore", "rating": 4.2, "description": "Technology division of Walmart building digital solutions for global retail operations.", "linkedin": "walmart-global-tech"},
+    {"name": "JPMorgan Chase India", "industry": "Banking/Tech", "size": "55,000+", "headquarters": "Bangalore", "rating": 4.1, "description": "Global financial services firm with one of India's largest technology operations centers.", "linkedin": "jpmorgan-chase"},
+    {"name": "Goldman Sachs India", "industry": "Banking/Tech", "size": "15,000+", "headquarters": "Bangalore", "rating": 4.3, "description": "Global investment banking company with major tech operations in India.", "linkedin": "goldman-sachs"},
+    {"name": "Nagarro", "industry": "IT Services", "size": "20,000+", "headquarters": "Gurugram", "rating": 4.0, "description": "Global software product engineering company focused on digital-first transformation.", "linkedin": "nagarro"},
+    {"name": "Tata Elxsi", "industry": "Product Engineering", "size": "12,000+", "headquarters": "Bangalore", "rating": 3.9, "description": "Design and technology services company specializing in EVs, medical devices and broadcasting.", "linkedin": "tata-elxsi"},
+    {"name": "Harman India", "industry": "Electronics/Software", "size": "10,000+", "headquarters": "Bangalore", "rating": 3.9, "description": "Audio and connected car technology company with large software engineering teams.", "linkedin": "harman-international"},
+    {"name": "Nykaa", "industry": "E-Commerce", "size": "3,000+", "headquarters": "Mumbai", "rating": 3.8, "description": "Beauty and lifestyle retail company with omni-channel presence across India.", "linkedin": "nykaa"},
+    {"name": "Urban Company", "industry": "Home Services/Tech", "size": "3,000+", "headquarters": "Gurugram", "rating": 4.0, "description": "Technology platform connecting consumers with trusted home service professionals.", "linkedin": "urban-company"},
+    {"name": "InMobi", "industry": "AdTech", "size": "3,000+", "headquarters": "Bangalore", "rating": 4.0, "description": "Global marketing cloud and advertising technology platform for mobile audiences.", "linkedin": "inmobi"},
+    {"name": "Druva", "industry": "SaaS/Cloud", "size": "1,500+", "headquarters": "Pune", "rating": 4.2, "description": "Cloud data protection and management platform trusted by 4,000+ companies globally.", "linkedin": "druva-inc"},
+    {"name": "Byju's", "industry": "EdTech", "size": "15,000+", "headquarters": "Bangalore", "rating": 3.2, "description": "India's largest edtech company offering online learning for K-12 and competitive exams.", "linkedin": "byjus"},
+    {"name": "PwC India", "industry": "IT Consulting", "size": "50,000+", "headquarters": "Mumbai", "rating": 3.9, "description": "Professional services network providing assurance, advisory and tax services.", "linkedin": "pricewaterhousecoopers"},
+    {"name": "KPMG India", "industry": "IT Consulting", "size": "30,000+", "headquarters": "Gurugram", "rating": 3.8, "description": "Global network of professional firms providing audit, tax and advisory services.", "linkedin": "kpmg-india"},
+]
+
+
+def _scrape_ab_companies_page(page_num: int) -> list[dict]:
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+        import urllib.parse
+
+        params = urllib.parse.urlencode({"industry": "IT Services & Consulting", "page": page_num})
+        url = f"https://www.ambitionbox.com/list-of-companies?{params}"
+        hdrs = {"User-Agent": _UA, "Accept": "text/html", "Accept-Language": "en-US,en;q=0.5"}
+        resp = _req.get(url, headers=hdrs, timeout=10)
+        if resp.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        companies = []
+
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict) and item.get("@type") == "Organization":
+                        name = item.get("name", "").strip()
+                        if name and 1 < len(name) < 60:
+                            companies.append({
+                                "name": name,
+                                "rating": item.get("aggregateRating", {}).get("ratingValue"),
+                                "description": (item.get("description", "") or "")[:200],
+                            })
+            except Exception:
+                pass
+
+        if not companies:
+            for el in soup.find_all(["h2", "h3", "h4"]):
+                name = el.get_text(strip=True)
+                if name and 2 < len(name) < 60 and not any(c in name for c in ["?", "Top", "List", "Review", "Copyright"]):
+                    companies.append({"name": name, "rating": None, "description": ""})
+
+        return companies[:30]
+    except Exception as e:
+        print(f"[AmbitionBox] List page {page_num} failed: {e}")
+        return []
+
+
+async def _verify_career_url_fast(client: httpx.AsyncClient, name: str) -> str | None:
+    slug = re.sub(r"[^a-z0-9]", "", name.lower().replace(" ", ""))
+    for url in [f"https://careers.{slug}.com", f"https://www.{slug}.com/careers"]:
+        try:
+            resp = await client.get(url, headers={"User-Agent": _UA}, timeout=4)
+            if resp.status_code == 200:
+                return url
+        except Exception:
+            pass
+    return None
+
+
+async def _build_company_directory() -> list[dict]:
+    print("[Directory] Building company directory cache...")
+    by_name: dict[str, dict] = {co["name"].lower(): dict(co) for co in _SEED_COMPANIES}
+
+    try:
+        app_id = os.getenv("ADZUNA_APP_ID", "")
+        app_key = os.getenv("ADZUNA_APP_KEY", "")
+        if app_id and app_key:
+            async with httpx.AsyncClient(timeout=12) as client:
+                for role in ADZUNA_ROLES[:5]:
+                    try:
+                        resp = await client.get(
+                            "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                            params={"app_id": app_id, "app_key": app_key, "results_per_page": 50, "what": role},
+                        )
+                        resp.raise_for_status()
+                        for job in resp.json().get("results", []):
+                            cname = (job.get("company", {}).get("display_name") or "").strip()
+                            if cname and 2 < len(cname) < 60 and cname.lower() not in by_name:
+                                by_name[cname.lower()] = {
+                                    "name": cname, "industry": "IT Services", "size": "N/A",
+                                    "headquarters": "India", "rating": None, "description": "",
+                                    "linkedin": re.sub(r"[^a-z0-9]", "-", cname.lower()).strip("-"),
+                                    "source": "adzuna",
+                                }
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f"[Directory] Adzuna fetch failed: {e}")
+
+    try:
+        for pg in range(1, 6):
+            results = await _asyncio.to_thread(_scrape_ab_companies_page, pg)
+            for co in results:
+                n = co["name"]
+                if n and n.lower() not in by_name:
+                    by_name[n.lower()] = {
+                        "name": n, "industry": "IT Services", "size": "N/A",
+                        "headquarters": "India", "rating": co.get("rating"),
+                        "description": co.get("description", ""),
+                        "linkedin": re.sub(r"[^a-z0-9]", "-", n.lower()).strip("-"),
+                        "source": "ambitionbox",
+                    }
+            if not results:
+                break
+    except Exception as e:
+        print(f"[Directory] AmbitionBox failed: {e}")
+
+    companies = list(by_name.values())
+    careers_cache = _load_json(CAREERS_CACHE_PATH)
+    seeds = [co for co in companies if "source" not in co][:50]
+
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        urls = await _asyncio.gather(*[_verify_career_url_fast(client, co["name"]) for co in seeds], return_exceptions=True)
+
+    for co, url in zip(seeds, urls):
+        found = url if isinstance(url, str) else None
+        co["careers_url"] = found
+        co["careers_verified"] = bool(found)
+        careers_cache[co["name"].lower()] = {"url": found, "verified_at": datetime.now(timezone.utc).isoformat()}
+
+    for co in companies:
+        if "careers_url" not in co:
+            cached = careers_cache.get(co["name"].lower()) or {}
+            co["careers_url"] = cached.get("url")
+            co["careers_verified"] = bool(cached.get("url"))
+
+    _save_json(CAREERS_CACHE_PATH, careers_cache)
+    result = {"companies": companies, "total_count": len(companies), "last_updated": datetime.now(timezone.utc).isoformat()}
+    _save_json(COMPANY_DIR_PATH, result)
+    print(f"[Directory] Done - {len(companies)} companies cached.")
+    return companies
+
+
+@app.get("/api/directory/companies")
+async def company_directory(
+    page: int = 1,
+    industry: str = "",
+    city: str = "",
+    rating: float = 0,
+    search: str = "",
+    background_tasks: BackgroundTasks = None,
+):
+    cache_data = _load_json(COMPANY_DIR_PATH)
+    building = False
+
+    if not cache_data or not cache_data.get("companies"):
+        building = True
+        if background_tasks is not None:
+            background_tasks.add_task(_build_company_directory)
+        companies = [dict(co) for co in _SEED_COMPANIES]
+        for co in companies:
+            co.setdefault("careers_url", None)
+            co.setdefault("careers_verified", False)
+    else:
+        try:
+            ts = datetime.fromisoformat(cache_data.get("last_updated", "2000-01-01T00:00:00+00:00"))
+            if datetime.now(timezone.utc) - ts > timedelta(days=7) and background_tasks is not None:
+                background_tasks.add_task(_build_company_directory)
+        except Exception:
+            pass
+        companies = cache_data.get("companies", [])
+
+    filtered = companies
+    if search:
+        s = search.lower()
+        filtered = [c for c in filtered if s in c.get("name", "").lower() or s in c.get("description", "").lower()]
+    if industry:
+        filtered = [c for c in filtered if industry.lower() in c.get("industry", "").lower()]
+    if city:
+        filtered = [c for c in filtered if city.lower() in c.get("headquarters", "").lower()]
+    if rating > 0:
+        filtered = [c for c in filtered if (c.get("rating") or 0) >= rating]
+
+    total = len(filtered)
+    page_size = 50
+    start = (page - 1) * page_size
+
+    return {
+        "companies": filtered[start : start + page_size],
+        "total_count": total,
+        "page": page,
+        "has_more": start + page_size < total,
+        "building": building,
+    }
+
+
+@app.get("/api/colleges/list")
+def colleges_list():
+    return {"colleges": list(COLLEGE_DB.values())}
 
 
 # ── LinkedIn Profile Analyser ─────────────────────────────────────────────────
