@@ -26,6 +26,7 @@ type Internship = {
   hiring_status: string | null;
   match_score: number;
   source: "Adzuna" | "Remotive" | "Arbeitnow" | "AI Generated";
+  tags?: string[];
 };
 
 type SourceCounts = { Adzuna?: number; Remotive?: number; Arbeitnow?: number; "AI Generated"?: number; [key: string]: number | undefined };
@@ -92,23 +93,22 @@ type BrowseListing = {
 };
 
 const NAV_LINKS = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Skill Gap", path: "/skills" },
-  { label: "Companies", path: "/companies" },
-  { label: "Roadmap", path: "/roadmap" },
-  { label: "Market", path: "/market" },
-  { label: "Resume", path: "/resume" },
-  { label: "Tracker", path: "/tracker" },
-  { label: "Progress", path: "/progress" },
-  { label: "On Campus", path: "/oncampus" },
-  { label: "Off Campus", path: "/offcampus" },
-  { label: "Resources", path: "/resources" },
-  { label: "Cold Email", path: "/coldemail" },
-  { label: "Directory", path: "/company-directory" },
-  { label: "LinkedIn", path: "/linkedin" },
-  { label: "PYQ", path: "/pyq" },
-  { label: "Internships", path: "/internships", active: true },
-  { label: "Referral Radar", path: "/referral" },
+  { label: "Dashboard",        path: "/dashboard" },
+  { label: "Skills",           path: "/skills" },
+  { label: "Companies",        path: "/companies" },
+  { label: "Roadmap",          path: "/roadmap" },
+  { label: "On Campus",        path: "/oncampus" },
+  { label: "Off Campus",       path: "/offcampus" },
+  { label: "Internships",      path: "/internships", active: true },
+  { label: "Tracker",          path: "/tracker" },
+  { label: "Market",           path: "/market" },
+  { label: "Resume",           path: "/resume" },
+  { label: "LinkedIn",         path: "/linkedin" },
+  { label: "PYQ",              path: "/pyq" },
+  { label: "Referral",         path: "/referral" },
+  { label: "Progress",         path: "/progress" },
+  { label: "Resources",        path: "/resources" },
+  { label: "Company Directory", path: "/company-directory" },
 ];
 
 const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [
@@ -294,6 +294,25 @@ const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [
   },
 ];
 
+function validateUrl(url: string | null | undefined, companyName: string): string {
+  if (url && url.startsWith("https://")) return url;
+  return `https://www.google.com/search?q=${encodeURIComponent(companyName)}+careers`;
+}
+
+function computeMatchScore(job: Internship, skills: string[]): number | null {
+  if (!skills || skills.length === 0) return null;
+  const jobTags = (job.tags || []).map(t => t.toLowerCase());
+  const titleWords = job.title.toLowerCase().split(/\s+/);
+  const searchable = [...jobTags, ...titleWords];
+  if (searchable.length === 0) return 5;
+  const denominator = jobTags.length > 0 ? jobTags.length : titleWords.length;
+  const matched = skills.filter(s =>
+    searchable.some(t => t.includes(s.toLowerCase()) || s.toLowerCase().includes(t))
+  ).length;
+  const raw = (matched / denominator) * 100;
+  return Math.min(100, Math.max(5, Math.round(raw)));
+}
+
 function sourceBadge(source: string) {
   if (source === "Remotive")      return "bg-green-500/10 text-green-400 border-green-500/20";
   if (source === "Arbeitnow")     return "bg-orange-500/10 text-orange-400 border-orange-500/20";
@@ -388,6 +407,14 @@ export default function Internships() {
       const raw = localStorage.getItem("placeiq_profile");
       if (raw) setProfile(JSON.parse(raw));
     } catch {}
+    // Restore cached listings immediately so they show while re-fetching
+    try {
+      const cached = localStorage.getItem("placeiq_internships_cache");
+      if (cached) {
+        const { jobs, by_source } = JSON.parse(cached);
+        if (jobs?.length) { setInternships(jobs); setSourceCounts(by_source || {}); }
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -404,8 +431,11 @@ export default function Internships() {
       const res = await fetch(`http://localhost:8000/api/internships/list?skills=${encodeURIComponent(skillsParam)}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setInternships(data.jobs || []);
-      setSourceCounts(data.by_source || {});
+      const jobs = data.jobs || [];
+      const by_source = data.by_source || {};
+      setInternships(jobs);
+      setSourceCounts(by_source);
+      try { localStorage.setItem("placeiq_internships_cache", JSON.stringify({ jobs, by_source })); } catch {}
     } catch (e: unknown) {
       setListingsError(e instanceof Error ? e.message : "Failed to load internships");
     } finally {
@@ -531,29 +561,35 @@ export default function Internships() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
+      <nav className="bg-[#0a0a0a] border-b border-gray-800 sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center gap-4">
+          <h1 className="text-xl font-bold shrink-0 cursor-pointer" onClick={() => router.push("/dashboard")}>
             Place<span className="text-blue-500">IQ</span>
           </h1>
-          <div className="flex gap-4 flex-wrap">
-            {NAV_LINKS.map(n => (
-              <button
-                key={n.path}
-                onClick={() => !n.active && router.push(n.path)}
-                className={`text-sm transition pb-0.5 ${n.active ? "text-white border-b border-blue-500" : "text-gray-400 hover:text-white"}`}
-              >
-                {n.label}
-              </button>
-            ))}
+          <div className="flex-1 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-1 whitespace-nowrap">
+              {NAV_LINKS.map(n => (
+                <button
+                  key={n.path}
+                  onClick={() => !n.active && router.push(n.path)}
+                  className={`text-sm px-3 py-1.5 rounded transition shrink-0 ${
+                    n.active
+                      ? "text-white bg-white/5 border-b-2 border-blue-500"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {n.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">
-            Sign out
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <img src={session?.user?.image || ""} className="w-7 h-7 rounded-full" alt="" />
+            <span className="text-gray-400 text-sm hidden md:inline">{session?.user?.name}</span>
+            <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">
+              Sign out
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -698,15 +734,18 @@ export default function Internships() {
 
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className={`text-xs font-medium ${matchTextColor(job.match_score)}`}>
-                            {job.match_score}% match
-                          </span>
-                          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${matchColor(job.match_score)}`}
-                              style={{ width: `${job.match_score}%` }}
-                            />
-                          </div>
+                          {(() => {
+                            const score = computeMatchScore(job, profile?.skills ?? []);
+                            if (score === null) return <span className="text-xs text-gray-600">— match</span>;
+                            return (
+                              <>
+                                <span className={`text-xs font-medium ${matchTextColor(score)}`}>{score}% match</span>
+                                <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all ${matchColor(score)}`} style={{ width: `${score}%` }} />
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                         {job.redirect_url && (
                           <a
@@ -800,17 +839,15 @@ export default function Internships() {
                           </p>
                           <div className="flex gap-2 mt-3">
                             {startup.linkedin_url && (
-                              <a href={startup.linkedin_url} target="_blank" rel="noopener noreferrer"
+                              <a href={validateUrl(startup.linkedin_url, startup.name)} target="_blank" rel="noopener noreferrer"
                                 className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition">
                                 LinkedIn →
                               </a>
                             )}
-                            {startup.careers_url && (
-                              <a href={startup.careers_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs px-3 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:border-blue-400 transition">
-                                Apply →
-                              </a>
-                            )}
+                            <a href={validateUrl(startup.careers_url, startup.name)} target="_blank" rel="noopener noreferrer"
+                              className="text-xs px-3 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:border-blue-400 transition">
+                              Apply →
+                            </a>
                           </div>
                         </div>
                       ))}
