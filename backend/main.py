@@ -1124,9 +1124,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://placeiq.vercel.app",
-        "https://*.vercel.app",
+        "https://placeiq-ashen.vercel.app",
     ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
