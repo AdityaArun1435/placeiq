@@ -23,9 +23,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from database import Base, engine, get_db
-from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn, Alumni
-from utils.college_lookup import get_college_stats, get_college_tier, get_all_college_stats
+from backend.database import Base, engine, get_db
+from backend.models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn, Alumni
+from backend.utils.college_lookup import get_college_stats, get_college_tier, get_all_college_stats
 
 load_dotenv()
 

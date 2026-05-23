@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, JSON, Text, Boolean
 from pydantic import BaseModel, Field
 from typing import List
-from database import Base
+from backend.database import Base
 
 
 class UserProfile(Base):
@@ -75,6 +75,7 @@ class SkillsGapIn(BaseModel):
     target_role: str
     skills: List[str]
     college_tier: str = ""
+    college: str = ""
     branch: str = ""
     cgpa: float = 0.0
 
@@ -92,6 +93,7 @@ class CompanyMatchIn(BaseModel):
     leetcode_count: str = "0"
     hackathons: str = "0"
     github_active: str = "no"
+    certifications: str = "0"
 
 
 class RoadmapIn(BaseModel):
