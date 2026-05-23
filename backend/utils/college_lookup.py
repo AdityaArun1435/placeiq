@@ -15,7 +15,7 @@ _PROJECT_DIR = Path(__file__).parent.parent.parent
 if str(_PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(_PROJECT_DIR))
 
-from backend.database import get_connection, db_type  # noqa: E402
+from database import get_connection, db_type  # noqa: E402
 
 _TIER_KEYWORDS: list[tuple[list[str], str]] = [
     (["iit", "iisc", "bits pilani", "nit trichy", "nit warangal"], "Tier 1"),

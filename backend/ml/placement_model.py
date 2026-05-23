@@ -29,7 +29,7 @@ _ENCODERS_PATH = _ML_DIR / "encoders.pkl"
 if str(_PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(_PROJECT_DIR))
 
-from backend.database import get_connection  # noqa: E402
+from database import get_connection  # noqa: E402
 
 # ── Tier assignment ────────────────────────────────────────────────────────────
 

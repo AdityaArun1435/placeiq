@@ -22,7 +22,7 @@ _PROJECT_DIR = Path(__file__).parent.parent.parent
 if str(_PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(_PROJECT_DIR))
 
-from backend.database import get_connection  # noqa: E402
+from database import get_connection  # noqa: E402
 
 # ── Paths & constants ─────────────────────────────────────────────────────────
 
@@ -370,7 +370,7 @@ def _clean(rows: list[dict]) -> list[dict]:
 
 # ── DB persistence ────────────────────────────────────────────────────────────
 
-from backend.database import db_type  # noqa: E402
+from database import db_type  # noqa: E402
 
 _DDL_SQLITE = """
 CREATE TABLE IF NOT EXISTS nirf_placements (

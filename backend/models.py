@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, JSON, Text, Boolean
 from pydantic import BaseModel, Field
 from typing import List
-from backend.database import Base
+from database import Base
 
 
 class UserProfile(Base):
