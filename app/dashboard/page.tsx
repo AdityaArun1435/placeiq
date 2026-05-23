@@ -279,8 +279,27 @@ export default function Dashboard() {
   useEffect(() => {
     if (!profile?.email) return;
     setScoreLoading(true);
-    const email = encodeURIComponent(profile.email);
-    fetchWithTimeout(`${config.apiUrl}/api/placement/score/${email}`, {}, 10000)
+    fetchWithTimeout(`${config.apiUrl}/api/placement/probability`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: profile.email,
+        college: profile.college,
+        branch: profile.branch,
+        year: "",
+        cgpa: profile.cgpa,
+        skills: profile.skills,
+        targetRole: profile.targetRole,
+        projectsCount: profile.projectsCount || "0",
+        hasInternship: profile.hasInternship || "no",
+        internshipMonths: profile.internshipMonths || "",
+        hackathons: profile.hackathons || "0",
+        leetcodeCount: profile.leetcodeCount || "0",
+        openSource: "no",
+        certifications: "0",
+        githubActive: profile.githubActive || "no",
+      }),
+    }, 10000)
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setLiveScore(data); })
       .catch(() => {})
