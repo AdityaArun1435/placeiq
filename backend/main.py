@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import math
@@ -8,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
+from bs4 import BeautifulSoup
 import pdfplumber
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from groq import Groq
@@ -23,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
 from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn, Alumni
+from utils.college_lookup import get_college_stats, get_college_tier, get_all_college_stats
 
 load_dotenv()
 
@@ -51,8 +54,170 @@ def _migrate():
             if col not in existing:
                 conn.execute(text(f"ALTER TABLE user_profiles ADD COLUMN {col} {definition}"))
 
+    # placement_sources table (multi-source college data)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS placement_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                college_name TEXT NOT NULL,
+                source_name TEXT NOT NULL,
+                placement_rate REAL,
+                median_salary REAL,
+                highest_salary REAL,
+                top_companies TEXT,
+                year INTEGER,
+                url TEXT,
+                scraped_at TEXT,
+                UNIQUE(college_name, source_name, year)
+            )
+        """))
+
+    # market_insights table (scraped news articles)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS market_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                summary TEXT,
+                source_name TEXT,
+                source_url TEXT,
+                skills_mentioned TEXT,
+                roles_mentioned TEXT,
+                companies_mentioned TEXT,
+                city_mentioned TEXT,
+                published_date TEXT,
+                scraped_at TEXT
+            )
+        """))
+
+    # AI response cache tables
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS roadmap_cache (
+                cache_key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cold_email_cache (
+                cache_key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS resume_cache (
+                cache_key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ai_cache_stats (
+                endpoint TEXT PRIMARY KEY,
+                cache_hits INTEGER DEFAULT 0,
+                cache_misses INTEGER DEFAULT 0,
+                groq_calls_saved INTEGER DEFAULT 0,
+                last_reset TEXT
+            )
+        """))
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS translation_cache (
+                original_text_hash TEXT PRIMARY KEY,
+                translated_title TEXT NOT NULL,
+                translated_description TEXT NOT NULL,
+                translated_at TEXT NOT NULL
+            )
+        """))
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pyq_explanations (
+                question_id TEXT PRIMARY KEY,
+                explanation TEXT NOT NULL,
+                generated_at TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pyq_quiz_cache (
+                cache_key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS coding_stats_cache (
+                platform TEXT NOT NULL,
+                username TEXT NOT NULL,
+                stats_json TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                PRIMARY KEY (platform, username)
+            )
+        """))
+
 
 _migrate()
+
+
+def _cache_get(table: str, key: str, ttl_hours: int) -> str | None:
+    """Return cached content if it exists and is within TTL, else None."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(f"SELECT content, created_at FROM {table} WHERE cache_key = :k"),
+                {"k": key},
+            ).fetchone()
+            if row:
+                ts = datetime.fromisoformat(row[1])
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - ts <= timedelta(hours=ttl_hours):
+                    return row[0]
+    except Exception as e:
+        print(f"[Cache] get error ({table}): {e}")
+    return None
+
+
+def _cache_set(table: str, key: str, content: str):
+    """Upsert content into cache table."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(f"DELETE FROM {table} WHERE cache_key = :k"),
+                {"k": key},
+            )
+            conn.execute(
+                text(f"INSERT INTO {table} (cache_key, content, created_at) VALUES (:k, :c, :t)"),
+                {"k": key, "c": content, "t": datetime.now(timezone.utc).isoformat()},
+            )
+    except Exception as e:
+        print(f"[Cache] set error ({table}): {e}")
+
+
+def _cache_stat(endpoint: str, hit: bool):
+    """Increment cache hit/miss stats."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO ai_cache_stats (endpoint, cache_hits, cache_misses, groq_calls_saved, last_reset)
+                VALUES (:ep, 0, 0, 0, :t)
+                ON CONFLICT(endpoint) DO NOTHING
+            """), {"ep": endpoint, "t": datetime.now(timezone.utc).isoformat()})
+            if hit:
+                conn.execute(text("""
+                    UPDATE ai_cache_stats
+                    SET cache_hits = cache_hits + 1, groq_calls_saved = groq_calls_saved + 1
+                    WHERE endpoint = :ep
+                """), {"ep": endpoint})
+            else:
+                conn.execute(text("""
+                    UPDATE ai_cache_stats SET cache_misses = cache_misses + 1 WHERE endpoint = :ep
+                """), {"ep": endpoint})
+    except Exception as e:
+        print(f"[Cache] stat error: {e}")
 
 _groq_key = os.getenv("GROQ_API_KEY", "")
 _groq = Groq(api_key=_groq_key) if (_groq_key and _groq_key != "your_key_here") else None
@@ -454,104 +619,150 @@ async def refresh_market_cache() -> dict:
 
     top_skills = extract_skills_from_jobs(all_jobs)
 
-    # Pre-compute log-normalised scores to pass to Groq
+    # Build market intelligence directly from Adzuna data — no Groq
     max_count = top_skills[0][1] if top_skills else 1
-    skills_with_scores = [
-        {"skill": s, "raw_count": c, "log_score": normalize_score(c, max_count)}
-        for s, c in top_skills
+
+    _SKILL_WHY = {
+        "Python": "Used across data science, backend, automation, and AI — the most versatile language for Indian fresher job listings",
+        "Java": "Backbone of enterprise software at TCS, Infosys, and most service companies; Spring Boot dominates backend hiring",
+        "JavaScript": "Frontend and Node.js backend — any web-facing role in India requires JavaScript proficiency",
+        "React": "Most demanded frontend framework across Indian product companies and startups in 2025",
+        "SQL": "Mandatory for data roles and expected in most backend interviews — can't be skipped",
+        "Docker": "Containerisation is now standard in DevOps and backend roles, driving up demand sharply",
+        "AWS": "Cloud skills command a 20-30% salary premium; AWS leads over GCP and Azure in Indian listings",
+        "Machine Learning": "AI/ML roles are growing 40% YoY in India; freshers with project experience stand out",
+        "TypeScript": "Replacing vanilla JavaScript in product companies — TypeScript jobs pay 15-20% more",
+        "Kubernetes": "Orchestration skill expected for senior DevOps; freshers learning it get a strong edge",
+        "Node.js": "Full-stack JavaScript development standard; startups and mid-size product companies rely on it",
+        "Django": "Python web framework popular at Indian startups and SMEs, second only to FastAPI in new projects",
+        "System Design": "Required for SDE-2 interviews and increasingly asked of freshers at product companies",
+        "DSA": "Gate to product company interviews — LeetCode medium-hard fluency separates offers from rejections",
+        "Data Structures": "Core for all coding interviews; expected at service and product companies alike",
+        "Git": "Non-negotiable for any software role; expected day one",
+        "Linux": "Backend and DevOps backbone; every production system uses Linux",
+    }
+
+    _COMPANY_SKILLS = {
+        "Python": ["TCS", "Infosys", "Zoho", "Freshworks", "PhonePe", "Swiggy"],
+        "Java": ["TCS", "Infosys", "Wipro", "Accenture", "Cognizant", "HCL"],
+        "JavaScript": ["Freshworks", "Razorpay", "Zoho", "Chargebee"],
+        "React": ["Freshworks", "Razorpay", "Groww", "Zepto"],
+        "SQL": ["TCS", "Infosys", "Wipro", "Cognizant", "Goldman Sachs"],
+        "AWS": ["Amazon", "Wipro", "TCS", "Accenture"],
+        "Docker": ["Wipro", "HCL", "Tech Mahindra", "IBM"],
+        "Machine Learning": ["TCS", "Infosys", "Amazon", "Flipkart"],
+        "DSA": ["Google", "Microsoft", "Amazon", "PhonePe", "Razorpay"],
+    }
+
+    _ROLE_SALARY = {
+        "software engineer": 12, "data scientist": 14, "frontend developer": 10,
+        "backend developer": 12, "devops engineer": 11, "machine learning engineer": 15,
+        "full stack developer": 11, "android developer": 10, "product manager": 16,
+    }
+    _ROLE_YOY = {
+        "software engineer": "+12%", "data scientist": "+25%", "frontend developer": "+8%",
+        "backend developer": "+15%", "devops engineer": "+20%", "machine learning engineer": "+35%",
+        "full stack developer": "+10%", "android developer": "+5%", "product manager": "+18%",
+    }
+    _ROLE_CHECK = {
+        "software engineer": "Over 200,000 freshers compete for ~40,000 quality SDE roles annually — DSA fluency is the real filter",
+        "data scientist": "Most 'data scientist' openings actually want data analysts; genuine ML roles require project evidence",
+        "frontend developer": "React/TypeScript skills are non-negotiable; pure HTML/CSS knowledge isn't enough for product companies",
+        "backend developer": "Strong DSA and system design required — service company backend roles are less competitive but also lower paying",
+        "devops engineer": "DevOps fresher roles are rare; most companies want 1-2 years experience, making internships critical",
+        "machine learning engineer": "True ML engineering roles are highly competitive; differentiation comes from deployed projects and Kaggle rankings",
+        "full stack developer": "Startups prefer full stack but quality bar is high — both frontend and backend must be polished",
+    }
+    _ROLE_COMPANIES = {
+        "software engineer": ["TCS", "Infosys", "Wipro", "Amazon", "Microsoft"],
+        "data scientist": ["TCS", "Infosys", "PhonePe", "Amazon", "Flipkart"],
+        "frontend developer": ["Freshworks", "Razorpay", "Zoho", "Chargebee"],
+        "backend developer": ["TCS", "Infosys", "Wipro", "PhonePe", "Swiggy"],
+        "devops engineer": ["Wipro", "HCL", "IBM", "Accenture", "Amazon"],
+        "machine learning engineer": ["TCS", "Infosys", "Amazon", "Flipkart", "PhonePe"],
+        "full stack developer": ["Freshworks", "Zoho", "Chargebee", "Zepto"],
+    }
+    _ROLE_SKILLS = {
+        "software engineer": ["DSA", "Python", "Java", "SQL"],
+        "data scientist": ["Python", "Machine Learning", "SQL", "Statistics"],
+        "frontend developer": ["JavaScript", "React", "TypeScript", "CSS"],
+        "backend developer": ["Python", "Java", "SQL", "REST API"],
+        "devops engineer": ["Docker", "Kubernetes", "Linux", "AWS"],
+        "machine learning engineer": ["Python", "PyTorch", "TensorFlow", "Machine Learning"],
+        "full stack developer": ["JavaScript", "React", "Node.js", "SQL"],
+        "android developer": ["Kotlin", "Java", "Android", "REST API"],
+        "product manager": ["SQL", "Data Analysis", "Agile", "Figma"],
+    }
+
+    trending_skills = [
+        {
+            "skill": s,
+            "demand_score": normalize_score(c, max_count),
+            "trend": "rising" if normalize_score(c, max_count) >= 70 else "stable",
+            "avg_salary_lpa": 10 + int(normalize_score(c, max_count) / 20),
+            "job_count": c,
+            "why_trending": _SKILL_WHY.get(s, f"High mention frequency across {c} Indian job postings"),
+            "top_companies": _COMPANY_SKILLS.get(s, ["TCS", "Infosys", "Wipro"]),
+        }
+        for s, c in top_skills[:15]
     ]
 
-    # Sample companies from job results for the prompt
     sample_companies = list({
         j.get("company", {}).get("display_name", "")
         for j in all_jobs[:200]
         if j.get("company", {}).get("display_name")
-    })[:30]
+    })[:20]
 
-    # Build Groq prompt using real data
-    prompt = (
-        "Here is REAL live job market data fetched from Adzuna API for India today:\n"
-        f"- Total jobs found per role: {json.dumps(role_counts)}\n"
-        f"- Skills extracted from {len(all_jobs)} actual job postings, with pre-computed log-normalised scores:\n"
-        f"  {json.dumps(skills_with_scores)}\n"
-        f"- Sample hiring companies seen in listings: {json.dumps(sample_companies)}\n\n"
-        "Using this REAL data, generate a comprehensive market intelligence JSON object for Indian engineering students in 2026.\n\n"
-        "Rules:\n"
-        "- demand_score: START with the log_score provided above for each skill, then ADJUST based on actual relevance for "
-        "Indian fresher software engineering jobs in 2026. A skill appearing in many job postings for niche roles "
-        "(embedded C, legacy COBOL) should score lower than a skill appearing across many general software roles "
-        "(Python, JavaScript, Java). Weight by breadth of application across the Indian tech industry, not just raw count. "
-        "C appearing in embedded/systems job descriptions should score at most 30 for a general software fresher audience — "
-        "skills like Python, Java, JavaScript that apply broadly should score higher even with lower raw counts.\n"
-        "- role openings: use the EXACT role_counts numbers from the data above.\n"
-        "- top_companies for skills/roles: pick from the sample hiring companies list above where relevant, supplement with well-known Indian employers.\n"
-        "- why_trending: 1 sentence explaining WHY this skill is in demand in India right now (specific, not generic).\n"
-        "- reality_check: 1 brutal honest sentence about the competition/difficulty for freshers targeting this role.\n"
-        "- salary_by_city: use realistic 2026 Indian fresher salaries (Bangalore highest, tier-2 cities lower).\n"
-        "- hot_sectors: 6 sectors, mix of Booming/Stable/Slow based on actual market data.\n"
-        "- skills_to_avoid: 3-4 outdated or oversaturated skills Indian freshers waste time on.\n\n"
-        "Return ONLY a JSON object with EXACTLY this structure (no extra fields, no markdown):\n"
-        "{\n"
-        '  "trending_skills": [\n'
-        '    {\n'
-        '      "skill": "Python",\n'
-        '      "demand_score": 95,\n'
-        '      "trend": "rising",\n'
-        '      "avg_salary_lpa": 12,\n'
-        '      "job_count": 4200,\n'
-        '      "why_trending": "one sentence why this skill is hot in India right now",\n'
-        '      "top_companies": ["TCS", "Infosys", "Zoho"]\n'
-        "    }\n"
-        "  ],\n"
-        '  "role_demand": [\n'
-        '    {\n'
-        '      "role": "Software Engineer",\n'
-        '      "openings": 15000,\n'
-        '      "avg_lpa": 14,\n'
-        '      "yoy_change": "+18%",\n'
-        '      "top_companies": ["TCS", "Wipro", "Infosys"],\n'
-        '      "key_skills": ["Python", "Java", "DSA"],\n'
-        '      "reality_check": "one brutal sentence about fresher competition for this role"\n'
-        "    }\n"
-        "  ],\n"
-        '  "top_hiring_companies": ["TCS", "Infosys"],\n'
-        '  "salary_by_city": [\n'
-        '    {\n'
-        '      "city": "Bangalore",\n'
-        '      "avg_lpa": 18,\n'
-        '      "cost_of_living": "High",\n'
-        '      "best_for_roles": ["Software Engineer", "Data Scientist"]\n'
-        "    }\n"
-        "  ],\n"
-        '  "hot_sectors": [\n'
-        '    {\n'
-        '      "sector": "FinTech",\n'
-        '      "status": "Booming",\n'
-        '      "reason": "one sentence why"\n'
-        "    }\n"
-        "  ],\n"
-        '  "skills_to_avoid": [\n'
-        '    {\n'
-        '      "skill": "COBOL",\n'
-        '      "reason": "one sentence why freshers should avoid wasting time on this"\n'
-        "    }\n"
-        "  ],\n"
-        '  "market_summary": "2-3 sentences summarising the Indian job market right now based on the real data",\n'
-        '  "data_freshness": "Live data from Adzuna — fetched today"\n'
-        "}"
-    )
+    role_demand = []
+    for role, count in sorted(role_counts.items(), key=lambda x: -x[1])[:8]:
+        role_demand.append({
+            "role": role.title(),
+            "openings": count,
+            "avg_lpa": _ROLE_SALARY.get(role, 10),
+            "yoy_change": _ROLE_YOY.get(role, "+10%"),
+            "top_companies": _ROLE_COMPANIES.get(role, sample_companies[:4] or ["TCS", "Infosys"]),
+            "key_skills": _ROLE_SKILLS.get(role, ["Python", "DSA", "SQL"]),
+            "reality_check": _ROLE_CHECK.get(role, "Competition is high — skills and projects are your differentiator"),
+        })
 
-    if not _groq:
-        raise RuntimeError("Groq client not initialised — check GROQ_API_KEY")
+    top_hiring = list(dict.fromkeys(
+        [j.get("company", {}).get("display_name", "") for j in all_jobs[:500]
+         if j.get("company", {}).get("display_name")]
+    ))[:15] or ["TCS", "Infosys", "Wipro", "Accenture", "Cognizant"]
 
-    completion = _groq.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-    )
-    raw = completion.choices[0].message.content or ""
-    print(f"[Market] Groq response preview: {raw[:300]!r}")
-    result = parse_groq_json(raw)
+    result = {
+        "trending_skills": trending_skills,
+        "role_demand": role_demand,
+        "top_hiring_companies": top_hiring,
+        "salary_by_city": [
+            {"city": "Bangalore", "avg_lpa": 18, "cost_of_living": "High", "best_for_roles": ["Software Engineer", "Data Scientist", "DevOps Engineer"]},
+            {"city": "Hyderabad", "avg_lpa": 14, "cost_of_living": "Moderate", "best_for_roles": ["Software Engineer", "Full Stack Developer"]},
+            {"city": "Pune", "avg_lpa": 12, "cost_of_living": "Moderate", "best_for_roles": ["Software Engineer", "Data Analyst"]},
+            {"city": "Chennai", "avg_lpa": 11, "cost_of_living": "Moderate", "best_for_roles": ["Software Engineer", "Backend Developer"]},
+            {"city": "Mumbai", "avg_lpa": 13, "cost_of_living": "Very High", "best_for_roles": ["Data Scientist", "Product Manager", "FinTech Engineer"]},
+            {"city": "Delhi-NCR", "avg_lpa": 12, "cost_of_living": "High", "best_for_roles": ["Software Engineer", "Data Analyst"]},
+        ],
+        "hot_sectors": [
+            {"sector": "FinTech", "status": "Booming", "reason": "UPI ecosystem growth is driving massive engineering hiring at PhonePe, Razorpay, Groww, and Zepto"},
+            {"sector": "AI/ML", "status": "Booming", "reason": "Every major company is building AI teams — freshers with ML project experience command 30-50% salary premiums"},
+            {"sector": "Cloud & DevOps", "status": "Booming", "reason": "Cloud migration projects across all industries are creating more DevOps roles than available engineers"},
+            {"sector": "SaaS Products", "status": "Stable", "reason": "Indian SaaS companies (Freshworks, Zoho, Chargebee) continue steady hiring despite global slowdowns"},
+            {"sector": "IT Services", "status": "Stable", "reason": "TCS, Infosys, Wipro maintain large fresher intakes but wage growth is slow compared to product companies"},
+            {"sector": "EdTech", "status": "Slow", "reason": "Post-2022 correction; most EdTech companies are in cost-cutting mode with limited fresher hiring"},
+        ],
+        "skills_to_avoid": [
+            {"skill": "COBOL", "reason": "Legacy banking language with 0 fresher demand — time spent here has near-zero ROI for Indian freshers"},
+            {"skill": "PHP", "reason": "WordPress and legacy PHP roles are declining sharply; modern Indian companies prefer Python/Node.js stacks"},
+            {"skill": "XML/SOAP", "reason": "REST and GraphQL have fully replaced SOAP in Indian product companies — XML is only relevant in legacy banking roles"},
+        ],
+        "market_summary": (
+            f"Adzuna data shows {len(all_jobs)} active job postings across {len(ADZUNA_ROLES)} role categories in India. "
+            f"Software engineering and data science have the highest demand, with top skills being "
+            f"{', '.join(s for s, _ in top_skills[:3]) if top_skills else 'Python, Java, SQL'}. "
+            f"Product and startup roles pay 2-3x more than service companies but require significantly stronger DSA and project evidence."
+        ),
+        "data_freshness": f"Live data from Adzuna — {len(all_jobs)} jobs scraped today",
+    }
 
     # Stamp and persist
     payload = {
@@ -564,7 +775,7 @@ async def refresh_market_cache() -> dict:
         },
     }
     MARKET_CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"[Market] Cache written to {MARKET_CACHE_PATH}")
+    print(f"[Market] Cache written to {MARKET_CACHE_PATH} (pure data, no Groq)")
     return payload
 
 
@@ -587,15 +798,335 @@ app = FastAPI(title="PlaceIQ API")
 _scheduler = AsyncIOScheduler()
 
 
+def _seed_nirf_sync():
+    """Run NIRF scraper if nirf_placements table is empty."""
+    try:
+        from database import get_connection
+        con = get_connection()
+        try:
+            row = con.execute("SELECT COUNT(*) FROM nirf_placements").fetchone()
+            if row and row[0] > 0:
+                print(f"[NIRF] {row[0]} colleges already in nirf_placements — skipping seed.")
+                return
+        except Exception:
+            pass  # Table doesn't exist yet
+        finally:
+            con.close()
+        print("[NIRF] nirf_placements empty — seeding now...")
+        from scrapers.nirf_scraper import run_nirf_scraper
+        run_nirf_scraper()
+    except Exception as exc:
+        print(f"[NIRF] Startup seed failed: {exc}")
+
+
+def _seed_placement_sources_sync():
+    """Seed Shiksha + Careers360 data if placement_sources table is empty."""
+    try:
+        from database import get_connection
+        con = get_connection()
+        try:
+            row = con.execute("SELECT COUNT(*) FROM placement_sources").fetchone()
+            if row and row[0] > 0:
+                print(f"[Sources] {row[0]} records already in placement_sources — skipping seed.")
+                return
+        except Exception:
+            pass
+        finally:
+            con.close()
+        print("[Sources] placement_sources empty — seeding Shiksha + Careers360...")
+        from scrapers.shiksha_scraper import run_shiksha_scraper
+        from scrapers.careers360_scraper import run_careers360_scraper
+        n1 = run_shiksha_scraper()
+        n2 = run_careers360_scraper()
+        print(f"[Sources] Seeded {n1} Shiksha + {n2} Careers360 records.")
+    except Exception as exc:
+        print(f"[Sources] Startup seed failed: {exc}")
+
+
+def _ensure_skill_demand_tables():
+    """Create job_listings, skill_demand, and model_metadata tables if absent."""
+    from database import get_connection, db_type
+    try:
+        con = get_connection()
+        cur = con.cursor()
+        if db_type == "supabase":
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS job_listings (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT,
+                    description TEXT,
+                    role TEXT,
+                    fetched_at TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS skill_demand (
+                    skill_name TEXT,
+                    role TEXT,
+                    demand_count INTEGER,
+                    demand_percentage REAL,
+                    total_listings_analysed INTEGER,
+                    last_updated TEXT,
+                    PRIMARY KEY (skill_name, role)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS model_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS job_listings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT,
+                    description TEXT,
+                    role TEXT,
+                    fetched_at TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS skill_demand (
+                    skill_name TEXT,
+                    role TEXT,
+                    demand_count INTEGER,
+                    demand_percentage REAL,
+                    total_listings_analysed INTEGER,
+                    last_updated TEXT,
+                    PRIMARY KEY (skill_name, role)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS model_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
+        con.commit()
+        con.close()
+        print("[Skills] skill_demand / job_listings / model_metadata tables ready")
+    except Exception as exc:
+        print(f"[Skills] Table creation failed: {exc}")
+
+
+async def extract_and_store_skill_demand():
+    """Daily job: fetch job listings per role, extract skill frequencies, persist to skill_demand."""
+    from collections import Counter as _Counter
+    from ml.skill_extractor import extract_skills_from_text
+    from database import get_connection, db_type
+
+    print("[Skills] Starting daily skill extraction...")
+
+    app_id = os.getenv("ADZUNA_APP_ID", "")
+    app_key = os.getenv("ADZUNA_APP_KEY", "")
+    if not app_id or not app_key:
+        print("[Skills] Adzuna credentials missing — skipping skill extraction")
+        return
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    jobs_by_role: dict[str, list[dict]] = {}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for role in ADZUNA_ROLES:
+            try:
+                resp = await client.get(
+                    "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                    params={
+                        "app_id": app_id,
+                        "app_key": app_key,
+                        "results_per_page": 50,
+                        "what": role,
+                        "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                jobs_by_role[role] = resp.json().get("results", [])
+            except Exception as exc:
+                print(f"[Skills] Adzuna fetch failed for '{role}': {exc}")
+                jobs_by_role[role] = []
+
+    # Persist raw listings to job_listings table (prune entries older than 2 days first)
+    try:
+        con = get_connection()
+        cur = con.cursor()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        if db_type == "supabase":
+            cur.execute("DELETE FROM job_listings WHERE fetched_at < %s", (cutoff,))
+            ins = "INSERT INTO job_listings (title, description, role, fetched_at) VALUES (%s, %s, %s, %s)"
+        else:
+            cur.execute("DELETE FROM job_listings WHERE fetched_at < ?", (cutoff,))
+            ins = "INSERT INTO job_listings (title, description, role, fetched_at) VALUES (?, ?, ?, ?)"
+        for role, jobs in jobs_by_role.items():
+            for job in jobs:
+                cur.execute(ins, (job.get("title", ""), job.get("description", ""), role, fetched_at))
+        con.commit()
+        con.close()
+    except Exception as exc:
+        print(f"[Skills] Failed to store job listings: {exc}")
+
+    # Aggregate skill demand per role
+    now_str = datetime.now(timezone.utc).isoformat()
+    total_listings = 0
+    unique_skills: set[str] = set()
+    skill_demand_rows: list[tuple] = []
+
+    for role, jobs in jobs_by_role.items():
+        counter: _Counter = _Counter()
+        role_total = len(jobs)
+        total_listings += role_total
+        for job in jobs:
+            text = (job.get("title", "") + " " + job.get("description", "")).strip()
+            for skill in extract_skills_from_text(text):
+                counter[skill] += 1
+                unique_skills.add(skill)
+        for skill, count in counter.items():
+            pct = round(count / role_total * 100, 1) if role_total > 0 else 0.0
+            skill_demand_rows.append((skill, role, count, pct, role_total, now_str))
+
+    # Persist to skill_demand table
+    try:
+        con = get_connection()
+        cur = con.cursor()
+        if db_type == "supabase":
+            for row in skill_demand_rows:
+                cur.execute("""
+                    INSERT INTO skill_demand (skill_name, role, demand_count, demand_percentage, total_listings_analysed, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (skill_name, role) DO UPDATE SET
+                        demand_count = EXCLUDED.demand_count,
+                        demand_percentage = EXCLUDED.demand_percentage,
+                        total_listings_analysed = EXCLUDED.total_listings_analysed,
+                        last_updated = EXCLUDED.last_updated
+                """, row)
+        else:
+            for row in skill_demand_rows:
+                cur.execute("""
+                    INSERT OR REPLACE INTO skill_demand
+                        (skill_name, role, demand_count, demand_percentage, total_listings_analysed, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, row)
+        con.commit()
+        con.close()
+    except Exception as exc:
+        print(f"[Skills] Failed to store skill demand: {exc}")
+        return
+
+    print(
+        f"[Skills] Skill extraction complete. Analysed {total_listings} listings, "
+        f"found {len(unique_skills)} unique skills across {len(jobs_by_role)} roles"
+    )
+
+
+async def monthly_model_retrain():
+    """Monthly job: retrain XGBoost model on accumulated data and log metrics."""
+    from database import get_connection, db_type
+    print("[ML] Starting monthly model retrain...")
+    try:
+        from ml.placement_model import train_model
+        metrics = train_model()
+        retrain_date = datetime.now(timezone.utc).isoformat()
+        con = get_connection()
+        cur = con.cursor()
+        if db_type == "supabase":
+            cur.execute("""
+                INSERT INTO model_metadata (key, value) VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, ("model_last_retrained", retrain_date))
+        else:
+            cur.execute(
+                "INSERT OR REPLACE INTO model_metadata (key, value) VALUES (?, ?)",
+                ("model_last_retrained", retrain_date),
+            )
+        con.commit()
+        con.close()
+        print(f"[ML] Monthly model retrain complete. New RMSE: {metrics['rmse']:.2f} R2: {metrics['r2']:.3f}")
+    except Exception as exc:
+        print(f"[ML] Monthly model retrain failed: {exc}")
+
+
+def _get_placement_sources(college_name: str) -> list[dict]:
+    """Return all placement_sources rows for the best fuzzy match of college_name.
+    Applies the same alias resolution as college_lookup before fuzzy matching."""
+    import json as _json
+    from difflib import get_close_matches as _gcm
+    from database import get_connection as _gc
+    from utils.college_lookup import _COLLEGE_ALIASES  # reuse alias dict
+    try:
+        con = _gc()
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT DISTINCT college_name FROM placement_sources")
+            all_names = [r[0] for r in cur.fetchall()]
+            if not all_names:
+                return []
+            # Try alias resolution first
+            resolved = _COLLEGE_ALIASES.get(college_name)
+            matched = None
+            if resolved and resolved in all_names:
+                matched = resolved
+            else:
+                # Fuzzy match on both original and alias-resolved name
+                candidates = [college_name]
+                if resolved:
+                    candidates.append(resolved)
+                for candidate in candidates:
+                    hits = _gcm(candidate, all_names, n=1, cutoff=0.6)
+                    if hits:
+                        matched = hits[0]
+                        break
+            if not matched:
+                return []
+            cur.execute(
+                "SELECT source_name, placement_rate, median_salary, highest_salary, "
+                "top_companies, year, url "
+                "FROM placement_sources WHERE college_name = ? ORDER BY source_name",
+                (matched,),
+            )
+            rows = cur.fetchall()
+            result = []
+            for r in rows:
+                companies: list = []
+                try:
+                    companies = _json.loads(r[4]) if r[4] else []
+                except Exception:
+                    pass
+                result.append({
+                    "source_name": r[0],
+                    "placement_rate": r[1],
+                    "median_salary": r[2],
+                    "highest_salary": r[3],
+                    "top_companies": companies,
+                    "year": r[5],
+                    "url": r[6],
+                })
+            return result
+        finally:
+            con.close()
+    except Exception:
+        return []
+
+
 @app.on_event("startup")
 async def _startup():
     _scheduler.add_job(refresh_market_cache, "cron", hour=0, minute=0)
+    _scheduler.add_job(refresh_market_insights, "cron", hour=1, minute=0)
+    _scheduler.add_job(extract_and_store_skill_demand, "cron", hour=0, minute=30)
+    _scheduler.add_job(monthly_model_retrain, "cron", day=1, hour=2, minute=0)
     _scheduler.start()
-    print("[Market] Scheduler started — daily refresh at midnight UTC")
+    print("[Market] Scheduler started — market cache at 00:00, skill extraction at 00:30, model retrain on 1st of month")
+
+    _ensure_skill_demand_tables()
+    _seed_nirf_sync()
+    _seed_placement_sources_sync()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://placeiq.vercel.app",
+        "https://*.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -639,74 +1170,129 @@ def parse_groq_json(raw: str) -> dict:
     return json.loads(raw.strip())
 
 
-def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
-    if _groq is None:
-        score = _fallback_score(
-            payload.cgpa, payload.skills, payload.year, payload.projectsCount,
-            payload.hasInternship, payload.internshipMonths, payload.hackathons,
-            payload.leetcodeCount, payload.openSource, payload.certifications,
-            payload.githubActive,
-        )
-        return score, "", ""
+# ── NIRF-based deterministic scoring ─────────────────────────────────────────
 
-    internship_str = (
-        f"Yes ({payload.internshipMonths} months)"
-        if payload.hasInternship == "yes"
-        else "No"
+def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
+    """
+    Compute placement probability with NIRF placement_rate as the base.
+    Groq never touches the number — only the explanation.
+
+    Returns (score: int, college_tier: str, nirf_stats: dict | None)
+    """
+    nirf_stats = get_college_stats(payload.college)
+
+    if nirf_stats and nirf_stats.get("matched") and nirf_stats.get("placement_rate") is not None:
+        base = float(nirf_stats["placement_rate"])
+        college_tier = nirf_stats.get("college_tier") or "Tier 3"
+        source = f"NIRF 2024 ({nirf_stats['college_name']})"
+    else:
+        college_tier = get_college_tier(payload.college)
+        base = {"Tier 1": 82.0, "Tier 2": 65.0, "Tier 3": 50.0, "Tier 4": 35.0}.get(college_tier, 55.0)
+        source = f"tier-default ({college_tier})"
+        nirf_stats = None
+
+    # --- Adjustments (all in percentage points) ---
+
+    # CGPA vs tier expectation
+    tier_cgpa_avg = {"Tier 1": 8.0, "Tier 2": 7.5, "Tier 3": 6.5, "Tier 4": 6.0}.get(college_tier, 7.0)
+    cgpa_adj = round(max(-15.0, min(10.0, (payload.cgpa - tier_cgpa_avg) * 3.0)), 1)
+
+    # Skills count (generous but bounded)
+    skills_count = len(payload.skills) if payload.skills else 0
+    skills_adj = round(min(8.0, skills_count * 1.0), 1)
+
+    # Projects (no projects is a big penalty)
+    project_adj = {"0": -8.0, "1-2": 0.0, "3-5": 4.0, "5+": 7.0}.get(str(payload.projectsCount), 0.0)
+
+    # Internship
+    if payload.hasInternship == "yes":
+        intern_adj = {"1-3": 3.0, "3-6": 5.0, "6+": 7.0}.get(str(payload.internshipMonths), 3.0)
+    else:
+        intern_adj = 0.0
+
+    # LeetCode
+    lc_adj = {"0": -5.0, "1-50": 0.0, "51-200": 3.0, "200+": 7.0}.get(str(payload.leetcodeCount), 0.0)
+
+    # Academic year (penalise early years — placement is far away)
+    year_adj = {"1st": -20.0, "2nd": -10.0, "3rd": 0.0, "4th": 0.0}.get(str(payload.year), 0.0)
+
+    # Small bonuses
+    os_adj   = 3.0 if payload.openSource  == "yes" else 0.0
+    gh_adj   = 2.0 if payload.githubActive == "yes" else 0.0
+    cert_adj = {"0": 0.0, "1-2": 1.0, "3+": 2.0}.get(str(payload.certifications), 0.0)
+    hack_adj = {"0": 0.0, "1-2": 2.0, "3+": 4.0}.get(str(payload.hackathons), 0.0)
+
+    total_adj = (cgpa_adj + skills_adj + project_adj + intern_adj +
+                 lc_adj + year_adj + os_adj + gh_adj + cert_adj + hack_adj)
+    raw = base + total_adj
+    final = max(5, min(98, round(raw)))
+
+    print(
+        f"[NIRF Score] college={payload.college!r} source={source}\n"
+        f"  base={base:.1f}%"
+        f"  cgpa_adj={cgpa_adj:+.1f} (cgpa={payload.cgpa} vs avg={tier_cgpa_avg})"
+        f"  skills_adj={skills_adj:+.1f} ({skills_count} skills)"
+        f"  proj_adj={project_adj:+.1f} ({payload.projectsCount} projects)\n"
+        f"  intern_adj={intern_adj:+.1f}  lc_adj={lc_adj:+.1f} ({payload.leetcodeCount} LC)"
+        f"  year_adj={year_adj:+.1f} ({payload.year})"
+        f"  os={os_adj:+.1f}  gh={gh_adj:+.1f}  cert={cert_adj:+.1f}  hack={hack_adj:+.1f}\n"
+        f"  total_adj={total_adj:+.1f}  raw={raw:.1f}  FINAL={final}"
     )
 
-    college_info = COLLEGE_DB.get(payload.college, {})
-    college_context = ""
-    if college_info:
-        recruiters_str = ", ".join(college_info.get("top_recruiters", []))
-        college_context = (
-            f"\nVERIFIED DATA for {payload.college}:\n"
-            f"- Actual placement rate: {college_info['placement_rate']}\n"
-            f"- Average package: {college_info['avg_package']}\n"
-            f"- Highest package recorded: {college_info['highest_package']}\n"
-            f"- CGPA cutoff at this college (most companies): {college_info['cgpa_cutoff_most_companies']}\n"
-            f"- TPO strictly enforces CGPA cutoff: {'Yes' if college_info['tpo_strict'] else 'No'}\n"
-            f"- Top companies that visit this campus: {recruiters_str}\n"
-            f"- Known for: {college_info['known_for']}\n"
+    return final, college_tier, nirf_stats
+
+
+def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
+    """
+    Score is computed deterministically by nirf_adjusted_score().
+    Groq is called only to write the explanation text — it cannot change the number.
+    """
+    score, college_tier, nirf_stats = nirf_adjusted_score(payload)
+
+    if _groq is None:
+        return score, "", college_tier
+
+    # --- Build context for the reasoning prompt ---
+    nirf_line = ""
+    if nirf_stats:
+        nirf_line = (
+            f"NIRF 2024: rank {nirf_stats.get('nirf_rank')}, "
+            f"college-wide placement rate {nirf_stats.get('placement_rate')}%, "
+            f"median salary {nirf_stats.get('median_salary')} LPA."
         )
 
+    college_info = COLLEGE_DB.get(payload.college, {})
+    college_line = ""
+    if college_info:
+        college_line = (
+            f"Top campus recruiters: {', '.join(college_info.get('top_recruiters', []))}. "
+            f"CGPA cutoff most companies enforce: {college_info.get('cgpa_cutoff_most_companies')}."
+        )
+
+    internship_str = (
+        f"Yes ({payload.internshipMonths} months)" if payload.hasInternship == "yes" else "No"
+    )
+
     prompt = (
-        "You are a brutally honest placement prediction expert for Indian engineering students. "
-        "You have deep knowledge of actual placement realities at Indian colleges.\n\n"
-        "STRICT RULES you must follow:\n"
-        "- Use the VERIFIED DATA section below as ground truth for this specific college. "
-        "If the student's CGPA is below the cutoff listed, their score must reflect that they will be filtered by TPO before interviews.\n"
-        "- Most companies visiting Tier 2 colleges have a CGPA cutoff of 7.0–8.0. "
-        "A student below the cutoff at a Tier 2 college should score 15–30% max on-campus.\n"
-        "- At Tier 1 colleges (IITs, NITs, BITS, Amrita Coimbatore, CEG), CGPA matters less because the brand carries weight, "
-        "but below 6.5 is still a red flag.\n"
-        "- At Tier 3 colleges, on-campus placement is rare. Even strong students should not score above 60% "
-        "unless they have exceptional off-campus skills.\n"
-        "- Skills without projects add very little value. 10 skills + 0 projects should not score high.\n"
-        "- 1st or 2nd year students should score lower — placements are 2+ years away.\n"
-        "- Internship experience is a strong positive signal.\n"
-        "- LeetCode 200+ problems is a strong positive signal for SWE roles.\n\n"
-        "Given this student profile, return a JSON object with exactly three fields:\n"
-        "- score (integer 0-100): brutally realistic placement probability at THEIR specific college\n"
-        "- reasoning (3-4 sentences specific about what is hurting and helping their score, "
-        "citing actual college name, CGPA cutoffs, and which companies they can/cannot reach)\n"
-        "- college_tier (string: \"Tier 1\", \"Tier 2\", or \"Tier 3\")\n\n"
-        "Only return valid JSON, nothing else.\n\n"
-        f"Profile:\n"
-        f"- College: {payload.college}\n"
-        f"- Branch: {payload.branch}\n"
-        f"- Year: {payload.year}\n"
+        "You are a placement advisor. The placement probability score has already been calculated "
+        f"as {score}/100 using NIRF 2024 data. DO NOT change this number.\n\n"
+        "Student profile:\n"
+        f"- College: {payload.college} ({college_tier})\n"
+        f"- Branch: {payload.branch}, Year: {payload.year}\n"
         f"- CGPA: {payload.cgpa}/10\n"
-        f"- Skills: {', '.join(payload.skills)}\n"
-        f"- Target Role: {payload.targetRole}\n"
+        f"- Skills: {', '.join(payload.skills) if payload.skills else 'none listed'}\n"
         f"- Projects: {payload.projectsCount}\n"
         f"- Internship: {internship_str}\n"
-        f"- Hackathons: {payload.hackathons}\n"
-        f"- LeetCode solved: {payload.leetcodeCount}\n"
-        f"- Open source contributions: {payload.openSource}\n"
-        f"- Certifications: {payload.certifications}\n"
-        f"- GitHub active: {payload.githubActive}"
-        f"{college_context}"
+        f"- LeetCode: {payload.leetcodeCount} problems\n"
+        f"- Target Role: {payload.targetRole}\n"
+        f"{nirf_line}\n"
+        f"{college_line}\n\n"
+        f"Write exactly 3 sentences explaining WHY this student scored {score}/100. "
+        "Be specific: (1) what the college's actual placement rate means for this student, "
+        "(2) what is their biggest weakness hurting the score, "
+        "(3) one concrete action that would most improve it. "
+        "Do NOT suggest the score should be higher or lower. "
+        f'Return only: {{"score": {score}, "reasoning": "...", "college_tier": "{college_tier}"}}'
     )
 
     try:
@@ -715,20 +1301,12 @@ def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
         )
-        response_text = completion.choices[0].message.content
-        result = parse_groq_json(response_text)
-        score = max(0, min(100, int(result["score"])))
-        reasoning = str(result["reasoning"])
-        college_tier = str(result.get("college_tier", ""))
+        result = parse_groq_json(completion.choices[0].message.content or "")
+        reasoning = str(result.get("reasoning", ""))
+        # Always enforce our computed score — never trust Groq's number
         return score, reasoning, college_tier
     except Exception:
-        score = _fallback_score(
-            payload.cgpa, payload.skills, payload.year, payload.projectsCount,
-            payload.hasInternship, payload.internshipMonths, payload.hackathons,
-            payload.leetcodeCount, payload.openSource, payload.certifications,
-            payload.githubActive,
-        )
-        return score, "", ""
+        return score, "", college_tier
 
 
 def _to_out(p: UserProfile) -> ProfileOut:
@@ -815,6 +1393,177 @@ def get_profile(email: str, db: Session = Depends(get_db)):
     return _to_out(profile)
 
 
+@app.post("/api/placement/probability")
+def placement_probability(payload: ProfileIn):
+    """
+    Returns placement probability score using XGBoost ML model.
+    No Groq — score is always from ML or deterministic fallback.
+    Always includes NIRF 2024 college stats when available.
+    """
+    # Fetch multi-source college data
+    all_stats = get_all_college_stats(payload.college)
+    nirf_stats = all_stats.get("nirf_data") or get_college_stats(payload.college)
+    _base_rate = all_stats.get("combined_placement_rate")
+    print(
+        f"[/placement/probability] college={payload.college!r} | "
+        f"combined_rate={_base_rate}% | tier={all_stats.get('college_tier')} | "
+        f"sources={all_stats.get('sources_count')}"
+    )
+
+    try:
+        from ml.placement_model import predict_placement
+        result = predict_placement(payload.model_dump())
+        resp = {
+            "score": result["score"],
+            "reasoning": (
+                f"Predicted by XGBoost model trained on NIRF placement data "
+                f"(confidence: {result['confidence']}). College tier: {result['tier']}."
+            ),
+            "college_tier": result["tier"],
+            "breakdown": result.get("breakdown", {}),
+            "source": "ml",
+        }
+    except FileNotFoundError:
+        # Train-on-demand if model not yet built
+        try:
+            from ml.placement_model import train_model, predict_placement
+            train_model()
+            result = predict_placement(payload.model_dump())
+            resp = {
+                "score": result["score"],
+                "reasoning": (
+                    f"Predicted by XGBoost model trained on NIRF placement data "
+                    f"(confidence: {result['confidence']}). College tier: {result['tier']}."
+                ),
+                "college_tier": result["tier"],
+                "breakdown": result.get("breakdown", {}),
+                "source": "ml",
+            }
+        except Exception as exc2:
+            print(f"[placement/probability] Auto-train failed: {exc2} — using deterministic fallback")
+            score, college_tier, _ = nirf_adjusted_score(payload)
+            resp = {
+                "score": score,
+                "reasoning": "Computed deterministically from NIRF placement data and profile attributes.",
+                "college_tier": college_tier,
+                "breakdown": {},
+                "source": "deterministic",
+            }
+    except Exception as exc:
+        print(f"[placement/probability] ML error: {exc} — using deterministic fallback")
+        score, college_tier, _ = nirf_adjusted_score(payload)
+        resp = {
+            "score": score,
+            "reasoning": "Computed deterministically from NIRF placement data and profile attributes.",
+            "college_tier": college_tier,
+            "breakdown": {},
+            "source": "deterministic",
+        }
+
+    # Include multi-source college data in every response
+    if all_stats.get("matched") or (nirf_stats and nirf_stats.get("matched")):
+        resp["nirf_rank"] = all_stats.get("nirf_rank")
+        resp["nirf_placement_rate"] = nirf_stats.get("placement_rate") if nirf_stats else None
+        resp["nirf_median_salary"] = nirf_stats.get("median_salary") if nirf_stats else None
+        resp["nirf_highest_salary"] = nirf_stats.get("highest_salary") if nirf_stats else None
+        resp["combined_placement_rate"] = all_stats.get("combined_placement_rate")
+        resp["combined_median_salary"] = all_stats.get("combined_median_salary")
+        resp["sources_count"] = all_stats.get("sources_count", 0)
+        resp["all_sources"] = all_stats.get("all_sources", [])
+
+    return resp
+
+
+@app.get("/api/placement/score/{email}")
+def get_placement_score_live(email: str, db: Session = Depends(get_db)):
+    """
+    Re-compute placement score from stored profile using live NIRF data.
+    Also returns all available placement sources for the college.
+    Use this on the dashboard to always show the current score, never the cached one.
+    """
+    profile = db.query(UserProfile).filter(UserProfile.email == email).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    payload = ProfileIn(
+        email=profile.email,
+        college=profile.college,
+        branch=profile.branch,
+        year=profile.year,
+        cgpa=profile.cgpa,
+        skills=profile.skills,
+        targetRole=profile.target_role,
+        projectsCount=profile.projects_count or "0",
+        hasInternship=profile.has_internship or "no",
+        internshipMonths=profile.internship_months or "",
+        hackathons=profile.hackathons or "0",
+        leetcodeCount=profile.leetcode_count or "0",
+        openSource=profile.open_source or "no",
+        certifications=profile.certifications or "0",
+        githubActive=profile.github_active or "no",
+    )
+
+    score, college_tier, nirf_stats = nirf_adjusted_score(payload)
+
+    sources = _get_placement_sources(profile.college)
+
+    # Combined score: average of placement_rates across all available sources
+    rates: list[float] = []
+    if nirf_stats and nirf_stats.get("matched") and nirf_stats.get("placement_rate") is not None:
+        rates.append(float(nirf_stats["placement_rate"]))
+    for s in sources:
+        if s.get("placement_rate") is not None:
+            rates.append(float(s["placement_rate"]))
+    combined_base = round(sum(rates) / len(rates), 1) if rates else float(score)
+
+    model_last_retrained = None
+    try:
+        from database import get_connection, db_type
+        con = get_connection()
+        ph = "%s" if db_type == "supabase" else "?"
+        cur = con.cursor()
+        cur.execute(f"SELECT value FROM model_metadata WHERE key = {ph}", ("model_last_retrained",))
+        row = cur.fetchone()
+        con.close()
+        if row and row[0]:
+            model_last_retrained = row[0]
+    except Exception:
+        pass
+
+    return {
+        "score": score,
+        "college_tier": college_tier,
+        "nirf_stats": nirf_stats,
+        "sources": sources,
+        "combined_base": combined_base,
+        "num_sources": len(rates),
+        "model_last_retrained": model_last_retrained,
+    }
+
+
+@app.get("/api/placement/sources")
+def get_placement_sources_for_college(college: str = ""):
+    """Return all placement_sources records for a college (for multi-source display)."""
+    if not college:
+        raise HTTPException(status_code=400, detail="college query parameter required")
+    nirf = get_college_stats(college)
+    sources = _get_placement_sources(college)
+    rates = []
+    if nirf and nirf.get("matched") and nirf.get("placement_rate") is not None:
+        rates.append(float(nirf["placement_rate"]))
+    for s in sources:
+        if s.get("placement_rate") is not None:
+            rates.append(float(s["placement_rate"]))
+    combined = round(sum(rates) / len(rates), 1) if rates else None
+    return {
+        "college": college,
+        "nirf_stats": nirf,
+        "sources": sources,
+        "combined_placement_rate": combined,
+        "num_sources": len(rates),
+    }
+
+
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         text = " ".join(page.extract_text() or "" for page in pdf.pages).strip()
@@ -883,6 +1632,20 @@ async def analyse_resume(
         if _groq is None:
             raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
 
+        # Cache key: MD5 of resume text + target role (24h TTL)
+        resume_cache_key = hashlib.md5(
+            (resume_text + "|" + target_role).encode()
+        ).hexdigest()
+
+        cached_resume = _cache_get("resume_cache", resume_cache_key, ttl_hours=24)
+        if cached_resume:
+            _cache_stat("resume", hit=True)
+            # Return cached as a streaming response for API consistency
+            def _cached_gen():
+                yield cached_resume
+            return StreamingResponse(_cached_gen(), media_type="text/plain")
+        _cache_stat("resume", hit=False)
+
         prompt = (
             f"You are an expert resume reviewer for Indian engineering students targeting placements. "
             f"Analyse this resume for a student targeting the role of {target_role}.\n\n"
@@ -897,6 +1660,8 @@ async def analyse_resume(
             "IMPORTANT: Return only raw JSON with no markdown formatting, no backticks, no code fences.\n\n"
             f"Resume text:\n{resume_text}"
         )
+
+        _resume_cache_key = resume_cache_key
 
         def generate():
             try:
@@ -914,7 +1679,13 @@ async def analyse_resume(
                     if content:
                         collected.append(content)
                         yield content
-                print(f"[DEBUG] Groq stream done. First 200 chars: {''.join(collected)[:200]!r}")
+                full = "".join(collected)
+                print(f"[DEBUG] Groq stream done. First 200 chars: {full[:200]!r}")
+                # Store in cache for next 24h
+                try:
+                    _cache_set("resume_cache", _resume_cache_key, full)
+                except Exception:
+                    pass
             except Exception as e:
                 traceback.print_exc()
                 yield json.dumps({"error": f"Groq API error: {str(e)}"})
@@ -930,62 +1701,55 @@ async def analyse_resume(
 
 @app.post("/api/skills/gap")
 async def skills_gap(payload: SkillsGapIn):
-    if _groq is None:
-        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+    from ml.skill_extractor import get_skill_gap_analysis
 
-    skills_str = ", ".join(payload.skills) if payload.skills else "None listed"
-
-    prompt = (
-        "You are a technical hiring expert with deep knowledge of the Indian job market in 2025. "
-        "You know exactly what skills companies like TCS, Infosys, Wipro, Accenture, Cognizant, HCL "
-        "(service companies), and product companies like Google, Microsoft, Amazon, Flipkart, Swiggy, "
-        "Zepto, Razorpay, CRED, PhonePe, Groww (product/startup companies) actually look for when "
-        "hiring freshers in India.\n\n"
-        "Given this student's profile, analyse their skill gaps for their target role.\n\n"
-        "Student Profile:\n"
-        f"- Target Role: {payload.target_role}\n"
-        f"- Current Skills: {skills_str}\n"
-        f"- College Tier: {payload.college_tier or 'Unknown'}\n"
-        f"- Branch: {payload.branch or 'Not specified'}\n"
-        f"- CGPA: {payload.cgpa}/10\n\n"
-        "Return a JSON object with exactly these fields:\n\n"
-        "- must_have_missing (list of objects): Skills that are MANDATORY for "
-        f"{payload.target_role} that this student is missing. Each object: "
-        '{"skill": "...", "why_important": "...", "time_to_learn": "...", "free_resource_link": "..."}. '
-        "Only include skills that are genuinely missing from their profile. Be specific — not just "
-        "'DSA' but 'Dynamic Programming', 'Graph Algorithms' etc.\n\n"
-        "- good_to_have_missing (list of objects): Skills that give a strong edge but aren't mandatory. "
-        "Same format as above.\n\n"
-        "- skills_to_improve (list of objects): Skills they have listed but are likely weak at based on "
-        "their profile — common for freshers. Each object: "
-        '{"skill": "...", "what_to_focus_on": "...", "free_resource_link": "..."}.\n\n'
-        "- service_company_ready (boolean): Are they ready for TCS/Infosys/Wipro/Accenture level hiring "
-        "RIGHT NOW based on their profile?\n\n"
-        "- product_company_ready (boolean): Are they ready for product/startup company hiring right now?\n\n"
-        "- verdict (string): 2-3 sentences being brutally honest about their current market position in "
-        "India, mentioning specific company tiers they can and cannot target right now.\n\n"
-        "Rules:\n"
-        "- For Software Engineer roles: DSA is non-negotiable for product companies. TCS/Infosys mainly "
-        "test aptitude + basic coding, not hard DSA.\n"
-        "- For Data Science roles: Python, Pandas, SQL, and at least one ML framework are must-haves.\n"
-        "- For Frontend roles: React + JavaScript fundamentals are must-haves. TypeScript is good to have.\n"
-        "- For DevOps roles: Linux, Docker, at least one cloud (AWS/GCP/Azure) are must-haves.\n"
-        "- Be specific about free_resource_link — use actual URLs like https://leetcode.com, "
-        "https://www.youtube.com/@takeUforward, https://missing.csail.mit.edu etc.\n"
-        "- Do not list skills they already have as missing.\n"
-        "- If they have strong skills already, acknowledge it — don't manufacture gaps.\n\n"
-        "Only return valid JSON with no markdown formatting."
-    )
+    # Fetch combined college data if college is provided; use authoritative tier
+    college_info = None
+    effective_tier = payload.college_tier or "Tier 3"
+    if payload.college:
+        all_stats = get_all_college_stats(payload.college)
+        if all_stats.get("college_tier"):
+            effective_tier = all_stats["college_tier"]
+        college_info = {
+            "college_name": all_stats["college_name"],
+            "college_tier": all_stats["college_tier"],
+            "sources_count": all_stats.get("sources_count", 0),
+            "combined_placement_rate": all_stats.get("combined_placement_rate"),
+            "combined_median_salary": all_stats.get("combined_median_salary"),
+        }
 
     try:
-        completion = _groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+        result = get_skill_gap_analysis(
+            target_role=payload.target_role,
+            user_skills=payload.skills or [],
+            college_tier=effective_tier,
+            cgpa=float(payload.cgpa or 6.0),
+            branch=payload.branch or "",
         )
-        raw = completion.choices[0].message.content or ""
-        print(f"[DEBUG] Groq skill gap response: {raw[:500]!r}")
-        return parse_groq_json(raw)
+        if college_info:
+            result["college_info"] = college_info
+
+        # Attach last_updated timestamp from skill_demand table if available
+        try:
+            from database import get_connection, db_type
+            con = get_connection()
+            cur = con.cursor()
+            ph = "%s" if db_type == "supabase" else "?"
+            cur.execute(
+                f"SELECT last_updated FROM skill_demand WHERE role = {ph} ORDER BY last_updated DESC LIMIT 1",
+                (payload.target_role,),
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.execute("SELECT last_updated FROM skill_demand ORDER BY last_updated DESC LIMIT 1")
+                row = cur.fetchone()
+            con.close()
+            if row and row[0]:
+                result["skill_demand_last_updated"] = row[0]
+        except Exception:
+            pass
+
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -993,159 +1757,349 @@ async def skills_gap(payload: SkillsGapIn):
 
 @app.post("/api/companies/match")
 async def companies_match(payload: CompanyMatchIn):
-    if _groq is None:
-        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+    """
+    Pure data company matching — zero Groq. Scores computed from skill overlap,
+    college tier, CGPA, and placement history.
+    """
+    user_skills_lower = {s.lower() for s in (payload.skills or [])}
+    cgpa = float(payload.cgpa or 0)
+    college_tier = (payload.college_tier or "Tier 3").strip()
+    has_internship = payload.has_internship == "yes"
+    lc_count = str(payload.leetcode_count or "0")
+    projects = str(payload.projects_count or "0")
+    github_active = payload.github_active == "yes"
 
-    skills_str = ", ".join(payload.skills) if payload.skills else "None listed"
-    internship_str = (
-        f"Yes ({payload.internship_months} months)"
-        if payload.has_internship == "yes"
-        else "No"
-    )
+    lc_score = {"0": 0, "1-50": 1, "51-200": 2, "200+": 3}.get(lc_count, 0)
+    proj_score = {"0": 0, "1-2": 1, "3-5": 2, "5+": 3}.get(projects, 0)
 
-    prompt = (
-        "You are a placement expert with insider knowledge of exactly how each major Indian company "
-        "hires freshers in 2025-2026. You know each company's specific hiring process, what their "
-        "interviewers actually test, and what differentiates candidates who get offers.\n\n"
-        "Given this student profile, return 15 company matches with highly specific, company-unique "
-        "feedback.\n\n"
-        "Student Profile:\n"
-        f"- College: {payload.college}\n"
-        f"- College Tier: {payload.college_tier or 'Unknown'}\n"
-        f"- Branch: {payload.branch}\n"
-        f"- CGPA: {payload.cgpa}/10\n"
-        f"- Skills: {skills_str}\n"
-        f"- Target Role: {payload.target_role}\n"
-        f"- Projects: {payload.projects_count}\n"
-        f"- Internship: {internship_str}\n"
-        f"- LeetCode: {payload.leetcode_count} problems solved\n"
-        f"- Hackathons: {payload.hackathons}\n"
-        f"- GitHub Active: {payload.github_active}\n\n"
-        "For each company, the why_match and biggest_gap must be SPECIFIC to that exact company — "
-        "not generic statements. Examples of what specific means:\n\n"
-        "BAD (generic): 'Company considers students with good skills and focus on problem solving'\n"
-        "GOOD (specific): 'TCS NextStep hiring in 2026 requires clearing their TCS NQT exam which "
-        "tests numerical reasoning, verbal ability and coding. Your Python skills help but you need "
-        "to specifically practice their NQT pattern on PrepInsta.'\n\n"
-        "BAD (generic): 'High competition might be a challenge'\n"
-        "GOOD (specific): 'Zoho has no mass recruitment — they hire through their own Zoho Recruit "
-        "platform and give a multi-round coding test in C. They specifically want students who can "
-        "code in C, not just Python.'\n\n"
-        "Company-specific facts you must use:\n"
-        "- TCS: Hires via TCS NQT exam. Tests numerical reasoning, verbal, programming logic. "
-        "Mass recruiter, CGPA 6.0+. Package 3.36-7 LPA depending on stream.\n"
-        "- Infosys: Hires via InfyTQ platform + Infosys Instep. Tests coding + aptitude. "
-        "CGPA 6.5+. Package 3.6-6.25 LPA.\n"
-        "- Wipro: WILP and Elite tracks. CGPA 6.0+. Tests aptitude + coding. Package 3.5-6.5 LPA.\n"
-        "- Accenture: ASE and Packaged App roles. CGPA 6.5+. Heavy focus on communication + aptitude. "
-        "Package 4.5-6.5 LPA.\n"
-        "- Cognizant: GenC and GenC Elevate tracks. CGPA 6.0+. Tests coding + aptitude. "
-        "Package 4-7 LPA.\n"
-        "- HCL: Hires freshers heavily. CGPA 6.0+. Package 3.5-4.5 LPA. Good for anyone "
-        "struggling elsewhere.\n"
-        "- Capgemini: Tests on AMCAT platform. CGPA 6.0+. Package 4-6 LPA.\n"
-        "- Zoho: No mass recruitment. Own coding test, prefers C language. No CGPA cutoff but "
-        "very selective. Package 5-8 LPA.\n"
-        "- Freshworks: Strong focus on problem solving + product thinking. Prefers students with "
-        "real projects. Package 10-15 LPA.\n"
-        "- Chargebee: Startup culture, prefers full stack. Strong GitHub presence needed. "
-        "Package 10-14 LPA.\n"
-        "- Razorpay: Strong DSA required, LeetCode medium-hard. CGPA 7.5+ preferred. "
-        "Package 15-25 LPA.\n"
-        "- CRED: Very selective, product thinking + DSA. Only top profiles. Package 20-35 LPA.\n"
-        "- Swiggy: DSA + system design for SDE roles. Package 15-25 LPA.\n"
-        "- Zepto: Fast growing, values hustle + skills over CGPA. Package 12-20 LPA.\n"
-        "- PhonePe: Strong DSA + fintech interest. Package 15-30 LPA.\n"
-        "- Groww: DSA + finance knowledge helpful. Package 12-20 LPA.\n"
-        "- Flipkart: Strong DSA, system design for experienced. Hard for freshers off-campus. "
-        "Package 18-40 LPA.\n"
-        "- Amazon: DSA heavy + leadership principles in interviews. CGPA matters less than problem "
-        "solving. Package 18-40 LPA.\n"
-        "- Microsoft: Very strong DSA + CS fundamentals. CGPA 7.5+ preferred. Package 20-45 LPA.\n"
-        "- Google: Extremely competitive. LeetCode hard problems. Package 25-60 LPA. Realistic only "
-        "for top 1% profiles.\n"
-        "- Deloitte: Consulting + tech hybrid. Communication skills matter. Package 6-9 LPA.\n"
-        "- IBM: Hires via campus. Tests aptitude + coding. Package 4.5-7 LPA.\n"
-        "- Mindtree (LTIMindtree): CGPA 6.0+. Package 4-6 LPA.\n"
-        "- Mphasis: CGPA 6.0+. Good backup option. Package 3.5-5 LPA.\n\n"
-        'Return a JSON object with exactly this structure:\n'
-        '{\n'
-        '  "companies": [\n'
-        '    {\n'
-        '      "name": "Company name",\n'
-        '      "type": "Service" or "Product" or "Startup",\n'
-        '      "match_score": integer 0-100,\n'
-        '      "cgpa_cutoff": "e.g. 6.0" or "No cutoff",\n'
-        '      "visits_college_tier": "Tier 1 only" or "Tier 1 & 2" or "All tiers",\n'
-        '      "likely_to_visit": boolean,\n'
-        '      "hiring_mode": "On Campus" or "Off Campus" or "Both",\n'
-        '      "role_offered": "specific role name e.g. Systems Engineer, SDE-1",\n'
-        '      "package_range": "e.g. 3.5-4.5 LPA",\n'
-        '      "why_match": "company-specific sentence referencing that company\'s actual 2026 hiring process",\n'
-        '      "biggest_gap": "company-specific sentence referencing that company\'s actual screening criteria",\n'
-        '      "apply_link": "direct careers page URL"\n'
-        '    }\n'
-        '  ],\n'
-        '  "summary": "2-3 sentences on their overall company targeting strategy"\n'
-        '}\n\n'
-        "Match score rules:\n"
-        "- Google/Microsoft/Amazon: max 35 for Tier 2 unless LeetCode 200+ AND CGPA 8.5+ AND "
-        "strong projects.\n"
-        "- Razorpay/CRED/Swiggy/PhonePe: max 50 for Tier 2 average profiles.\n"
-        "- Freshworks/Zoho/Chargebee: realistic 55-75 for good Tier 2 profiles.\n"
-        "- TCS/Infosys/Wipro/Accenture/Cognizant: 65-85 for Tier 2 with 6.5+ CGPA.\n"
-        "- If CGPA below cutoff: max score 30.\n"
-        "- If 0 projects: reduce product scores by 20.\n"
-        "- If LeetCode 0: reduce product scores by 15.\n\n"
-        "why_match and biggest_gap must reference specific things about that company's actual hiring "
-        "process in 2026, not generic statements.\n\n"
-        "CRITICAL RULES for why_match and biggest_gap:\n"
-        "- why_match must talk about what specifically HELPS this student at this company — their actual "
-        "skills, CGPA, projects, or experience that aligns with what this company looks for.\n"
-        "- biggest_gap must talk about something COMPLETELY DIFFERENT from why_match — a specific "
-        "weakness, missing skill, or specific exam/round they are likely to struggle with.\n"
-        "- They must NEVER repeat the same point or say the same thing in different words.\n"
-        "- biggest_gap must be about a concrete specific thing they are missing or weak at, not a vague "
-        "statement like 'high competition might be a challenge'.\n\n"
-        "Examples of CORRECT why_match and biggest_gap:\n"
-        "Infosys:\n"
-        "- why_match: 'Your Python and Java skills directly apply to InfyTQ coding rounds, and your 7.2 "
-        "CGPA clears their 6.5 cutoff comfortably giving you access to their campus drive'\n"
-        "- biggest_gap: 'InfyTQ heavily tests logical reasoning and data interpretation in the aptitude "
-        "section — you have no certifications or practice in aptitude prep which is the most common "
-        "reason students fail this round'\n"
-        "TCS:\n"
-        "- why_match: 'Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in "
-        "their coding section — SRM is a regular TCS recruitment campus'\n"
-        "- biggest_gap: 'TCS NQT has a dedicated numerical reasoning section that trips up most students "
-        "— without specific PrepInsta NQT practice you are likely to clear coding but fail aptitude'\n\n"
-        "NEVER say things like 'high competition might be a challenge' or 'limited projects might be "
-        "an issue' — be specific to that exact company and that exact student profile.\n\n"
-        "Only return valid JSON with no markdown formatting."
-    )
+    # Company database with pure data
+    COMPANY_DB = [
+        # ── Tier 1+ Companies ─────────────────────────────────────────────────
+        {"name": "Google", "type": "Product", "cgpa_cutoff": 7.5, "tiers": ["Tier 1"],
+         "required_skills": ["DSA", "System Design", "Algorithms", "Data Structures"],
+         "hiring_mode": "Off Campus", "role_offered": "Software Engineer (L3)",
+         "package_range": "25-60 LPA",
+         "why_match_template": "Google requires LeetCode hard-level DSA; your {skill_match}% skill overlap with their requirements is the starting point",
+         "gap_template": "Google expects 200+ LeetCode problems and system design expertise — both are gaps that take months to close",
+         "apply_link": "https://careers.google.com/"},
+        {"name": "Microsoft", "type": "Product", "cgpa_cutoff": 7.5, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Algorithms", "Data Structures", "OOP", "System Design"],
+         "hiring_mode": "Both", "role_offered": "SDE-1",
+         "package_range": "20-45 LPA",
+         "why_match_template": "Microsoft SDE-1 interviews test DSA and CS fundamentals; your {skill_match}% match with their required skills positions you for screening",
+         "gap_template": "Microsoft expects strong OS and networking fundamentals beyond just DSA — expect questions on process management and concurrency",
+         "apply_link": "https://careers.microsoft.com/"},
+        {"name": "Amazon", "type": "Product", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Algorithms", "Data Structures", "OOP"],
+         "hiring_mode": "Both", "role_offered": "SDE-1",
+         "package_range": "18-40 LPA",
+         "why_match_template": "Amazon SDE-1 tests DSA + Leadership Principles; your {skill_match}% skill match means you clear the technical bar if LeetCode is strong",
+         "gap_template": "Amazon's Bar Raiser round tests Leadership Principles (ownership, customer obsession) — not preparing behavioural answers is the #1 reason candidates fail final rounds",
+         "apply_link": "https://www.amazon.jobs/"},
+        {"name": "Goldman Sachs", "type": "Product", "cgpa_cutoff": 7.0, "tiers": ["Tier 1"],
+         "required_skills": ["Python", "SQL", "DSA", "Statistics"],
+         "hiring_mode": "On Campus", "role_offered": "Analyst",
+         "package_range": "18-35 LPA",
+         "why_match_template": "Goldman Sachs analyst roles require Python + SQL + DSA; your {skill_match}% match is a strong foundation for their hackerrank round",
+         "gap_template": "Goldman Sachs finance rounds test probability and statistics that most CS students skip — without this preparation, you will struggle in the quantitative round",
+         "apply_link": "https://www.goldmansachs.com/careers/"},
+        {"name": "Atlassian", "type": "Product", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "System Design", "REST API", "Git"],
+         "hiring_mode": "Off Campus", "role_offered": "Software Engineer",
+         "package_range": "20-40 LPA",
+         "why_match_template": "Atlassian's remote-friendly culture values solid DSA and system design; your {skill_match}% skill match with their stack gives you a genuine shot",
+         "gap_template": "Atlassian uses a take-home coding challenge format — candidates without experience shipping real projects to GitHub often underperform in this format",
+         "apply_link": "https://www.atlassian.com/company/careers"},
+        # ── Product/Startup ────────────────────────────────────────────────────
+        {"name": "Razorpay", "type": "Product", "cgpa_cutoff": 7.0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Python", "Java", "System Design", "REST API"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "15-25 LPA",
+         "why_match_template": "Razorpay hires through HackerRank DSA rounds; your {skill_match}% match with their fintech tech stack (Python/Java + APIs) shows readiness",
+         "gap_template": "Razorpay expects LeetCode medium-hard DSA fluency — if your LeetCode count is below 100, you will likely fail their online assessment",
+         "apply_link": "https://razorpay.com/jobs/"},
+        {"name": "PhonePe", "type": "Product", "cgpa_cutoff": 7.0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Java", "Python", "SQL", "System Design"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "15-30 LPA",
+         "why_match_template": "PhonePe's fintech engineering requires strong DSA and backend skills; your {skill_match}% skill match covers their core requirements",
+         "gap_template": "PhonePe specifically tests high-concurrency system design for payment systems — without system design prep your final round is at risk",
+         "apply_link": "https://phonepe.com/en-in/careers.html"},
+        {"name": "Swiggy", "type": "Product", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Python", "System Design", "Algorithms"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "15-25 LPA",
+         "why_match_template": "Swiggy's engineering team uses Python and requires strong DSA; your {skill_match}% overlap with their stack is a good foundation",
+         "gap_template": "Swiggy's system design round focuses on real-time order management and geo-distributed systems — a gap if you haven't studied distributed systems fundamentals",
+         "apply_link": "https://careers.swiggy.com/"},
+        {"name": "Zepto", "type": "Startup", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "DSA", "React", "Node.js"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "12-20 LPA",
+         "why_match_template": "Zepto values skills and hustle over pedigree; your {skill_match}% skill match with their fast-paced engineering stack shows technical readiness",
+         "gap_template": "Zepto moves extremely fast — candidates without side projects or open source contributions struggle to demonstrate the initiative they screen for",
+         "apply_link": "https://www.zepto.team/careers"},
+        {"name": "Groww", "type": "Product", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["DSA", "Python", "React", "SQL"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "12-20 LPA",
+         "why_match_template": "Groww's fintech stack (Python/React) matches your profile; your {skill_match}% overlap positions you for their online assessment round",
+         "gap_template": "Groww interviews include a product thinking round — candidates purely from a coding background without any product/user empathy context fail this stage",
+         "apply_link": "https://groww.in/careers"},
+        {"name": "CRED", "type": "Startup", "cgpa_cutoff": 8.0, "tiers": ["Tier 1"],
+         "required_skills": ["DSA", "System Design", "Python", "React"],
+         "hiring_mode": "Off Campus", "role_offered": "SDE-1",
+         "package_range": "20-35 LPA",
+         "why_match_template": "CRED selects from the top 1% — your {skill_match}% skill match is the baseline; your portfolio and product thinking determine final selection",
+         "gap_template": "CRED requires a strong public portfolio (GitHub, blog, or product contributions) — applications without visible work are screened out before any technical round",
+         "apply_link": "https://cred.club/careers"},
+        {"name": "Freshworks", "type": "Product", "cgpa_cutoff": 6.5, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["Python", "JavaScript", "React", "DSA", "REST API"],
+         "hiring_mode": "Both", "role_offered": "Software Engineer",
+         "package_range": "10-15 LPA",
+         "why_match_template": "Freshworks recruits from Tier 2 colleges for product roles; your {skill_match}% skill match with their full-stack requirement is competitive",
+         "gap_template": "Freshworks' final round tests product thinking alongside coding — candidates without any SaaS product usage or UX awareness frequently fail this round",
+         "apply_link": "https://www.freshworks.com/company/careers/"},
+        {"name": "Zoho", "type": "Product", "cgpa_cutoff": 0, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["C", "C++", "Java", "DSA", "Algorithms"],
+         "hiring_mode": "Both", "role_offered": "Member Technical Staff",
+         "package_range": "5-8 LPA",
+         "why_match_template": "Zoho has no CGPA cutoff and runs its own multi-stage coding test; your {skill_match}% match with their low-level programming focus is what they evaluate",
+         "gap_template": "Zoho's test is entirely in C — if you only know Python, you will fail their coding test as Python is not accepted in their assessment platform",
+         "apply_link": "https://careers.zoho.com/"},
+        # ── Service Companies ─────────────────────────────────────────────────
+        {"name": "TCS", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3", "Tier 4"],
+         "required_skills": ["Python", "Java", "SQL", "OOP"],
+         "hiring_mode": "Both", "role_offered": "Systems Engineer",
+         "package_range": "3.36-7 LPA",
+         "why_match_template": "TCS NQT recruits from all tiers — your {skill_match}% overlap with their coding round requirements (Python/Java + basic logic) clears the technical bar",
+         "gap_template": "TCS NQT has a dedicated numerical reasoning section that most students underestimate — without PrepInsta NQT mock tests you risk failing the aptitude section even with strong coding",
+         "apply_link": "https://nextstep.tcs.com/"},
+        {"name": "Infosys", "type": "Service", "cgpa_cutoff": 6.5, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "Java", "SQL", "OOP"],
+         "hiring_mode": "Both", "role_offered": "Systems Engineer",
+         "package_range": "3.6-6.25 LPA",
+         "why_match_template": "Infosys InfyTQ tests coding and aptitude; your {skill_match}% skill match means you clear the technical filter if CGPA is above 6.5",
+         "gap_template": "InfyTQ's logical reasoning and data interpretation sections are harder than the coding round — candidates who only prepare for coding fail this section",
+         "apply_link": "https://career.infosys.com/"},
+        {"name": "Wipro", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3", "Tier 4"],
+         "required_skills": ["Python", "Java", "SQL"],
+         "hiring_mode": "Both", "role_offered": "Project Engineer",
+         "package_range": "3.5-6.5 LPA",
+         "why_match_template": "Wipro WILP/Elite tracks test aptitude and basic coding; your {skill_match}% skill match comfortably clears their programming requirements",
+         "gap_template": "Wipro's elite track requires clearing AMCAT — candidates without platform-specific practice (Wipro mock tests on PrepInsta) often fail despite having the skills",
+         "apply_link": "https://careers.wipro.com/"},
+        {"name": "Accenture", "type": "Service", "cgpa_cutoff": 6.5, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "Java", "SQL", "OOP"],
+         "hiring_mode": "Both", "role_offered": "Associate Software Engineer",
+         "package_range": "4.5-6.5 LPA",
+         "why_match_template": "Accenture ASE role tests aptitude + communication; your {skill_match}% skill match handles the technical portion — communication round is the differentiator",
+         "gap_template": "Accenture's communication and HR rounds are tougher than the technical round — candidates who over-focus on coding and neglect mock HR interviews fail at this stage",
+         "apply_link": "https://www.accenture.com/in-en/careers"},
+        {"name": "Cognizant", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "Java", "SQL"],
+         "hiring_mode": "Both", "role_offered": "Programmer Analyst Trainee",
+         "package_range": "4-7 LPA",
+         "why_match_template": "Cognizant GenC track requires basic coding + aptitude; your {skill_match}% skill match is above their technical threshold for campus drives",
+         "gap_template": "Cognizant Elevate track (7 LPA) requires advanced DSA — candidates applying for Elevate without 100+ LeetCode problems solved consistently fail the coding round",
+         "apply_link": "https://careers.cognizant.com/"},
+        {"name": "HCL Technologies", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3", "Tier 4"],
+         "required_skills": ["Python", "Java", "SQL"],
+         "hiring_mode": "Both", "role_offered": "Software Engineer Trainee",
+         "package_range": "3.5-4.5 LPA",
+         "why_match_template": "HCL has one of the highest fresher intakes in India; your {skill_match}% skill match easily clears their basic aptitude and coding requirements",
+         "gap_template": "HCL's interview includes a technical interview beyond the written test — candidates who only prepare for online assessments get stuck in the technical discussion round",
+         "apply_link": "https://www.hcltech.com/careers"},
+        {"name": "Capgemini", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3", "Tier 4"],
+         "required_skills": ["Python", "Java", "SQL", "OOP"],
+         "hiring_mode": "Both", "role_offered": "Analyst",
+         "package_range": "4-6 LPA",
+         "why_match_template": "Capgemini uses AMCAT for assessment; your {skill_match}% skill match covers their programming requirements across their analyst track",
+         "gap_template": "Capgemini's AMCAT includes a personality and situation judgement section that cannot be crammed — candidates unfamiliar with this format often score poorly",
+         "apply_link": "https://www.capgemini.com/in-en/careers/"},
+        {"name": "IBM", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "Java", "SQL", "Linux"],
+         "hiring_mode": "Both", "role_offered": "Application Developer",
+         "package_range": "4.5-7 LPA",
+         "why_match_template": "IBM campus hiring tests aptitude + coding + HR; your {skill_match}% skill match clears the technical bar for their application developer role",
+         "gap_template": "IBM's interview emphasises cloud and AI knowledge (IBM Cloud, Watson) — candidates without any cloud exposure struggle to answer the technical interview questions",
+         "apply_link": "https://www.ibm.com/employment/"},
+        {"name": "Deloitte", "type": "Service", "cgpa_cutoff": 6.5, "tiers": ["Tier 1", "Tier 2"],
+         "required_skills": ["Python", "SQL", "Data Analysis"],
+         "hiring_mode": "Both", "role_offered": "Analyst — Technology",
+         "package_range": "6-9 LPA",
+         "why_match_template": "Deloitte Analyst hires for tech consulting roles; your {skill_match}% skill match is suitable for their aptitude and case interview format",
+         "gap_template": "Deloitte's case study round tests business + tech reasoning — candidates with pure engineering backgrounds without any business awareness fail the case portion",
+         "apply_link": "https://jobs2.deloitte.com/in/en"},
+        {"name": "Tech Mahindra", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3", "Tier 4"],
+         "required_skills": ["Python", "Java", "SQL"],
+         "hiring_mode": "Both", "role_offered": "Associate Software Engineer",
+         "package_range": "3.5-5 LPA",
+         "why_match_template": "Tech Mahindra hires broadly from all tiers; your {skill_match}% skill match is sufficient for their programming and aptitude assessment",
+         "gap_template": "Tech Mahindra's interview rounds include a group discussion that candidates from technical backgrounds underestimate — poor communication in GD leads to rejections even with good scores",
+         "apply_link": "https://careers.techmahindra.com/"},
+        {"name": "Mphasis", "type": "Service", "cgpa_cutoff": 6.0, "tiers": ["Tier 1", "Tier 2", "Tier 3"],
+         "required_skills": ["Python", "Java", "SQL"],
+         "hiring_mode": "Both", "role_offered": "Software Engineer Trainee",
+         "package_range": "3.5-5 LPA",
+         "why_match_template": "Mphasis is a strong backup option with a straightforward aptitude + coding process; your {skill_match}% skill match clears their requirements",
+         "gap_template": "Mphasis focuses on BFSI domain knowledge in the technical interview — candidates without any exposure to banking or financial systems concepts fail the domain round",
+         "apply_link": "https://mphasis.com/careers.html"},
+    ]
 
-    try:
-        completion = _groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+    # Colleges that historically place in specific companies (simplified)
+    college_lower = (payload.college or "").lower()
+    college_company_history: set[str] = set()
+    if any(k in college_lower for k in ("iit", "nit", "bits", "iisc")):
+        college_company_history = {"Google", "Microsoft", "Amazon", "Goldman Sachs", "Atlassian", "Razorpay", "PhonePe"}
+    elif any(k in college_lower for k in ("vit", "srm", "manipal", "kiit", "thapar", "amrita", "pes")):
+        college_company_history = {"TCS", "Infosys", "Wipro", "Cognizant", "Amazon", "Freshworks", "Zoho"}
+    else:
+        college_company_history = {"TCS", "Infosys", "Wipro", "HCL", "Capgemini", "Tech Mahindra"}
+
+    tier_num = {"Tier 1": 1, "Tier 2": 2, "Tier 3": 3, "Tier 4": 4}.get(college_tier, 3)
+
+    def _compute_score(company: dict) -> int:
+        req = set(s.lower() for s in company["required_skills"])
+        skill_overlap = len(user_skills_lower & req)
+        skill_match_pct = round(skill_overlap / len(req) * 100) if req else 0
+
+        # Base from skill overlap
+        base = skill_match_pct
+
+        # CGPA check
+        cutoff = company["cgpa_cutoff"]
+        if cutoff > 0 and cgpa < cutoff:
+            base = min(base, 30)
+
+        # Tier filter — companies that don't visit this tier
+        allowed_tiers = set(company.get("tiers", []))
+        if college_tier not in allowed_tiers:
+            base = max(0, base - 25)
+
+        # History boost
+        if company["name"] in college_company_history:
+            base = min(100, base + 10)
+
+        # Internship boost for product companies
+        if company["type"] in ("Product", "Startup") and has_internship:
+            base = min(100, base + 5)
+
+        # Certifications boost (small)
+        cert_str = str(payload.certifications or "0")
+        if cert_str in ("1-2", "3+"):
+            base = min(100, base + 3)
+
+        # LeetCode penalty for product companies
+        if company["type"] in ("Product", "Startup") and lc_score == 0:
+            base = max(0, base - 15)
+
+        # Projects penalty for product companies
+        if company["type"] in ("Product", "Startup") and proj_score == 0:
+            base = max(0, base - 20)
+
+        # Tier 2/3/4 caps for elite companies
+        elite = {"Google", "Microsoft", "Amazon", "Goldman Sachs", "Atlassian", "CRED"}
+        if company["name"] in elite and tier_num >= 2 and lc_score < 3 and cgpa < 8.5:
+            base = min(base, 35)
+
+        competitive = {"Razorpay", "PhonePe", "Swiggy", "Groww"}
+        if company["name"] in competitive and tier_num >= 2 and skill_match_pct < 60:
+            base = min(base, 50)
+
+        return max(0, min(100, base))
+
+    companies_out = []
+    for company in COMPANY_DB:
+        req = set(s.lower() for s in company["required_skills"])
+        skill_overlap = len(user_skills_lower & req)
+        skill_match_pct = round(skill_overlap / len(req) * 100) if req else 0
+
+        score = _compute_score(company)
+
+        allowed_tiers = set(company.get("tiers", []))
+        likely_to_visit = college_tier in allowed_tiers and score >= 40
+
+        # Build why_match and biggest_gap from data (not Groq)
+        why = company["why_match_template"].format(skill_match=skill_match_pct)
+        gap = company["gap_template"]
+
+        visits_label = (
+            "Tier 1 only" if allowed_tiers == {"Tier 1"}
+            else "Tier 1 & 2" if allowed_tiers <= {"Tier 1", "Tier 2"}
+            else "Tier 1 & 2 & 3" if allowed_tiers <= {"Tier 1", "Tier 2", "Tier 3"}
+            else "All tiers"
         )
-        raw = completion.choices[0].message.content or ""
-        print(f"[DEBUG] Groq company match response: {raw[:500]!r}")
-        return parse_groq_json(raw)
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+
+        companies_out.append({
+            "name": company["name"],
+            "type": company["type"],
+            "match_score": score,
+            "cgpa_cutoff": str(company["cgpa_cutoff"]) if company["cgpa_cutoff"] > 0 else "No cutoff",
+            "visits_college_tier": visits_label,
+            "likely_to_visit": likely_to_visit,
+            "hiring_mode": company["hiring_mode"],
+            "role_offered": company["role_offered"],
+            "package_range": company["package_range"],
+            "why_match": why,
+            "biggest_gap": gap,
+            "apply_link": company["apply_link"],
+        })
+
+    companies_out.sort(key=lambda x: -x["match_score"])
+
+    # Build summary from data
+    top3 = [c["name"] for c in companies_out[:3]]
+    strong = [c for c in companies_out if c["match_score"] >= 70]
+    possible = [c for c in companies_out if 50 <= c["match_score"] < 70]
+    summary = (
+        f"Your strongest matches are {', '.join(top3[:2])} and {top3[2] if len(top3) > 2 else 'similar companies'}. "
+        f"You have {len(strong)} strong matches (70+ score) and {len(possible)} possible targets (50–70 score). "
+        f"Focus applications on your top matches while building DSA skills to unlock higher-tier opportunities."
+    )
+
+    return {"companies": companies_out[:15], "summary": summary}
 
 
 @app.post("/api/roadmap/generate")
 async def generate_roadmap(body: RoadmapIn):
+    # Build cache key from profile factors
+    cache_key = hashlib.md5(
+        "|".join([
+            body.college or "",
+            body.branch or "",
+            str(body.cgpa or ""),
+            ",".join(sorted(body.skills or [])),
+            body.target_role or "",
+        ]).encode()
+    ).hexdigest()
+
+    cached = _cache_get("roadmap_cache", cache_key, ttl_hours=7 * 24)
+    if cached:
+        _cache_stat("roadmap", hit=True)
+        return json.loads(cached)
+    _cache_stat("roadmap", hit=False)
+
     skills_str = ", ".join(body.skills) if body.skills else "none listed"
     companies_str = ", ".join(body.target_companies) if body.target_companies else "not specified"
     missing_str = ", ".join(body.must_have_missing) if body.must_have_missing else "none identified"
     internship_str = (
         f"yes ({body.internship_months} months)" if body.has_internship == "yes" else "no"
     )
+
+    all_stats = get_all_college_stats(body.college)
+    nirf_stats = all_stats.get("nirf_data")
+    nirf_context = ""
+    if all_stats.get("matched"):
+        combined_median = all_stats.get("combined_median_salary")
+        combined_rate = all_stats.get("combined_placement_rate")
+        sources_n = all_stats.get("sources_count", 0)
+        highest = nirf_stats.get("highest_salary") if nirf_stats else None
+        nirf_context = (
+            f"- Combined Median Salary at {all_stats['college_name']} ({sources_n} source{'s' if sources_n != 1 else ''}): {combined_median} LPA\n"
+            f"- Highest Salary (NIRF 2024): {highest} LPA\n"
+            f"- Combined Placement Rate ({sources_n} sources): {combined_rate}%\n"
+        )
 
     prompt = (
         "You are a placement preparation expert who knows exactly what Indian engineering students "
@@ -1161,7 +2115,8 @@ async def generate_roadmap(body: RoadmapIn):
         f"- LeetCode Problems Solved: {body.leetcode_count}\n"
         f"- Projects Count: {body.projects_count}\n"
         f"- Internship: {internship_str}\n"
-        f"- Critical Skill Gaps (must learn): {missing_str}\n\n"
+        f"- Critical Skill Gaps (must learn): {missing_str}\n"
+        f"{nirf_context}\n"
         "Generate a 90-day personalised placement prep roadmap. Be specific to their profile — "
         "reference their actual gaps, target companies, and college tier. Don't give generic advice.\n\n"
         "Return ONLY a JSON object with this exact structure:\n"
@@ -1205,6 +2160,9 @@ async def generate_roadmap(body: RoadmapIn):
         "- resource_link must be a real, free URL (LeetCode, GeeksForGeeks, YouTube, official docs) or empty string.\n"
         "- Warnings must be real risks for this student's profile (e.g. 'At CGPA 6.8, Infosys has a 6.5 cutoff — maintain it').\n"
         "- Daily schedule must be concrete times, not vague ('study DSA' is bad, '6-7am: 2 LeetCode mediums' is good).\n"
+        "- Use the NIRF 2024 median salary to set a REALISTIC salary target in the overview. "
+        "Don't over-promise; the overview must mention the college's actual median so expectations are calibrated.\n"
+        "- Calibrate advice to college tier: Tier 1 → competitive + DSA heavy; Tier 2 → domain + DSA; Tier 3/4 → core skills + one project first.\n"
         "- Only return valid JSON with no markdown formatting."
     )
 
@@ -1216,7 +2174,9 @@ async def generate_roadmap(body: RoadmapIn):
         )
         raw = completion.choices[0].message.content or ""
         print(f"[DEBUG] Groq roadmap response: {raw[:500]!r}")
-        return parse_groq_json(raw)
+        result = parse_groq_json(raw)
+        _cache_set("roadmap_cache", cache_key, json.dumps(result))
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1262,16 +2222,66 @@ async def roadmap_chat(body: RoadmapChatIn):
 
 
 @app.get("/api/market/intelligence")
-async def market_intelligence():
+async def market_intelligence(college: str = "", city: str = ""):
     cached = _load_market_cache()
-    if cached:
-        return cached
-    try:
-        payload = await refresh_market_cache()
-        return payload
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    base = cached
+    if not base:
+        try:
+            base = await refresh_market_cache()
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Enrich with multi-source college context if college is provided
+    if college:
+        all_stats = get_all_college_stats(college)
+        tier = all_stats.get("college_tier") or get_college_tier(college)
+        combined_salary = all_stats.get("combined_median_salary")
+        combined_rate = all_stats.get("combined_placement_rate")
+        sources_n = all_stats.get("sources_count", 0)
+
+        def _salary_benchmark(default_lpa: int) -> str:
+            if combined_salary and sources_n:
+                return f"{combined_salary} LPA median ({sources_n} source{'s' if sources_n != 1 else ''}, 2024)"
+            return f"{default_lpa} LPA median (estimate)"
+
+        # Build tier-specific hiring demand context
+        if tier == "Tier 1":
+            tier_demand = {
+                "college_tier": tier,
+                "top_roles_in_demand": ["Software Engineer", "Data Scientist", "SDE-2", "Research Engineer"],
+                "companies_hiring_this_tier": ["Google", "Microsoft", "Amazon", "Goldman Sachs", "Atlassian", "Qualcomm"],
+                "salary_benchmark": _salary_benchmark(20),
+                "combined_placement_rate": combined_rate,
+                "sources_count": sources_n,
+            }
+        elif tier == "Tier 2":
+            tier_demand = {
+                "college_tier": tier,
+                "top_roles_in_demand": ["Software Engineer", "Full Stack Developer", "Data Analyst", "DevOps Engineer"],
+                "companies_hiring_this_tier": ["TCS", "Infosys", "Wipro", "Cognizant", "Accenture", "Amazon", "Zoho"],
+                "salary_benchmark": _salary_benchmark(7),
+                "combined_placement_rate": combined_rate,
+                "sources_count": sources_n,
+            }
+        else:
+            tier_demand = {
+                "college_tier": tier,
+                "top_roles_in_demand": ["Software Engineer", "Web Developer", "QA Engineer", "Support Engineer"],
+                "companies_hiring_this_tier": ["TCS", "Infosys", "Wipro", "HCL", "Tech Mahindra", "Mphasis", "Hexaware"],
+                "salary_benchmark": _salary_benchmark(5),
+                "combined_placement_rate": combined_rate,
+                "sources_count": sources_n,
+            }
+
+        if city:
+            tier_demand["hiring_near_city"] = city
+            tier_demand["city_note"] = f"In {city}, demand is highest for software and IT roles. Check naukri.com and LinkedIn for local openings."
+
+        base = dict(base)
+        base["college_intelligence"] = tier_demand
+
+    return base
 
 
 @app.get("/api/market/refresh")
@@ -1281,6 +2291,282 @@ async def market_force_refresh():
     try:
         payload = await refresh_market_cache()
         return payload
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Market News Scraper ────────────────────────────────────────────────────────
+
+INSIGHTS_CACHE_PATH = Path(__file__).parent / "market_insights_cache.json"
+INSIGHTS_TTL_HOURS = 24
+
+MARKET_NEWS_SOURCES = [
+    {"name": "Economic Times Jobs", "url": "https://economictimes.indiatimes.com/jobs", "base_url": "https://economictimes.indiatimes.com"},
+    {"name": "TimesJobs", "url": "https://www.timesjobs.com/", "base_url": "https://www.timesjobs.com"},
+    {"name": "YourStory Hiring", "url": "https://yourstory.com/topic/hiring", "base_url": "https://yourstory.com"},
+    {"name": "Naukri Blog", "url": "https://www.naukriblog.com/", "base_url": "https://www.naukriblog.com"},
+    {"name": "LinkedIn Talent Blog", "url": "https://www.linkedin.com/business/talent/blog", "base_url": "https://www.linkedin.com"},
+]
+
+
+async def _scrape_articles(source: dict) -> list[dict]:
+    articles = []
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }) as client:
+            resp = await client.get(source["url"])
+            if resp.status_code != 200:
+                return articles
+            soup = BeautifulSoup(resp.text, "html.parser")
+            seen: set[str] = set()
+            for selector in ["h2 a", "h3 a", "article h2", "article h3", ".article-title", ".headline", "h1 a"]:
+                for tag in soup.select(selector)[:15]:
+                    title = tag.get_text(strip=True)
+                    href = tag.get("href", "") if tag.name == "a" else ""
+                    if not href and tag.name != "a":
+                        link = tag.find("a")
+                        if link:
+                            href = link.get("href", "")
+                    if len(title) > 20 and title not in seen:
+                        seen.add(title)
+                        if href and not href.startswith("http"):
+                            href = source["base_url"] + href
+                        articles.append({
+                            "title": title,
+                            "summary": "",
+                            "source_name": source["name"],
+                            "source_url": href or source["url"],
+                            "published_date": "",
+                            "scraped_at": datetime.now(timezone.utc).isoformat(),
+                        })
+                if len(articles) >= 5:
+                    break
+    except Exception as e:
+        print(f"[Market Insights] Failed to scrape {source['name']}: {e}")
+    return articles[:5]
+
+
+_INSIGHT_SKILLS = [
+    "Python", "Java", "JavaScript", "React", "Node.js", "SQL", "AWS", "Docker",
+    "Kubernetes", "Machine Learning", "Deep Learning", "TypeScript", "Go", "Rust",
+    "MongoDB", "PostgreSQL", "Redis", "FastAPI", "Django", "Spring Boot", "Flutter",
+    "Android", "iOS", "Swift", "Kotlin", "C++", "Git", "Linux", "Azure", "GCP",
+    "Terraform", "Jenkins", "GraphQL", "REST API", "Microservices", "System Design",
+    "Data Structures", "Algorithms", "DSA", "AI", "ML", "Generative AI", "LLM",
+]
+
+_INSIGHT_ROLES = [
+    "Software Engineer", "Data Scientist", "Data Analyst", "Frontend Developer",
+    "Backend Developer", "Full Stack Developer", "DevOps Engineer", "ML Engineer",
+    "Product Manager", "Android Developer", "iOS Developer", "SDE", "SWE",
+]
+
+_INSIGHT_COMPANIES = [
+    "TCS", "Infosys", "Wipro", "Accenture", "Cognizant", "HCL", "Capgemini",
+    "Google", "Microsoft", "Amazon", "Meta", "Apple", "Flipkart", "Zoho",
+    "Freshworks", "Razorpay", "PhonePe", "Swiggy", "Zomato", "Ola", "Zepto",
+    "Groww", "CRED", "IBM", "Deloitte", "KPMG", "EY", "PwC", "SAP",
+    "Oracle", "Salesforce", "Adobe", "Atlassian", "Intuit", "Walmart",
+]
+
+_INSIGHT_CITIES = [
+    "Bangalore", "Bengaluru", "Hyderabad", "Pune", "Chennai", "Mumbai",
+    "Delhi", "Noida", "Gurgaon", "Kolkata", "Ahmedabad", "Jaipur", "Kochi",
+]
+
+_CITY_REASON = {
+    "Bangalore": "Tech capital of India with 40% of all engineering jobs; highest average salaries",
+    "Bengaluru": "Tech capital of India with 40% of all engineering jobs; highest average salaries",
+    "Hyderabad": "Second-largest tech hub; booming with Google, Microsoft, and pharma-tech growth",
+    "Pune": "Growing IT and automotive tech hub; significantly lower cost of living than Bangalore",
+    "Chennai": "Strong in IT services and auto-tech; many Fortune 500 India development centres",
+    "Mumbai": "FinTech and BFSI capital; highest cost of living but premium salaries for finance roles",
+    "Delhi": "Government tech and consulting hub; FAANG has large NCR offices",
+    "Noida": "Affordable alternative to Delhi with many IT parks and startup offices",
+    "Gurgaon": "Fintech and startup hub adjacent to Delhi; Zomato, PolicyBazaar HQ here",
+    "Kochi": "Emerging tech hub; lower cost of living with growing startup ecosystem",
+}
+
+
+def _extract_insights_data(articles: list[dict]) -> dict:
+    """Pure data extraction from article titles — no Groq."""
+    skill_hits: dict[str, list] = {}
+    role_hits: dict[str, int] = {}
+    company_hits: dict[str, str] = {}
+    city_hits: dict[str, int] = {}
+
+    for article in articles:
+        title_lower = article.get("title", "").lower()
+        source_url = article.get("source_url", "")
+        title_text = article.get("title", "")
+
+        for skill in _INSIGHT_SKILLS:
+            if skill.lower() in title_lower:
+                if skill not in skill_hits:
+                    skill_hits[skill] = []
+                skill_hits[skill].append({"title": title_text, "url": source_url})
+
+        for role in _INSIGHT_ROLES:
+            if role.lower() in title_lower:
+                role_hits[role] = role_hits.get(role, 0) + 1
+
+        for company in _INSIGHT_COMPANIES:
+            if company.lower() in title_lower and company not in company_hits:
+                context_words = ["hiring", "recruit", "expan", "job", "opening", "campus"]
+                ctx = "actively hiring" if any(w in title_lower for w in context_words) else "mentioned in news"
+                company_hits[company] = ctx
+
+        for city in _INSIGHT_CITIES:
+            if city.lower() in title_lower:
+                city_hits[city] = city_hits.get(city, 0) + 1
+
+    trending_skills = sorted(
+        [
+            {
+                "skill": skill,
+                "article_count": len(hits),
+                "sample_article_title": hits[0]["title"] if hits else "",
+                "sample_article_url": hits[0]["url"] if hits else "",
+            }
+            for skill, hits in skill_hits.items()
+        ],
+        key=lambda x: -x["article_count"],
+    )[:10]
+
+    hot_roles = sorted(
+        [{"role": role, "article_count": count} for role, count in role_hits.items()],
+        key=lambda x: -x["article_count"],
+    )[:8]
+
+    hiring_companies = [
+        {"company": company, "context": context}
+        for company, context in list(company_hits.items())[:10]
+    ]
+
+    trending_cities = [
+        {"city": city, "reason": _CITY_REASON.get(city, f"Mentioned {count} times in recent hiring news")}
+        for city, count in sorted(city_hits.items(), key=lambda x: -x[1])[:5]
+    ]
+
+    # Fallback with static data if nothing was scraped
+    if not trending_skills:
+        trending_skills = [
+            {"skill": s, "article_count": 0, "sample_article_title": "", "sample_article_url": ""}
+            for s in ["Python", "JavaScript", "Java", "React", "SQL", "AWS", "Docker", "Machine Learning", "TypeScript", "Node.js"]
+        ]
+    if not hot_roles:
+        hot_roles = [{"role": r, "article_count": 0} for r in ["Software Engineer", "Data Scientist", "DevOps Engineer", "Full Stack Developer"]]
+    if not hiring_companies:
+        hiring_companies = [
+            {"company": c, "context": "major fresher recruiter in India"}
+            for c in ["TCS", "Infosys", "Wipro", "Accenture", "Cognizant", "Amazon", "Microsoft", "Google", "Freshworks", "Zoho"]
+        ]
+    if not trending_cities:
+        trending_cities = [
+            {"city": c, "reason": _CITY_REASON.get(c, "Major tech hub")}
+            for c in ["Bangalore", "Hyderabad", "Pune", "Chennai", "Mumbai"]
+        ]
+
+    return {
+        "trending_skills": trending_skills,
+        "hot_roles": hot_roles,
+        "hiring_companies": hiring_companies,
+        "trending_cities": trending_cities,
+        "is_ai_estimate": False,
+    }
+
+
+def _static_fallback_insights() -> dict:
+    """Static fallback when no articles available — clearly labelled as estimate."""
+    return {
+        "trending_skills": [
+            {"skill": s, "article_count": 0, "sample_article_title": "", "sample_article_url": ""}
+            for s in ["Python", "JavaScript", "Java", "React", "SQL", "AWS", "Docker", "Machine Learning", "TypeScript", "Node.js"]
+        ],
+        "hot_roles": [{"role": r, "article_count": 0} for r in [
+            "Software Engineer", "Data Scientist", "DevOps Engineer", "Full Stack Developer",
+            "ML Engineer", "Backend Developer", "Frontend Developer", "Data Analyst"
+        ]],
+        "hiring_companies": [
+            {"company": c, "context": "major fresher recruiter in India"}
+            for c in ["TCS", "Infosys", "Wipro", "Accenture", "Cognizant", "Amazon", "Microsoft", "Google", "Freshworks", "Zoho"]
+        ],
+        "trending_cities": [
+            {"city": c, "reason": _CITY_REASON.get(c, "Major tech hub")}
+            for c in ["Bangalore", "Hyderabad", "Pune", "Chennai", "Mumbai"]
+        ],
+        "is_ai_estimate": True,
+    }
+
+
+def _load_insights_cache() -> dict | None:
+    if not INSIGHTS_CACHE_PATH.exists():
+        return None
+    try:
+        data = json.loads(INSIGHTS_CACHE_PATH.read_text())
+        ts_str = data.get("scraped_at", "2000-01-01")
+        ts = datetime.fromisoformat(ts_str)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - ts > timedelta(hours=INSIGHTS_TTL_HOURS):
+            return None
+        return data
+    except Exception:
+        return None
+
+
+async def refresh_market_insights() -> dict:
+    print("[Market Insights] Starting scrape job...")
+    all_articles: list[dict] = []
+    for source in MARKET_NEWS_SOURCES:
+        articles = await _scrape_articles(source)
+        all_articles.extend(articles)
+        print(f"[Market Insights] {source['name']}: {len(articles)} articles")
+
+    scrape_success = len(all_articles) > 0
+    insights = _extract_insights_data(all_articles) if scrape_success else _static_fallback_insights()
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM market_insights"))
+            for article in all_articles:
+                conn.execute(text("""
+                    INSERT INTO market_insights (title, summary, source_name, source_url, scraped_at)
+                    VALUES (:title, :summary, :source_name, :source_url, :scraped_at)
+                """), article)
+    except Exception as e:
+        print(f"[Market Insights] DB store failed: {e}")
+
+    payload = {
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+        "articles": all_articles,
+        "insights": insights,
+        "scrape_success": scrape_success,
+    }
+    INSIGHTS_CACHE_PATH.write_text(json.dumps(payload, ensure_ascii=False))
+    print(f"[Market Insights] Done. {len(all_articles)} articles, scrape_success={scrape_success}")
+    return payload
+
+
+@app.get("/api/market/news")
+async def market_news():
+    cached = _load_insights_cache()
+    if cached:
+        return cached
+    try:
+        return await refresh_market_insights()
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market/news/refresh")
+async def market_news_refresh():
+    INSIGHTS_CACHE_PATH.unlink(missing_ok=True)
+    try:
+        return await refresh_market_insights()
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1303,6 +2589,35 @@ async def oncampus_predict(payload: OnCampusIn):
         raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
 
     skills_str = ", ".join(payload.skills) if payload.skills else "None listed"
+    all_stats = get_all_college_stats(payload.college)
+    nirf_stats = all_stats.get("nirf_data")
+
+    # Build multi-source context and determine company lists
+    nirf_context = ""
+    placement_rate = all_stats.get("combined_placement_rate")
+    effective_tier = all_stats.get("college_tier") or payload.college_tier
+
+    if all_stats.get("matched"):
+        sources_n = all_stats.get("sources_count", 0)
+        nirf_context = (
+            f"\nMULTI-SOURCE VERIFIED DATA for {payload.college} ({sources_n} source{'s' if sources_n != 1 else ''}):\n"
+            f"- NIRF Rank: {all_stats.get('nirf_rank')}\n"
+            f"- Combined placement rate: {placement_rate}%\n"
+            f"- Combined median salary: {all_stats.get('combined_median_salary')} LPA\n"
+            f"- Highest salary (NIRF 2024): {nirf_stats.get('highest_salary') if nirf_stats else 'N/A'} LPA\n"
+            f"- College Tier: {effective_tier}\n\n"
+            f"Use this combined placement_rate ({placement_rate}%) to calibrate probability scores. "
+            f"A college with 90% placement rate should show probabilities 15-25 points higher "
+            f"than one with 50% for the same tier.\n"
+        )
+
+    # Tier-specific company lists per spec
+    if "Tier 1" in effective_tier:
+        tier_company_rule = "Tier 1 (IITs/NITs/BITS): Include Google, Microsoft, Amazon, Goldman Sachs, Atlassian, Qualcomm, Uber, LinkedIn."
+    elif "Tier 2" in effective_tier:
+        tier_company_rule = "Tier 2 (VIT/SRM/Manipal/Amrita/KIIT etc): TCS, Infosys, Wipro, Cognizant, Accenture, Amazon, Microsoft, Capgemini, HCL, Zoho, Freshworks."
+    else:
+        tier_company_rule = "Tier 3 and 4: TCS, Infosys, Wipro, HCL, Tech Mahindra, Mphasis, Hexaware, Capgemini."
 
     prompt = (
         "You are a placement prediction expert with deep knowledge of Indian campus recruitment in 2026. "
@@ -1310,11 +2625,12 @@ async def oncampus_predict(payload: OnCampusIn):
         "for placements in the 2026 placement season (Aug-Dec 2026).\n\n"
         f"Student Profile:\n"
         f"- College: {payload.college}\n"
-        f"- College Tier: {payload.college_tier}\n"
+        f"- College Tier: {effective_tier}\n"
         f"- Branch: {payload.branch}\n"
         f"- Target Role: {payload.target_role}\n"
         f"- Skills: {skills_str}\n"
-        f"- CGPA: {payload.cgpa}/10\n\n"
+        f"- CGPA: {payload.cgpa}/10\n"
+        f"{nirf_context}"
         "Return a JSON object with this exact structure:\n"
         "{\n"
         '  "companies": [\n'
@@ -1338,11 +2654,9 @@ async def oncampus_predict(payload: OnCampusIn):
         '  "eligible_count": integer\n'
         '}\n\n'
         "Rules:\n"
-        "- Tier 1 (IITs/NITs/BITS): Include Google, Microsoft, Amazon, Goldman Sachs, Atlassian, etc.\n"
-        "- Tier 2 (VIT/SRM/Manipal/Amrita/KIIT etc): TCS, Infosys, Wipro, Accenture, Cognizant, HCL, Capgemini, Deloitte, IBM, Zoho, Freshworks.\n"
-        "- Tier 3: TCS, Infosys, Wipro, HCL, Mphasis, and regional IT companies.\n"
+        f"- {tier_company_rule}\n"
         "- Return exactly 8-10 companies relevant to their tier.\n"
-        "- probability reflects actual historical campus visit frequency for that college tier.\n"
+        "- probability reflects actual historical campus visit frequency for that college tier, weighted by the NIRF placement_rate if provided.\n"
         "- student_eligible is strictly CGPA >= cgpa_cutoff (compute accurately).\n"
         "- sample_questions must be REAL questions specific to each company's known hiring pattern.\n"
         "- eligible_count = count of companies where student_eligible is true.\n"
@@ -1361,6 +2675,41 @@ async def oncampus_predict(payload: OnCampusIn):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/oncampus/history")
+async def oncampus_history(college: str = ""):
+    """Return multi-source placement history (NIRF + Shiksha + Careers360) for the college."""
+    if not college:
+        raise HTTPException(status_code=400, detail="college query parameter is required")
+    all_stats = get_all_college_stats(college)
+    if not all_stats.get("matched"):
+        return {
+            "found": False,
+            "college": college,
+            "message": "No placement data found for this college. Data shown is based on tier estimates.",
+            "college_tier": all_stats.get("college_tier"),
+        }
+    nirf = all_stats.get("nirf_data") or {}
+    return {
+        "found": True,
+        "college_name": all_stats["college_name"],
+        "nirf_rank": all_stats.get("nirf_rank"),
+        "college_tier": all_stats["college_tier"],
+        "placement_rate": nirf.get("placement_rate"),
+        "median_salary": nirf.get("median_salary"),
+        "mean_salary": nirf.get("mean_salary"),
+        "highest_salary": nirf.get("highest_salary"),
+        "graduating_students_count": nirf.get("graduating_students_count"),
+        "combined_placement_rate": all_stats.get("combined_placement_rate"),
+        "combined_median_salary": all_stats.get("combined_median_salary"),
+        "sources_count": all_stats.get("sources_count"),
+        "all_sources": all_stats.get("all_sources", []),
+        "shiksha_data": all_stats.get("shiksha_data"),
+        "careers360_data": all_stats.get("careers360_data"),
+        "data_source": "NIRF 2024 + Shiksha + Careers360",
+        "note": "Data combined from NIRF 2024, Shiksha, and Careers360 (2024)",
+    }
 
 
 # ── Off Campus Jobs ───────────────────────────────────────────────────────────
@@ -1475,6 +2824,21 @@ async def generate_cold_email(payload: ColdEmailIn):
     if _groq is None:
         raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
 
+    # Cache key: skills + target company + target role
+    cache_key = hashlib.md5(
+        "|".join([
+            ",".join(sorted(payload.skills or [])),
+            (payload.company or "").lower().strip(),
+            (payload.role or "").lower().strip(),
+        ]).encode()
+    ).hexdigest()
+
+    cached = _cache_get("cold_email_cache", cache_key, ttl_hours=3 * 24)
+    if cached:
+        _cache_stat("coldemail", hit=True)
+        return json.loads(cached)
+    _cache_stat("coldemail", hit=False)
+
     skills_str = ", ".join(payload.skills[:8]) if payload.skills else "software development"
     internship_str = f"Yes ({payload.internship_months} months)" if payload.has_internship == "yes" else "No"
     name = payload.user_name or "a final-year engineering student"
@@ -1505,10 +2869,11 @@ async def generate_cold_email(payload: ColdEmailIn):
             temperature=0.7,
         )
         raw = completion.choices[0].message.content or ""
-        # Strip any markdown fences if present
         raw = re.sub(r"^```(?:text|markdown|email)?\s*", "", raw.strip())
         raw = re.sub(r"\s*```$", "", raw)
-        return {"email": raw.strip()}
+        result = {"email": raw.strip()}
+        _cache_set("cold_email_cache", cache_key, json.dumps(result))
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1925,80 +3290,28 @@ def colleges_list():
     return {"colleges": list(COLLEGE_DB.values())}
 
 
-# ── LinkedIn Profile Analyser ─────────────────────────────────────────────────
-
-class LinkedInAnalyseIn(BaseModel):
-    profile_text: str
-    target_role: str = "Software Engineer"
-
-
-@app.post("/api/linkedin/analyse")
-async def linkedin_analyse(payload: LinkedInAnalyseIn):
-    if _groq is None:
-        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
-
-    if len(payload.profile_text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="Profile text is too short. Please paste more content from your LinkedIn profile.")
-
-    truncated = payload.profile_text[:4000]
-
-    prompt = (
-        "You are a LinkedIn profile expert who knows exactly what Indian tech recruiters and hiring managers "
-        "look for in 2026. Analyse this LinkedIn profile text for an Indian engineering student targeting placements.\n\n"
-        f"Target Role: {payload.target_role}\n\n"
-        f"Profile Text:\n{truncated}\n\n"
-        "Return a JSON object with exactly these fields:\n"
-        "{\n"
-        '  "profile_score": integer 0-100,\n'
-        '  "headline_analysis": {\n'
-        '    "current": "their current headline or N/A if not found",\n'
-        '    "verdict": "good" or "bad" or "missing",\n'
-        '    "suggested": "a better headline optimised for recruiter searches for their target role"\n'
-        '  },\n'
-        '  "about_section": {\n'
-        '    "verdict": "good" or "bad" or "missing",\n'
-        '    "issues": ["specific issue 1", "specific issue 2"],\n'
-        '    "suggested_opening": "first 2 sentences of a stronger About section for this person"\n'
-        '  },\n'
-        '  "experience_gaps": ["specific gap 1", "specific gap 2"],\n'
-        '  "skills_section": {\n'
-        '    "missing_key_skills": ["skill 1", "skill 2"],\n'
-        '    "skills_to_remove": ["irrelevant skill 1", "irrelevant skill 2"]\n'
-        '  },\n'
-        '  "projects_section": {\n'
-        '    "verdict": "good" or "bad" or "missing",\n'
-        '    "improvements": ["specific improvement 1", "specific improvement 2"]\n'
-        '  },\n'
-        '  "quick_wins": [\n'
-        '    "specific fix they can do TODAY in under 10 minutes",\n'
-        '    "...", "...", "...", "..."\n'
-        '  ],\n'
-        '  "ats_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5",\n'
-        '                   "keyword6", "keyword7", "keyword8", "keyword9", "keyword10"],\n'
-        '  "overall_verdict": "2-3 brutal honest sentences on their LinkedIn profile strength for Indian placements"\n'
-        '}\n\n'
-        "Rules:\n"
-        "- profile_score: be realistic. Most Indian student profiles score 25-55. A truly strong profile scores 70+.\n"
-        "- headline_analysis.suggested: use format 'Role | Tech Stack | College' or 'Aspiring Role | Skill1 · Skill2 · Skill3' — what gets recruiter clicks.\n"
-        "- quick_wins: SPECIFIC and doable in under 10 minutes — e.g. 'Add Python to your Skills section' not 'Improve your skills'.\n"
-        "- ats_keywords: exact keywords recruiters search on LinkedIn for this target role in India in 2026.\n"
-        "- experience_gaps: missing quantified achievements, missing tech stack mentions, vague bullet descriptions.\n"
-        "- skills_to_remove: irrelevant skills (e.g. MS Word on a SWE profile) that dilute the profile.\n"
-        "- If a section is not in the pasted text, set verdict to 'missing' and give advice on what to write.\n"
-        "Only return valid JSON with no markdown formatting, no code fences, no explanation."
-    )
-
+@app.get("/admin/cache-stats")
+def cache_stats():
+    """Return AI cache hit/miss stats showing how many Groq calls are being saved."""
     try:
-        completion = _groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
-        raw = completion.choices[0].message.content or ""
-        print(f"[DEBUG] Groq linkedin response: {raw[:500]!r}")
-        return parse_groq_json(raw)
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT endpoint, cache_hits, cache_misses, groq_calls_saved, last_reset FROM ai_cache_stats"
+            )).fetchall()
+            stats = [
+                {
+                    "endpoint": r[0],
+                    "cache_hits": r[1],
+                    "cache_misses": r[2],
+                    "groq_calls_saved": r[3],
+                    "hit_rate_pct": round(r[1] / (r[1] + r[2]) * 100, 1) if (r[1] + r[2]) > 0 else 0,
+                    "last_reset": r[4],
+                }
+                for r in rows
+            ]
+        total_saved = sum(s["groq_calls_saved"] for s in stats)
+        return {"stats": stats, "total_groq_calls_saved": total_saved}
     except Exception as e:
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2081,6 +3394,128 @@ _ARBEITNOW_TECH_TAGS = {
     "developer", "ml", "ai", "frontend", "backend", "fullstack", "react", "node",
     "cloud", "devops", "sql",
 }
+
+_NON_CS_TITLE_KEYWORDS = {
+    "accounting", "accountant", "tax", "taxation", "finance", "financial", "legal",
+    "marketing", "sales", "hr", "human resources", "mechanical", "chemical",
+    "civil", "electrical", "manufacturing", "procurement", "logistics",
+    "supply chain", "operations", "content writer", "graphic design", "social media",
+    "business development", "customer support", "customer service", "receptionist",
+    "teaching", "tutoring", "fashion", "retail", "hospitality",
+}
+_CS_TITLE_KEYWORDS = {
+    "software", "developer", "engineer", "data", "ml", "ai", "machine learning",
+    "frontend", "backend", "fullstack", "full stack", "devops", "cloud", "python",
+    "javascript", "java", "react", "android", "ios", "mobile", "web", "cybersecurity",
+    "blockchain", "product", "ui", "ux", "qa", "testing", "automation", "intern",
+    "tech", "computer", "it ", "coding", "programming", "algorithm", "database",
+    "api", "system", "network", "security", "embedded", "firmware", "game",
+    "typescript", "golang", "rust", "kotlin", "flutter", "node", "angular", "vue",
+    "docker", "kubernetes", "aws", "azure", "gcp", "nlp", "llm", "deep learning",
+}
+
+
+def _is_non_english(text: str) -> bool:
+    """Return True if text contains significant non-ASCII characters (likely non-English)."""
+    if not text:
+        return False
+    non_ascii = sum(1 for c in text if ord(c) > 127)
+    return non_ascii / max(len(text), 1) > 0.08
+
+
+def _get_translation_cache(text_hash: str) -> dict | None:
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT translated_title, translated_description FROM translation_cache WHERE original_text_hash = :h"),
+                {"h": text_hash},
+            ).fetchone()
+            if row:
+                return {"title": row[0], "description": row[1]}
+    except Exception:
+        pass
+    return None
+
+
+def _set_translation_cache(text_hash: str, title: str, description: str):
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO translation_cache (original_text_hash, translated_title, translated_description, translated_at)
+                    VALUES (:h, :t, :d, :ts)
+                    ON CONFLICT(original_text_hash) DO NOTHING
+                """),
+                {"h": text_hash, "t": title, "d": description, "ts": datetime.now(timezone.utc).isoformat()},
+            )
+    except Exception as e:
+        print(f"[TranslationCache] set error: {e}")
+
+
+def _translate_listing_sync(title: str, description: str) -> tuple[str, str]:
+    """Translate title and description to English via Groq. Returns (title, description)."""
+    if _groq is None:
+        return title, description
+    try:
+        prompt = (
+            f"Translate this job listing title and description to English. "
+            f"Return only a JSON with keys 'title' and 'description', no markdown: "
+            f"TITLE: {title} DESCRIPTION: {description}"
+        )
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=500,
+        )
+        raw = (completion.choices[0].message.content or "").strip()
+        raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`")
+        parsed = json.loads(raw)
+        return str(parsed.get("title", title)), str(parsed.get("description", description))
+    except Exception as e:
+        print(f"[Translation] Failed: {e}")
+        return title, description
+
+
+def _is_cs_role(title: str, tags: list) -> bool:
+    """Return True if the listing is a CS/tech role worth showing."""
+    title_lower = title.lower()
+    # Reject clearly non-CS roles
+    for kw in _NON_CS_TITLE_KEYWORDS:
+        if kw in title_lower:
+            return False
+    # Must match at least one CS keyword in title or tags
+    tags_str = " ".join(tags).lower()
+    combined = title_lower + " " + tags_str
+    return any(kw in combined for kw in _CS_TITLE_KEYWORDS)
+
+
+async def _translate_and_filter(jobs: list[dict]) -> list[dict]:
+    """Translate non-English listings and filter to CS-only roles."""
+    import hashlib
+    filtered = []
+    for job in jobs:
+        title = job.get("title", "")
+        description = job.get("description", "") or ""
+        tags = job.get("tags", [])
+
+        # Translate if non-English
+        if _is_non_english(title) or _is_non_english(description):
+            text_hash = hashlib.md5((title + description).encode("utf-8", errors="ignore")).hexdigest()
+            cached = _get_translation_cache(text_hash)
+            if cached:
+                title = cached["title"]
+                description = cached["description"]
+            else:
+                title, description = await _asyncio.to_thread(_translate_listing_sync, title, description)
+                _set_translation_cache(text_hash, title, description)
+            job = {**job, "title": title, "description": description}
+
+        # CS-only filter
+        if _is_cs_role(title, tags):
+            filtered.append(job)
+
+    return filtered
 
 
 def _load_internships_cache() -> dict | None:
@@ -2327,6 +3762,10 @@ async def internships_list(skills: str = ""):
         )
 
         all_live = adzuna + remotive + arbeitnow
+
+        # Translate non-English listings and filter to CS-only roles
+        all_live = await _translate_and_filter(all_live)
+
         ai_generated: list[dict] = []
         if len(all_live) < 10:
             ai_generated = await _asyncio.to_thread(_generate_ai_internships)
@@ -2746,3 +4185,304 @@ async def startups_list(page: int = 1, search: str = "", industry: str = "", cit
         "page": page,
         "per_page": per_page,
     }
+
+
+# ── PYQ Quiz Mode ──────────────────────────────────────────────────────────────
+
+import random as _random
+
+class QuizIn(BaseModel):
+    company: str
+
+
+@app.post("/api/pyq/quiz")
+async def pyq_quiz(payload: QuizIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
+
+    cache_key = f"quiz_{payload.company.lower().replace(' ', '_')}"
+    cached = _cache_get("pyq_quiz_cache", cache_key, ttl_hours=24)
+    if cached:
+        try:
+            data = json.loads(cached)
+            questions = list(data.get("questions", []))
+            _random.shuffle(questions)
+            return {"company": payload.company, "questions": questions}
+        except Exception:
+            pass
+
+    prompt = (
+        f"You are an expert on Indian campus placement tests. Generate 15 multiple-choice quiz questions "
+        f"for {payload.company} placement preparation.\n\n"
+        "Mix topics: Quantitative Aptitude, Logical Reasoning, Verbal Ability, and Technical concepts "
+        f"commonly tested at {payload.company}.\n\n"
+        "Return only valid JSON:\n"
+        "{\n"
+        '  "questions": [\n'
+        '    {\n'
+        '      "id": "unique_short_string_no_spaces",\n'
+        '      "question": "full question text",\n'
+        '      "options": ["Option A text", "Option B text", "Option C text", "Option D text"],\n'
+        '      "correct_index": 0,\n'
+        '      "explanation": "why the correct answer is right, and briefly why the other options are wrong",\n'
+        '      "topic": "e.g. Time & Work / Arrays / Verbal",\n'
+        '      "difficulty": "Easy"\n'
+        '    }\n'
+        '  ]\n'
+        '}\n\n'
+        "Rules:\n"
+        "- correct_index is 0-based (0=A, 1=B, 2=C, 3=D)\n"
+        "- difficulty must be Easy, Medium, or Hard\n"
+        "- Make questions specific and realistic for this company\n"
+        "- Only return the JSON object, no markdown"
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+        )
+        raw = completion.choices[0].message.content or ""
+        data = parse_groq_json(raw)
+
+        questions = data.get("questions", [])
+        # Ensure all questions have required fields
+        valid = []
+        for q in questions:
+            if (isinstance(q.get("options"), list) and len(q["options"]) == 4
+                    and isinstance(q.get("correct_index"), int)
+                    and 0 <= q["correct_index"] <= 3
+                    and q.get("question")):
+                if not q.get("id"):
+                    q["id"] = hashlib.md5(q["question"].encode()).hexdigest()[:12]
+                valid.append(q)
+
+        _cache_set("pyq_quiz_cache", cache_key, json.dumps({"questions": valid}))
+        _random.shuffle(valid)
+        return {"company": payload.company, "questions": valid}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ExplanationIn(BaseModel):
+    question_id: str
+    question_text: str
+    correct_answer: str = ""
+
+
+@app.post("/api/pyq/explanation")
+async def pyq_explanation(payload: ExplanationIn):
+    if _groq is None:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT explanation FROM pyq_explanations WHERE question_id = :qid"),
+                {"qid": payload.question_id},
+            ).fetchone()
+            if row:
+                return {"explanation": row[0]}
+    except Exception as e:
+        print(f"[pyq_explanation] DB read error: {e}")
+
+    answer_part = f"'{payload.correct_answer}'" if payload.correct_answer else "the correct answer"
+    prompt = (
+        f"In one sentence, explain why {answer_part} is correct for this question:\n"
+        f"'{payload.question_text}'\nBe concise and educational."
+    )
+
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        explanation = (completion.choices[0].message.content or "").strip()
+
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM pyq_explanations WHERE question_id = :qid"),
+                    {"qid": payload.question_id},
+                )
+                conn.execute(
+                    text("INSERT INTO pyq_explanations (question_id, explanation, generated_at) VALUES (:qid, :exp, :ts)"),
+                    {"qid": payload.question_id, "exp": explanation, "ts": datetime.now(timezone.utc).isoformat()},
+                )
+        except Exception as e:
+            print(f"[pyq_explanation] DB write error: {e}")
+
+        return {"explanation": explanation}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Coding Platform Stats ──────────────────────────────────────────────────────
+
+async def _fetch_leetcode_stats(username: str) -> dict:
+    query = (
+        "{ matchedUser(username: \"%s\") { submitStats { acSubmissionNum { difficulty count } } "
+        "profile { ranking } } }" % username
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "Referer": "https://leetcode.com",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    }
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        resp = await client.post(
+            "https://leetcode.com/graphql",
+            json={"query": query},
+            headers=headers,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        user = data.get("data", {}).get("matchedUser")
+        if not user:
+            return {"error": "User not found or profile is private"}
+        counts = {s["difficulty"]: s["count"] for s in user.get("submitStats", {}).get("acSubmissionNum", [])}
+        return {
+            "username": username,
+            "total_solved": counts.get("All", 0),
+            "easy_solved": counts.get("Easy", 0),
+            "medium_solved": counts.get("Medium", 0),
+            "hard_solved": counts.get("Hard", 0),
+            "ranking": user.get("profile", {}).get("ranking", 0),
+            "profile_url": f"https://leetcode.com/{username}/",
+        }
+
+
+async def _fetch_codechef_stats(username: str) -> dict:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
+        resp = await client.get(f"https://www.codechef.com/users/{username}")
+        if resp.status_code == 404:
+            return {"error": "User not found"}
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        rating = 0
+        el = soup.find("div", class_="rating-number")
+        if el:
+            try:
+                rating = int(el.get_text(strip=True))
+            except ValueError:
+                pass
+
+        highest_rating = rating
+        for small in soup.find_all("small"):
+            txt = small.get_text()
+            if "Highest" in txt:
+                digits = "".join(c for c in txt if c.isdigit())
+                if digits:
+                    highest_rating = int(digits)
+                break
+
+        stars = 0
+        full_text = soup.get_text()
+        for marker in ["★★★★★★★", "★★★★★★", "★★★★★", "★★★★", "★★★", "★★", "★"]:
+            if marker in full_text:
+                stars = len(marker)
+                break
+
+        global_rank = country_rank = problems_solved = 0
+        ranks_div = soup.find("div", class_="rating-ranks")
+        if ranks_div:
+            strong_els = ranks_div.find_all("strong")
+            for i, el in enumerate(strong_els[:2]):
+                val = "".join(c for c in el.get_text() if c.isdigit() or c == ",").replace(",", "")
+                if val:
+                    if i == 0:
+                        global_rank = int(val)
+                    else:
+                        country_rank = int(val)
+
+        for section in soup.find_all("section"):
+            h5 = section.find("h5")
+            if h5 and "problem" in h5.get_text().lower():
+                problems_solved = len(section.find_all("a"))
+                break
+
+        return {
+            "username": username,
+            "rating": rating,
+            "highest_rating": highest_rating,
+            "stars": stars,
+            "global_rank": global_rank,
+            "country_rank": country_rank,
+            "problems_solved": problems_solved,
+            "profile_url": f"https://www.codechef.com/users/{username}",
+        }
+
+
+async def _fetch_codeforces_stats(username: str) -> dict:
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"https://codeforces.com/api/user.info?handles={username}")
+        data = resp.json()
+        if data.get("status") != "OK":
+            return {"error": data.get("comment", "User not found")}
+        user = data["result"][0]
+        return {
+            "username": username,
+            "rating": user.get("rating", 0),
+            "max_rating": user.get("maxRating", 0),
+            "rank": user.get("rank", "unrated"),
+            "max_rank": user.get("maxRank", "unrated"),
+            "contribution": user.get("contribution", 0),
+            "profile_url": f"https://codeforces.com/profile/{username}",
+        }
+
+
+@app.get("/api/coding/stats")
+async def coding_stats(leetcode: str = "", codechef: str = "", codeforces: str = ""):
+    result: dict = {}
+
+    async def get_stats(platform: str, username: str, fetch_fn):
+        if not username.strip():
+            return None
+        uname = username.strip()
+        try:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT stats_json, cached_at FROM coding_stats_cache WHERE platform = :p AND username = :u"),
+                    {"p": platform, "u": uname},
+                ).fetchone()
+                if row:
+                    cached_at = datetime.fromisoformat(row[1])
+                    if cached_at.tzinfo is None:
+                        cached_at = cached_at.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) - cached_at <= timedelta(hours=6):
+                        return json.loads(row[0])
+        except Exception as e:
+            print(f"[coding_stats] Cache read ({platform}): {e}")
+
+        try:
+            stats = await fetch_fn(uname)
+        except Exception as e:
+            stats = {"error": str(e)}
+
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM coding_stats_cache WHERE platform = :p AND username = :u"),
+                    {"p": platform, "u": uname},
+                )
+                conn.execute(
+                    text("INSERT INTO coding_stats_cache (platform, username, stats_json, cached_at) VALUES (:p, :u, :s, :t)"),
+                    {"p": platform, "u": uname, "s": json.dumps(stats), "t": datetime.now(timezone.utc).isoformat()},
+                )
+        except Exception as e:
+            print(f"[coding_stats] Cache write ({platform}): {e}")
+
+        return stats
+
+    if leetcode:
+        result["leetcode"] = await get_stats("leetcode", leetcode, _fetch_leetcode_stats)
+    if codechef:
+        result["codechef"] = await get_stats("codechef", codechef, _fetch_codechef_stats)
+    if codeforces:
+        result["codeforces"] = await get_stats("codeforces", codeforces, _fetch_codeforces_stats)
+
+    return result
