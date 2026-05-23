@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import config from '@/lib/config'
+import config, { fetchWithTimeout } from '@/lib/config'
 
 const COLLEGES = [
   // IITs
@@ -66,6 +66,14 @@ const ROLES = [
   "Full Stack Developer", "Embedded Systems Engineer", "Cybersecurity Analyst",
   "Cloud Engineer", "QA Engineer", "Research & Development"
 ];
+
+function getCollegeTier(college: string): string {
+  const name = college.toLowerCase();
+  if (/iit|iisc|bits pilani|nit trichy|nit warangal/.test(name)) return "Tier 1";
+  if (/nit|iiit|vit|manipal|srm|thapar|dtu|nsit/.test(name)) return "Tier 2";
+  if (/amity|lovely|chandigarh|chitkara|lpu/.test(name)) return "Tier 3";
+  return "Tier 3";
+}
 
 export default function Onboarding() {
   const router = useRouter();
@@ -146,15 +154,22 @@ export default function Onboarding() {
     setSubmitting(true);
     const payload = { ...form, email: session?.user?.email ?? "" };
     try {
-      const res = await fetch(`${config.apiUrl}/api/user/profile`, {
+      const res = await fetchWithTimeout(`${config.apiUrl}/api/user/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+      }, 10000);
+      if (!res.ok) throw new Error("backend error");
       const data = await res.json();
       localStorage.setItem("placeiq_profile", JSON.stringify(data));
     } catch {
-      localStorage.setItem("placeiq_profile", JSON.stringify(payload));
+      // Backend unavailable or timed out — save locally so the user can continue
+      localStorage.setItem("placeiq_profile", JSON.stringify({
+        ...payload,
+        collegeTier: getCollegeTier(payload.college),
+        placementScore: 0,
+        scoreReasoning: "",
+      }));
     }
     router.push("/dashboard");
   };

@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import config from '@/lib/config'
+import config, { fetchWithTimeout } from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type SkillItem = {
   skill: string;
@@ -172,6 +173,7 @@ export default function SkillGap() {
   const hasFetched = useRef(false);
 
   const [profile, setProfile] = useState<StoredProfile | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const [result, setResult] = useState<SkillGapResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -195,7 +197,14 @@ export default function SkillGap() {
         });
       }
     } catch {}
+    setProfileChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (!profileChecked || profile) return;
+    const timer = setTimeout(() => router.push('/onboarding'), 2000);
+    return () => clearTimeout(timer);
+  }, [profileChecked, profile]);
 
   useEffect(() => {
     if (profile && !hasFetched.current) {
@@ -218,7 +227,7 @@ export default function SkillGap() {
     setResult(null);
 
     try {
-      const res = await fetch(`${config.apiUrl}/api/skills/gap`, {
+      const res = await fetchWithTimeout(`${config.apiUrl}/api/skills/gap`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -229,7 +238,7 @@ export default function SkillGap() {
           branch: p.branch,
           cgpa: p.cgpa,
         }),
-      });
+      }, 10000);
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -252,7 +261,11 @@ export default function SkillGap() {
       setResult(newResult);
       try { localStorage.setItem("placeiq_skillgap", JSON.stringify(newResult)); } catch {}
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Analysis failed. Make sure the backend is running.");
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError("Backend is waking up, please wait 30 seconds and refresh.");
+      } else {
+        setError(err instanceof Error ? err.message : "Analysis failed. Make sure the backend is running.");
+      }
     } finally {
       setLoading(false);
     }
@@ -266,11 +279,7 @@ export default function SkillGap() {
     analyse(profile);
   };
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   const mustSorted = result ? sortItems(result.must_have_missing) : [];
   const goodSorted = result ? sortItems(result.good_to_have_missing) : [];
@@ -299,9 +308,10 @@ export default function SkillGap() {
           )}
         </div>
 
-        {!profile && !loading && (
+        {profileChecked && !profile && !loading && (
           <div className="mt-10 bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
-            <p className="text-gray-300 mb-4">Complete your profile first to get personalised skill gap analysis.</p>
+            <p className="text-gray-300 mb-2">Complete your profile first to get personalised skill gap analysis.</p>
+            <p className="text-gray-500 text-sm mb-6">Redirecting to onboarding in a moment…</p>
             <button
               onClick={() => router.push("/onboarding")}
               className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition"

@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import config from '@/lib/config'
+import config, { fetchWithTimeout } from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type Task = {
   name: string;
@@ -133,6 +134,7 @@ export default function RoadmapPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const [profile, setProfile] = useState<StoredProfile | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
@@ -168,7 +170,14 @@ export default function RoadmapPage() {
         });
       }
     } catch {}
+    setProfileChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (!profileChecked || profile) return;
+    const timer = setTimeout(() => router.push('/onboarding'), 2000);
+    return () => clearTimeout(timer);
+  }, [profileChecked, profile]);
 
   useEffect(() => {
     if (profile && !hasFetched.current) {
@@ -212,7 +221,7 @@ export default function RoadmapPage() {
 
     try {
       setStatusMsg("Analysing your skill gaps...");
-      const gapRes = await fetch(`${config.apiUrl}/api/skills/gap`, {
+      const gapRes = await fetchWithTimeout(`${config.apiUrl}/api/skills/gap`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -222,7 +231,7 @@ export default function RoadmapPage() {
           branch: p.branch,
           cgpa: p.cgpa,
         }),
-      });
+      }, 10000);
       if (gapRes.ok) {
         const gapData = await gapRes.json();
         if (gapData && Array.isArray(gapData.must_have_missing)) {
@@ -237,7 +246,7 @@ export default function RoadmapPage() {
 
     try {
       setStatusMsg("Building your personalised roadmap...");
-      const res = await fetch(`${config.apiUrl}/api/roadmap/generate`, {
+      const res = await fetchWithTimeout(`${config.apiUrl}/api/roadmap/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -267,11 +276,15 @@ export default function RoadmapPage() {
       setRoadmap(parsed);
       try { localStorage.setItem("placeiq_roadmap", JSON.stringify(parsed)); } catch {}
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to generate roadmap. Make sure the backend is running."
-      );
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError("Backend is waking up, please wait 30 seconds and refresh.");
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to generate roadmap. Make sure the backend is running."
+        );
+      }
     } finally {
       setLoading(false);
       setStatusMsg("");
@@ -369,12 +382,7 @@ export default function RoadmapPage() {
     }
   };
 
-  if (status === "loading")
-    return (
-      <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
@@ -407,12 +415,13 @@ export default function RoadmapPage() {
         </div>
 
         {/* No profile */}
-        {!profile && !loading && (
+        {profileChecked && !profile && !loading && (
           <div className="mt-10 bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
             <h3 className="text-xl font-bold mb-2">Complete your profile first</h3>
-            <p className="text-gray-400 mb-6">
+            <p className="text-gray-400 mb-2">
               We need your college, skills, and goals to generate a personalised roadmap.
             </p>
+            <p className="text-gray-500 text-sm mb-6">Redirecting to onboarding in a moment…</p>
             <button
               onClick={() => router.push("/onboarding")}
               className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-medium transition"

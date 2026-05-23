@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import config from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type ResumeAnalysis = {
   resume_score: number;
@@ -178,11 +179,7 @@ export default function ResumeAnalyser() {
     }
   };
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">

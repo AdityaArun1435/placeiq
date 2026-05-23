@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import LoadingScreen from '@/components/LoadingScreen'
 import { useRouter } from "next/navigation";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
@@ -365,13 +366,7 @@ export default function TrackerPage() {
     });
   }
 
-  if (status === "loading") {
-    return (
-      <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
-  }
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">

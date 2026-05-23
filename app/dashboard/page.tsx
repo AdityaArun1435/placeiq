@@ -8,7 +8,8 @@ import {
   BookOpen, BarChart2, Database,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
-import config from '@/lib/config'
+import config, { fetchWithTimeout } from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type Profile = {
   placementScore: number;
@@ -220,6 +221,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [backendSleeping, setBackendSleeping] = useState(false);
   const [liveScore, setLiveScore] = useState<LiveScore | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
   const [skillGaps, setSkillGaps] = useState<SkillItem[] | null>(null);
@@ -235,27 +238,49 @@ export default function Dashboard() {
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
 
+    // Primary: read from localStorage (source of truth)
+    try {
+      const stored = localStorage.getItem("placeiq_profile");
+      if (stored) {
+        setProfile(JSON.parse(stored));
+        setProfileLoading(false);
+        setProfileChecked(true);
+        return;
+      }
+    } catch {}
+
+    // Fallback: fetch from backend and cache locally
     const email = encodeURIComponent(session.user.email);
-    fetch(`${config.apiUrl}/api/user/profile/${email}`)
+    fetchWithTimeout(`${config.apiUrl}/api/user/profile/${email}`, {}, 10000)
       .then(res => {
         if (res.status === 404) return null;
         if (!res.ok) throw new Error("fetch failed");
         return res.json();
       })
       .then(data => {
+        if (data) localStorage.setItem("placeiq_profile", JSON.stringify(data));
         setProfile(data);
-        return data;
       })
-      .catch(() => setProfile(null))
-      .finally(() => setProfileLoading(false));
+      .catch((err) => {
+        if (err instanceof Error && err.name === 'AbortError') setBackendSleeping(true);
+        setProfile(null);
+      })
+      .finally(() => { setProfileLoading(false); setProfileChecked(true); });
   }, [status, session?.user?.email]);
+
+  // Redirect to onboarding if no profile found after 2 seconds
+  useEffect(() => {
+    if (!profileChecked || profile) return;
+    const timer = setTimeout(() => router.push('/onboarding'), 2000);
+    return () => clearTimeout(timer);
+  }, [profileChecked, profile]);
 
   // Fetch live score from backend (never use cached placementScore)
   useEffect(() => {
     if (!profile?.email) return;
     setScoreLoading(true);
     const email = encodeURIComponent(profile.email);
-    fetch(`${config.apiUrl}/api/placement/score/${email}`)
+    fetchWithTimeout(`${config.apiUrl}/api/placement/score/${email}`, {}, 10000)
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setLiveScore(data); })
       .catch(() => {})
@@ -267,7 +292,7 @@ export default function Dashboard() {
     setSkillGapLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${config.apiUrl}/api/skills/gap`, {
+        const res = await fetchWithTimeout(`${config.apiUrl}/api/skills/gap`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -277,7 +302,7 @@ export default function Dashboard() {
             branch: profile.branch,
             cgpa: profile.cgpa,
           }),
-        });
+        }, 10000);
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
@@ -296,7 +321,7 @@ export default function Dashboard() {
     setCompanyMatchLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${config.apiUrl}/api/companies/match`, {
+        const res = await fetchWithTimeout(`${config.apiUrl}/api/companies/match`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -336,9 +361,22 @@ export default function Dashboard() {
   const displayScore = liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
+  if (status === "loading") return <LoadingScreen />;
+
+  if (backendSleeping && !profile) return (
+    <main className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 px-6">
+      <div className="max-w-md text-center">
+        <p className="text-yellow-400 font-semibold text-lg mb-2">Backend is waking up</p>
+        <p className="text-gray-400 text-sm mb-6">
+          The server is starting up (Render free tier takes 30–60 seconds). Please wait and refresh.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-yellow-600/20 hover:bg-yellow-600/40 border border-yellow-500/30 text-yellow-300 px-6 py-2.5 rounded-lg text-sm font-medium transition"
+        >
+          Refresh page
+        </button>
+      </div>
     </main>
   );
 
@@ -349,6 +387,19 @@ export default function Dashboard() {
         <p className="text-gray-400 mb-10">
           {profile ? `Targeting ${profile.targetRole} · ${profile.college}` : "Complete your profile to get your placement score."}
         </p>
+
+        {/* Profile banner — shown briefly before 2s redirect fires */}
+        {profileChecked && !profile && (
+          <div className="bg-blue-600/10 border border-blue-500/30 rounded-xl px-5 py-3 flex items-center justify-between mb-6">
+            <p className="text-sm text-gray-300">Complete your profile to get personalised insights</p>
+            <button
+              onClick={() => router.push('/onboarding')}
+              className="shrink-0 ml-4 bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-1.5 rounded-lg font-medium transition"
+            >
+              Complete Profile →
+            </button>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">

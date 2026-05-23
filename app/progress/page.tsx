@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import config from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -327,11 +328,7 @@ export default function ProgressTracker() {
   const hasAnyStats = lcStats || ccStats || cfStats;
   const anyProfileConnected = profiles.leetcode || profiles.codechef || profiles.codeforces;
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">

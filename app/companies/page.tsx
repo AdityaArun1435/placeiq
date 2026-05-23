@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import config from '@/lib/config'
+import config, { fetchWithTimeout } from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type Company = {
   name: string;
@@ -188,6 +189,7 @@ export default function Companies() {
   const hasFetched = useRef(false);
 
   const [profile, setProfile] = useState<StoredProfile | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const [result, setResult] = useState<CompanyMatchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -222,7 +224,14 @@ export default function Companies() {
         });
       }
     } catch {}
+    setProfileChecked(true);
   }, []);
+
+  useEffect(() => {
+    if (!profileChecked || profile) return;
+    const timer = setTimeout(() => router.push('/onboarding'), 2000);
+    return () => clearTimeout(timer);
+  }, [profileChecked, profile]);
 
   useEffect(() => {
     if (profile && !hasFetched.current) {
@@ -246,11 +255,11 @@ export default function Companies() {
     setResult(null);
 
     try {
-      const res = await fetch(`${config.apiUrl}/api/companies/match`, {
+      const res = await fetchWithTimeout(`${config.apiUrl}/api/companies/match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(p),
-      });
+      }, 10000);
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -278,9 +287,11 @@ export default function Companies() {
       setResult(newResult);
       try { localStorage.setItem("placeiq_companies", JSON.stringify(newResult)); } catch {}
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Analysis failed. Make sure the backend is running."
-      );
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError("Backend is waking up, please wait 30 seconds and refresh.");
+      } else {
+        setError(err instanceof Error ? err.message : "Analysis failed. Make sure the backend is running.");
+      }
     } finally {
       setLoading(false);
     }
@@ -338,12 +349,7 @@ export default function Companies() {
       return 0;
     });
 
-  if (status === "loading")
-    return (
-      <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
@@ -370,11 +376,12 @@ export default function Companies() {
         </div>
 
         {/* No profile */}
-        {!profile && !loading && (
+        {profileChecked && !profile && !loading && (
           <div className="mt-10 bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
-            <p className="text-gray-300 mb-4">
+            <p className="text-gray-300 mb-2">
               Complete your profile to get personalised company matches.
             </p>
+            <p className="text-gray-500 text-sm mb-6">Redirecting to onboarding in a moment…</p>
             <button
               onClick={() => router.push("/onboarding")}
               className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition"

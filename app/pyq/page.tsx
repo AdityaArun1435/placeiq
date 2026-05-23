@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import config from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 const COMPANIES = [
   "TCS", "Infosys", "Wipro", "Accenture", "Cognizant", "HCL", "Capgemini",
@@ -400,11 +401,7 @@ export default function PYQPage() {
     c.toLowerCase().includes(quizCompanySearch.toLowerCase())
   );
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   // ── Results screen ─────────────────────────────────────────────────────────
   if (mode === "results") {

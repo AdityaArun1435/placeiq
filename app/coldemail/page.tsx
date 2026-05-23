@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import config from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type Profile = {
   college: string;
@@ -88,11 +89,7 @@ export default function ColdEmail() {
     }
   }
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">

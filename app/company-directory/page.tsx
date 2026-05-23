@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import config from '@/lib/config'
+import LoadingScreen from '@/components/LoadingScreen'
 
 type Company = {
   name: string;
@@ -166,11 +167,7 @@ export default function CompanyDirectoryPage() {
     fetchPage(1, false);
   }
 
-  if (status === "loading") return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <p className="text-gray-400">Loading...</p>
-    </main>
-  );
+  if (status === "loading") return <LoadingScreen />;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
