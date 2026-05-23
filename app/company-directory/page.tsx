@@ -1,7 +1,8 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import config from '@/lib/config'
 
 type Company = {
   name: string;
@@ -23,23 +24,6 @@ type DirectoryResponse = {
   has_more: boolean;
   building: boolean;
 };
-
-const NAV_LINKS = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Skill Gap", path: "/skills" },
-  { label: "Companies", path: "/companies" },
-  { label: "Roadmap", path: "/roadmap" },
-  { label: "Market", path: "/market" },
-  { label: "Resume", path: "/resume" },
-  { label: "Tracker", path: "/tracker" },
-  { label: "On Campus", path: "/oncampus" },
-  { label: "Off Campus", path: "/offcampus" },
-  { label: "Resources", path: "/resources" },
-  { label: "Cold Email", path: "/coldemail" },
-  { label: "Directory", path: "/company-directory", active: true },
-  { label: "Internships", path: "/internships" },
-  { label: "Referral Radar", path: "/referral" },
-];
 
 const INDUSTRIES = ["All", "IT Services", "IT Consulting", "SaaS/Product", "FinTech", "E-Commerce", "Food Tech", "Software/Cloud", "Technology", "Banking/Tech", "Product Engineering"];
 const CITIES = ["All", "Bangalore", "Mumbai", "Hyderabad", "Chennai", "Pune", "Noida", "Gurugram"];
@@ -149,7 +133,7 @@ export default function CompanyDirectoryPage() {
         ...(rating > 0 && { rating: String(rating) }),
         ...(search.trim() && { search: search.trim() }),
       });
-      const res = await fetch(`http://localhost:8000/api/directory/companies?${params}`);
+      const res = await fetch(`${config.apiUrl}/api/directory/companies?${params}`);
       if (!res.ok) throw new Error("Failed to fetch company directory");
       const data: DirectoryResponse = await res.json();
       if (append) {
@@ -190,30 +174,6 @@ export default function CompanyDirectoryPage() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-4 flex-wrap">
-            {NAV_LINKS.map(n => (
-              <button
-                key={n.path}
-                onClick={() => !n.active && router.push(n.path)}
-                className={`text-sm transition pb-0.5 ${n.active ? "text-white border-b border-blue-500" : "text-gray-400 hover:text-white"}`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">Sign out</button>
-        </div>
-      </nav>
-
       <div className="max-w-7xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="mb-8">

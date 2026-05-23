@@ -1,7 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import config from '@/lib/config'
 
 type ResumeAnalysis = {
   resume_score: number;
@@ -129,7 +130,7 @@ export default function ResumeAnalyser() {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const res = await fetch("http://localhost:8000/api/resume/analyse", {
+      const res = await fetch(`${config.apiUrl}/api/resume/analyse`, {
         method: "POST",
         body: formData,
         signal: controller.signal,
@@ -185,51 +186,6 @@ export default function ResumeAnalyser() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-6">
-            <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-400 hover:text-white transition">
-              Dashboard
-            </button>
-            <button onClick={() => router.push("/skills")} className="text-sm text-gray-400 hover:text-white transition">
-              Skill Gap
-            </button>
-            <button onClick={() => router.push("/companies")} className="text-sm text-gray-400 hover:text-white transition">
-              Companies
-            </button>
-            <button onClick={() => router.push("/roadmap")} className="text-sm text-gray-400 hover:text-white transition">
-              Roadmap
-            </button>
-            <button onClick={() => router.push("/market")} className="text-sm text-gray-400 hover:text-white transition">
-              Market
-            </button>
-            <button className="text-sm text-white border-b border-blue-500 pb-0.5">
-              Resume Analyser
-            </button>
-            <button onClick={() => router.push("/tracker")} className="text-sm text-gray-400 hover:text-white transition">
-              Tracker
-            </button>
-            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
-              Directory
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-sm text-gray-500 hover:text-white transition"
-          >
-            Sign out
-          </button>
-        </div>
-      </nav>
-
       <div className="max-w-4xl mx-auto px-8 py-10">
 
         {/* Upload form — always visible above results */}

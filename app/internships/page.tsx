@@ -1,7 +1,8 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
+import config from '@/lib/config'
 
 type Profile = {
   college: string;
@@ -24,7 +25,6 @@ type Internship = {
   created: string;
   days_ago: number | null;
   hiring_status: string | null;
-  match_score: number;
   source: "Adzuna" | "Remotive" | "Arbeitnow" | "AI Generated";
   tags?: string[];
 };
@@ -91,25 +91,6 @@ type BrowseListing = {
   hiring_status: string | null;
   source: string;
 };
-
-const NAV_LINKS = [
-  { label: "Dashboard",        path: "/dashboard" },
-  { label: "Skills",           path: "/skills" },
-  { label: "Companies",        path: "/companies" },
-  { label: "Roadmap",          path: "/roadmap" },
-  { label: "On Campus",        path: "/oncampus" },
-  { label: "Off Campus",       path: "/offcampus" },
-  { label: "Internships",      path: "/internships", active: true },
-  { label: "Tracker",          path: "/tracker" },
-  { label: "Market",           path: "/market" },
-  { label: "Resume",           path: "/resume" },
-  { label: "LinkedIn",         path: "/linkedin" },
-  { label: "PYQ",              path: "/pyq" },
-  { label: "Referral",         path: "/referral" },
-  { label: "Progress",         path: "/progress" },
-  { label: "Resources",        path: "/resources" },
-  { label: "Company Directory", path: "/company-directory" },
-];
 
 const STATIC_PROGRAMS: (VirtualProgram & { category: string })[] = [
   {
@@ -299,37 +280,11 @@ function validateUrl(url: string | null | undefined, companyName: string): strin
   return `https://www.google.com/search?q=${encodeURIComponent(companyName)}+careers`;
 }
 
-function computeMatchScore(job: Internship, skills: string[]): number | null {
-  if (!skills || skills.length === 0) return null;
-  const jobTags = (job.tags || []).map(t => t.toLowerCase());
-  const titleWords = job.title.toLowerCase().split(/\s+/);
-  const searchable = [...jobTags, ...titleWords];
-  if (searchable.length === 0) return 5;
-  const denominator = jobTags.length > 0 ? jobTags.length : titleWords.length;
-  const matched = skills.filter(s =>
-    searchable.some(t => t.includes(s.toLowerCase()) || s.toLowerCase().includes(t))
-  ).length;
-  const raw = (matched / denominator) * 100;
-  return Math.min(100, Math.max(5, Math.round(raw)));
-}
-
 function sourceBadge(source: string) {
   if (source === "Remotive")      return "bg-green-500/10 text-green-400 border-green-500/20";
   if (source === "Arbeitnow")     return "bg-orange-500/10 text-orange-400 border-orange-500/20";
   if (source === "AI Generated")  return "bg-purple-500/10 text-purple-400 border-purple-500/20";
   return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-}
-
-function matchColor(score: number) {
-  if (score >= 60) return "bg-green-500";
-  if (score >= 30) return "bg-yellow-500";
-  return "bg-red-500";
-}
-
-function matchTextColor(score: number) {
-  if (score >= 60) return "text-green-400";
-  if (score >= 30) return "text-yellow-400";
-  return "text-red-400";
 }
 
 function hiringBadge(status: string | null) {
@@ -398,6 +353,13 @@ export default function Internships() {
   const [browseIndustry, setBrowseIndustry] = useState("");
   const [browseCity, setBrowseCity] = useState("");
 
+  // College placement sources for tier-based prioritisation
+  const [collegeSources, setCollegeSources] = useState<{
+    combined_placement_rate: number | null;
+    sources_count: number;
+    college_tier?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
@@ -421,6 +383,18 @@ export default function Internships() {
     if (!profile) return;
     fetchListings();
     fetchStrategy();
+    if (profile.college) {
+      fetch(`${config.apiUrl}/api/placement/sources?college=${encodeURIComponent(profile.college)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d) setCollegeSources({
+            combined_placement_rate: d.combined_placement_rate,
+            sources_count: d.num_sources,
+            college_tier: d.nirf_stats?.college_tier,
+          });
+        })
+        .catch(() => {});
+    }
   }, [profile]);
 
   async function fetchListings() {
@@ -428,7 +402,7 @@ export default function Internships() {
     setListingsError("");
     try {
       const skillsParam = (profile?.skills || []).join(",");
-      const res = await fetch(`http://localhost:8000/api/internships/list?skills=${encodeURIComponent(skillsParam)}`);
+      const res = await fetch(`${config.apiUrl}/api/internships/list?skills=${encodeURIComponent(skillsParam)}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       const jobs = data.jobs || [];
@@ -455,7 +429,7 @@ export default function Internships() {
     setStrategyLoading(true);
     setStrategyError("");
     try {
-      const res = await fetch("http://localhost:8000/api/internships/ai-match", {
+      const res = await fetch(`${config.apiUrl}/api/internships/ai-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -494,7 +468,7 @@ export default function Internships() {
     setAiStartupsLoading(true);
     setAiStartupsError("");
     try {
-      const res = await fetch("http://localhost:8000/api/startups/find", {
+      const res = await fetch(`${config.apiUrl}/api/startups/find`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -523,7 +497,7 @@ export default function Internships() {
       if (browseSearch) params.set("search", browseSearch);
       if (browseIndustry) params.set("industry", browseIndustry);
       if (browseCity) params.set("city", browseCity);
-      const res = await fetch(`http://localhost:8000/api/startups/list?${params}`);
+      const res = await fetch(`${config.apiUrl}/api/startups/list?${params}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       if (page === 1) {
@@ -549,6 +523,11 @@ export default function Internships() {
       if (filterPosted === "7" && (j.days_ago === null || j.days_ago > 7)) return false;
       if (filterPosted === "30" && (j.days_ago === null || j.days_ago > 30)) return false;
       return true;
+    }).sort((a, b) => {
+      if (a.days_ago === null && b.days_ago === null) return 0;
+      if (a.days_ago === null) return 1;
+      if (b.days_ago === null) return -1;
+      return a.days_ago - b.days_ago;
     });
   }, [internships, filterRole, filterLocation, filterStipend, filterPosted]);
 
@@ -560,44 +539,10 @@ export default function Internships() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Navbar */}
-      <nav className="bg-[#0a0a0a] border-b border-gray-800 sticky top-0 z-10">
-        <div className="px-6 py-3 flex items-center gap-4">
-          <h1 className="text-xl font-bold shrink-0 cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex-1 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-1 whitespace-nowrap">
-              {NAV_LINKS.map(n => (
-                <button
-                  key={n.path}
-                  onClick={() => !n.active && router.push(n.path)}
-                  className={`text-sm px-3 py-1.5 rounded transition shrink-0 ${
-                    n.active
-                      ? "text-white bg-white/5 border-b-2 border-blue-500"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  {n.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <img src={session?.user?.image || ""} className="w-7 h-7 rounded-full" alt="" />
-            <span className="text-gray-400 text-sm hidden md:inline">{session?.user?.name}</span>
-            <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">
-              Sign out
-            </button>
-          </div>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-1">Internships</h2>
         <p className="text-gray-400 mb-8">
           Live listings · AI strategy · Major programs — all in one place
-          {profile?.skills?.length ? ` · Matched against ${profile.skills.length} skills` : ""}
         </p>
 
         {/* Tabs */}
@@ -620,6 +565,30 @@ export default function Internships() {
         {/* ── Live Listings Tab ─────────────────────────────────────────────── */}
         {tab === "listings" && (
           <div>
+            {/* College tier insight banner */}
+            {profile && (
+              <div className="bg-[#111] border border-gray-800 rounded-2xl px-5 py-3.5 mb-5 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-sm text-gray-300">
+                    Showing listings prioritised for{" "}
+                    <span className="text-blue-400 font-medium">{profile.collegeTier}</span>{" "}
+                    colleges{profile.college ? ` · ${profile.college}` : ""}
+                  </p>
+                  {collegeSources && collegeSources.combined_placement_rate != null ? (
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      College placement rate: {collegeSources.combined_placement_rate}% across {collegeSources.sources_count} source{collegeSources.sources_count !== 1 ? "s" : ""} · 2024 · Companies known to hire from your tier are ranked higher
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-gray-500 mt-0.5">Companies known to hire from your tier are ranked higher</p>
+                  )}
+                </div>
+                {collegeSources && collegeSources.combined_placement_rate != null && (
+                  <span className="text-xs font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full shrink-0">
+                    {collegeSources.combined_placement_rate}% placement rate
+                  </span>
+                )}
+              </div>
+            )}
             {/* Filter bar */}
             <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -732,32 +701,18 @@ export default function Internships() {
                         <p className="text-gray-500 text-xs mb-3 line-clamp-2">{job.description}</p>
                       )}
 
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {(() => {
-                            const score = computeMatchScore(job, profile?.skills ?? []);
-                            if (score === null) return <span className="text-xs text-gray-600">— match</span>;
-                            return (
-                              <>
-                                <span className={`text-xs font-medium ${matchTextColor(score)}`}>{score}% match</span>
-                                <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all ${matchColor(score)}`} style={{ width: `${score}%` }} />
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                        {job.redirect_url && (
+                      {job.redirect_url && (
+                        <div className="flex justify-end">
                           <a
                             href={job.redirect_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm text-blue-400 hover:text-blue-300 font-medium transition shrink-0"
+                            className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
                           >
                             Apply →
                           </a>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {filteredInternships.length === 0 && !listingsLoading && (

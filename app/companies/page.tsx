@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import config from '@/lib/config'
 
 type Company = {
   name: string;
@@ -125,7 +126,7 @@ function CompanyCard({ company }: { company: Company }) {
           <span className="text-gray-600 text-xs">Match Score</span>
           <span
             className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-700 text-gray-600 text-[9px] cursor-help leading-none"
-            title="How well your profile matches this company's typical hiring criteria. 70+ = strong match, 50-70 = possible with effort, below 50 = stretch goal."
+            title="Computed from your skill overlap with this company's requirements, your college tier, and CGPA. 70+ = strong match, 50-70 = possible with effort, below 50 = stretch goal."
           >
             ?
           </span>
@@ -245,7 +246,7 @@ export default function Companies() {
     setResult(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/companies/match", {
+      const res = await fetch(`${config.apiUrl}/api/companies/match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(p),
@@ -346,77 +347,13 @@ export default function Companies() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1
-            className="text-xl font-bold cursor-pointer"
-            onClick={() => router.push("/dashboard")}
-          >
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-6">
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => router.push("/skills")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Skill Gap
-            </button>
-            <button className="text-sm text-white border-b border-blue-500 pb-0.5">
-              Companies
-            </button>
-            <button
-              onClick={() => router.push("/roadmap")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Roadmap
-            </button>
-            <button
-              onClick={() => router.push("/market")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Market
-            </button>
-            <button
-              onClick={() => router.push("/resume")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Resume Analyser
-            </button>
-            <button onClick={() => router.push("/tracker")} className="text-sm text-gray-400 hover:text-white transition">
-              Tracker
-            </button>
-            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
-              Directory
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-sm text-gray-500 hover:text-white transition"
-          >
-            Sign out
-          </button>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-3xl font-bold">Company Match List</h2>
             <p className="text-gray-400 mt-2">
-              15 companies you can realistically target based on your profile and the 2025 Indian
-              job market.
+              Matched by skills and college tier against 15 companies in the Indian job market.
               {profile?.target_role && (
                 <span className="text-blue-400"> Role: {profile.target_role}</span>
               )}
@@ -576,6 +513,9 @@ export default function Companies() {
                 </button>
               </div>
             )}
+            <p className="text-xs text-gray-700 text-center mt-6 pb-2">
+              Match scores computed from skill overlap, college tier, and CGPA · No AI involved
+            </p>
           </div>
         )}
       </div>

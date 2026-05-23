@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import config from '@/lib/config'
 
 type Task = {
   name: string;
@@ -46,6 +47,13 @@ type StoredProfile = {
   projectsCount: string;
   hasInternship: string;
   internshipMonths: string;
+};
+
+type CollegeSalaryData = {
+  combined_median_salary: number | null;
+  combined_placement_rate: number | null;
+  sources_count: number;
+  nirf_stats: { college_name: string; matched: boolean } | null;
 };
 
 type ChatMessage = {
@@ -129,6 +137,7 @@ export default function RoadmapPage() {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [error, setError] = useState("");
+  const [collegeSalary, setCollegeSalary] = useState<CollegeSalaryData | null>(null);
 
   // Chat state
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -166,6 +175,12 @@ export default function RoadmapPage() {
       hasFetched.current = true;
       generate(profile);
     }
+    if (profile?.college) {
+      fetch(`${config.apiUrl}/api/placement/sources?college=${encodeURIComponent(profile.college)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setCollegeSalary(d); })
+        .catch(() => {});
+    }
   }, [profile]);
 
   // Scroll chat to bottom whenever history grows
@@ -197,7 +212,7 @@ export default function RoadmapPage() {
 
     try {
       setStatusMsg("Analysing your skill gaps...");
-      const gapRes = await fetch("http://localhost:8000/api/skills/gap", {
+      const gapRes = await fetch(`${config.apiUrl}/api/skills/gap`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -222,7 +237,7 @@ export default function RoadmapPage() {
 
     try {
       setStatusMsg("Building your personalised roadmap...");
-      const res = await fetch("http://localhost:8000/api/roadmap/generate", {
+      const res = await fetch(`${config.apiUrl}/api/roadmap/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -285,7 +300,7 @@ export default function RoadmapPage() {
     setChatLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/roadmap/chat", {
+      const res = await fetch(`${config.apiUrl}/api/roadmap/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -370,69 +385,6 @@ export default function RoadmapPage() {
         </div>
       )}
 
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1
-            className="text-xl font-bold cursor-pointer"
-            onClick={() => router.push("/dashboard")}
-          >
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-6">
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => router.push("/skills")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Skill Gap
-            </button>
-            <button
-              onClick={() => router.push("/companies")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Companies
-            </button>
-            <button className="text-sm text-white border-b border-blue-500 pb-0.5">
-              Roadmap
-            </button>
-            <button
-              onClick={() => router.push("/market")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Market
-            </button>
-            <button
-              onClick={() => router.push("/resume")}
-              className="text-sm text-gray-400 hover:text-white transition"
-            >
-              Resume Analyser
-            </button>
-            <button onClick={() => router.push("/tracker")} className="text-sm text-gray-400 hover:text-white transition">
-              Tracker
-            </button>
-            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
-              Directory
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-sm text-gray-500 hover:text-white transition"
-          >
-            Sign out
-          </button>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -499,6 +451,23 @@ export default function RoadmapPage() {
               <p className="text-xs text-blue-400 uppercase tracking-widest mb-2">Overview</p>
               <p className="text-gray-300 leading-relaxed">{roadmap.overview}</p>
             </div>
+
+            {/* Salary target from combined sources */}
+            {collegeSalary && collegeSalary.combined_median_salary != null && (
+              <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-5 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-emerald-400">
+                    Salary Target: {collegeSalary.combined_median_salary} LPA median
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Based on {collegeSalary.sources_count} source{collegeSalary.sources_count !== 1 ? "s" : ""} for {profile?.college} · 2024
+                  </p>
+                </div>
+                <span className="text-xs text-gray-600 bg-gray-800 px-2.5 py-1 rounded-full shrink-0">
+                  {collegeSalary.sources_count} source{collegeSalary.sources_count !== 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
 
             {/* 30/60/90 columns */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

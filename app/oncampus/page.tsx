@@ -1,7 +1,8 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import config from '@/lib/config'
 
 type Profile = {
   college: string;
@@ -55,23 +56,6 @@ function daysUntilSeason(): number {
   return Math.ceil((season.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-const NAV_LINKS = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Skill Gap", path: "/skills" },
-  { label: "Companies", path: "/companies" },
-  { label: "Roadmap", path: "/roadmap" },
-  { label: "Market", path: "/market" },
-  { label: "Resume", path: "/resume" },
-  { label: "Tracker", path: "/tracker" },
-  { label: "On Campus", path: "/oncampus", active: true },
-  { label: "Off Campus", path: "/offcampus" },
-  { label: "Resources", path: "/resources" },
-  { label: "Cold Email", path: "/coldemail" },
-  { label: "Directory", path: "/company-directory" },
-  { label: "Internships", path: "/internships" },
-  { label: "Referral Radar", path: "/referral" },
-];
-
 export default function OnCampus() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -86,11 +70,28 @@ export default function OnCampus() {
   type IntelEntry = { data: OnCampusIntel | null; status: "idle" | "loading" | "found" | "error" };
   const [intel, setIntel] = useState<Record<string, IntelEntry>>({});
 
+  type PlacementSource = {
+    source_name: string;
+    placement_rate: number | null;
+    median_salary: number | null;
+    highest_salary: number | null;
+    top_companies: string[];
+    year: number | null;
+    url: string;
+  };
+  type SourcesData = {
+    nirf_stats: { college_name: string; nirf_rank: number | null; placement_rate: number | null; median_salary: number | null; highest_salary: number | null; matched: boolean } | null;
+    sources: PlacementSource[];
+    combined_placement_rate: number | null;
+    num_sources: number;
+  };
+  const [sourcesData, setSourcesData] = useState<SourcesData | null>(null);
+
   async function fetchIntel(company: string) {
     if (intel[company]?.status === "found" || intel[company]?.status === "loading") return;
     setIntel(prev => ({ ...prev, [company]: { data: null, status: "loading" } }));
     try {
-      const res = await fetch("http://localhost:8000/api/oncampus/data", {
+      const res = await fetch(`${config.apiUrl}/api/oncampus/data`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ company }),
@@ -114,12 +115,20 @@ export default function OnCampus() {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    if (!profile?.college) return;
+    fetch(`${config.apiUrl}/api/placement/sources?college=${encodeURIComponent(profile.college)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setSourcesData(data); })
+      .catch(() => {});
+  }, [profile?.college]);
+
   async function predict() {
     if (!profile) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:8000/api/oncampus/predict", {
+      const res = await fetch(`${config.apiUrl}/api/oncampus/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,30 +158,6 @@ export default function OnCampus() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-4 flex-wrap">
-            {NAV_LINKS.map(n => (
-              <button
-                key={n.path}
-                onClick={() => !n.active && router.push(n.path)}
-                className={`text-sm transition pb-0.5 ${n.active ? "text-white border-b border-blue-500" : "text-gray-400 hover:text-white"}`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">Sign out</button>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
         <div className="flex items-start justify-between mb-8 gap-6 flex-wrap">
           <div>
@@ -213,6 +198,60 @@ export default function OnCampus() {
                 {loading ? "Predicting..." : result ? "Re-predict" : "Predict Companies →"}
               </button>
             </div>
+
+            {/* Your College Stats card */}
+            {sourcesData && (sourcesData.nirf_stats?.matched || sourcesData.sources.length > 0) && (
+              <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-200">Your College Stats</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{profile?.college} · placement data 2024</p>
+                  </div>
+                  {sourcesData.num_sources > 1 && (
+                    <span className="text-xs text-gray-500 bg-gray-800 px-2.5 py-1 rounded-full">
+                      avg {sourcesData.combined_placement_rate}% · {sourcesData.num_sources} sources
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {sourcesData.nirf_stats?.matched && (
+                    <div className="py-2.5 px-3 bg-gray-900/60 rounded-lg">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">NIRF</span>
+                          <a href="https://www.nirfindia.org/2024/EngineeringRanking.html" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-300 hover:text-white">
+                            NIRF 2024 <span className="text-gray-600 text-[11px]">· official govt ranking</span>
+                          </a>
+                        </div>
+                        <span className="text-sm font-semibold">{sourcesData.nirf_stats.placement_rate != null ? `${sourcesData.nirf_stats.placement_rate}%` : "—"}</span>
+                      </div>
+                      <div className="flex gap-4 text-[11px] text-gray-500 pl-1">
+                        {sourcesData.nirf_stats.median_salary != null && <span>Median: <span className="text-gray-300">{sourcesData.nirf_stats.median_salary} LPA</span></span>}
+                        {sourcesData.nirf_stats.highest_salary != null && <span>Highest: <span className="text-gray-300">{sourcesData.nirf_stats.highest_salary} LPA</span></span>}
+                      </div>
+                    </div>
+                  )}
+                  {sourcesData.sources.map((src, i) => (
+                    <div key={i} className="py-2.5 px-3 bg-gray-900/60 rounded-lg">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">{src.source_name[0]}</span>
+                          <a href={src.url || "#"} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-300 hover:text-white">
+                            {src.source_name}{src.year ? <span className="text-gray-600 text-[11px]"> · {src.year} data</span> : ""}
+                          </a>
+                        </div>
+                        <span className="text-sm font-semibold">{src.placement_rate != null ? `${src.placement_rate}%` : "—"}</span>
+                      </div>
+                      <div className="flex gap-4 text-[11px] text-gray-500 pl-1">
+                        {src.median_salary != null && <span>Median: <span className="text-gray-300">{src.median_salary} LPA</span></span>}
+                        {src.highest_salary != null && <span>Highest: <span className="text-gray-300">{src.highest_salary} LPA</span></span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-600 mt-3">Data from NIRF 2024, Shiksha, and Careers360 · 2024</p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400 text-sm">{error}</div>

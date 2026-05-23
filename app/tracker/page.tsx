@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
@@ -375,67 +375,6 @@ export default function TrackerPage() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-8">
-          <h1
-            className="text-xl font-bold cursor-pointer"
-            onClick={() => router.push("/dashboard")}
-          >
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-4 flex-wrap">
-            <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-400 hover:text-white transition">
-              Dashboard
-            </button>
-            <button onClick={() => router.push("/skills")} className="text-sm text-gray-400 hover:text-white transition">
-              Skill Gap
-            </button>
-            <button onClick={() => router.push("/companies")} className="text-sm text-gray-400 hover:text-white transition">
-              Companies
-            </button>
-            <button onClick={() => router.push("/roadmap")} className="text-sm text-gray-400 hover:text-white transition">
-              Roadmap
-            </button>
-            <button onClick={() => router.push("/market")} className="text-sm text-gray-400 hover:text-white transition">
-              Market
-            </button>
-            <button onClick={() => router.push("/resume")} className="text-sm text-gray-400 hover:text-white transition">
-              Resume
-            </button>
-            <button className="text-sm text-white border-b border-blue-500 pb-0.5">
-              Tracker
-            </button>
-            <button onClick={() => router.push("/oncampus")} className="text-sm text-gray-400 hover:text-white transition">
-              On Campus
-            </button>
-            <button onClick={() => router.push("/offcampus")} className="text-sm text-gray-400 hover:text-white transition">
-              Off Campus
-            </button>
-            <button onClick={() => router.push("/resources")} className="text-sm text-gray-400 hover:text-white transition">
-              Resources
-            </button>
-            <button onClick={() => router.push("/coldemail")} className="text-sm text-gray-400 hover:text-white transition">
-              Cold Email
-            </button>
-            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
-              Directory
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-sm text-gray-500 hover:text-white transition"
-          >
-            Sign out
-          </button>
-        </div>
-      </nav>
-
-      {/* Page header */}
       <div className="px-8 py-6 shrink-0">
         <h2 className="text-2xl font-bold">Job Tracker</h2>
         <p className="text-gray-400 text-sm mt-1">

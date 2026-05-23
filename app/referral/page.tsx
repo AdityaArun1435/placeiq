@@ -1,7 +1,8 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import config from '@/lib/config'
 
 type Profile = {
   college: string;
@@ -65,22 +66,6 @@ const BRANCHES = [
 
 const GRAD_YEARS = ["2020", "2021", "2022", "2023", "2024", "2025", "2026"];
 
-const NAV_LINKS = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Skill Gap", path: "/skills" },
-  { label: "Companies", path: "/companies" },
-  { label: "Roadmap", path: "/roadmap" },
-  { label: "Market", path: "/market" },
-  { label: "Resume", path: "/resume" },
-  { label: "Tracker", path: "/tracker" },
-  { label: "On Campus", path: "/oncampus" },
-  { label: "Off Campus", path: "/offcampus" },
-  { label: "Resources", path: "/resources" },
-  { label: "Cold Email", path: "/coldemail" },
-  { label: "Directory", path: "/company-directory" },
-  { label: "Internships", path: "/internships" },
-  { label: "Referral Radar", path: "/referral", active: true },
-];
 
 export default function Referral() {
   const { data: session, status } = useSession();
@@ -131,7 +116,7 @@ export default function Referral() {
 
   async function fetchStats() {
     try {
-      const res = await fetch("http://localhost:8000/api/referral/list");
+      const res = await fetch(`${config.apiUrl}/api/referral/list`);
       if (!res.ok) return;
       const data = await res.json();
       setStats({ total: data.total, college_count: data.college_count });
@@ -147,7 +132,7 @@ export default function Referral() {
       if (collegeFilter) params.set("college", collegeFilter);
       if (companyFilter) params.set("company", companyFilter);
       if (branchFilter) params.set("branch", branchFilter);
-      const res = await fetch(`http://localhost:8000/api/referral/list?${params}`);
+      const res = await fetch(`${config.apiUrl}/api/referral/list?${params}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setAlumni(data.alumni || []);
@@ -163,7 +148,7 @@ export default function Referral() {
     if (!profile) return;
     setPopup({ alumni: a, message: null, loading: true, copied: false });
     try {
-      const res = await fetch("http://localhost:8000/api/referral/message", {
+      const res = await fetch(`${config.apiUrl}/api/referral/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +187,7 @@ export default function Referral() {
     setSubmitLoading(true);
     setSubmitError("");
     try {
-      const res = await fetch("http://localhost:8000/api/referral/submit", {
+      const res = await fetch(`${config.apiUrl}/api/referral/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submitForm),
@@ -225,30 +210,6 @@ export default function Referral() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-4 flex-wrap">
-            {NAV_LINKS.map(n => (
-              <button
-                key={n.path}
-                onClick={() => !n.active && router.push(n.path)}
-                className={`text-sm transition pb-0.5 ${n.active ? "text-white border-b border-blue-500" : "text-gray-400 hover:text-white"}`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">Sign out</button>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
         {/* Banner */}
         <div className="bg-blue-600/10 border border-blue-500/20 rounded-2xl px-6 py-4 mb-8 flex items-center gap-3">

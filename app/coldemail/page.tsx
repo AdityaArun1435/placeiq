@@ -1,7 +1,8 @@
 "use client";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import config from '@/lib/config'
 
 type Profile = {
   college: string;
@@ -12,23 +13,6 @@ type Profile = {
   internshipMonths: string;
   collegeTier: string;
 };
-
-const NAV_LINKS = [
-  { label: "Dashboard", path: "/dashboard" },
-  { label: "Skill Gap", path: "/skills" },
-  { label: "Companies", path: "/companies" },
-  { label: "Roadmap", path: "/roadmap" },
-  { label: "Market", path: "/market" },
-  { label: "Resume", path: "/resume" },
-  { label: "Tracker", path: "/tracker" },
-  { label: "On Campus", path: "/oncampus" },
-  { label: "Off Campus", path: "/offcampus" },
-  { label: "Resources", path: "/resources" },
-  { label: "Cold Email", path: "/coldemail", active: true },
-  { label: "Directory", path: "/company-directory" },
-  { label: "Internships", path: "/internships" },
-  { label: "Referral Radar", path: "/referral" },
-];
 
 export default function ColdEmail() {
   const { data: session, status } = useSession();
@@ -64,7 +48,7 @@ export default function ColdEmail() {
     setError("");
     setEmail("");
     try {
-      const res = await fetch("http://localhost:8000/api/coldemail/generate", {
+      const res = await fetch(`${config.apiUrl}/api/coldemail/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,30 +96,6 @@ export default function ColdEmail() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold cursor-pointer" onClick={() => router.push("/dashboard")}>
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-4 flex-wrap">
-            {NAV_LINKS.map(n => (
-              <button
-                key={n.path}
-                onClick={() => !n.active && router.push(n.path)}
-                className={`text-sm transition pb-0.5 ${n.active ? "text-white border-b border-blue-500" : "text-gray-400 hover:text-white"}`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">Sign out</button>
-        </div>
-      </nav>
-
       <div className="max-w-4xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Cold Email Generator</h2>
         <p className="text-gray-400 mb-8">Generate a personalised cold email to reach recruiters at any company</p>

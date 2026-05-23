@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import config from '@/lib/config'
 
 const COLLEGES = [
   // IITs
@@ -145,7 +146,7 @@ export default function Onboarding() {
     setSubmitting(true);
     const payload = { ...form, email: session?.user?.email ?? "" };
     try {
-      const res = await fetch("http://localhost:8000/api/user/profile", {
+      const res = await fetch(`${config.apiUrl}/api/user/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

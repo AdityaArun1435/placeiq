@@ -1,195 +1,104 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import config from '@/lib/config'
 
-// ── Types ──────────────────────────────────────────────────────────────────
+type Article = {
+  title: string;
+  summary: string;
+  source_name: string;
+  source_url: string;
+  published_date: string;
+  scraped_at: string;
+};
 
 type TrendingSkill = {
   skill: string;
-  demand_score: number;
-  trend: "rising" | "stable" | "falling";
-  avg_salary_lpa: number;
-  job_count: number;
-  why_trending?: string;
-  top_companies?: string[];
+  article_count: number;
+  sample_article_title?: string;
+  sample_article_url?: string;
 };
 
-type RoleDemand = {
-  role: string;
-  openings: number;
-  avg_lpa: number;
-  yoy_change: string;
-  top_companies?: string[];
-  key_skills?: string[];
-  reality_check?: string;
-};
+type HotRole = { role: string; article_count: number };
+type HiringCompany = { company: string; context: string };
+type TrendingCity = { city: string; reason: string };
 
-type CityData = {
-  city: string;
-  avg_lpa: number;
-  cost_of_living: "High" | "Medium" | "Low";
-  best_for_roles: string[];
-};
-
-type Sector = {
-  sector: string;
-  status: "Booming" | "Stable" | "Slow";
-  reason: string;
-};
-
-type SkillToAvoid = {
-  skill: string;
-  reason: string;
-};
-
-type MarketData = {
+type Insights = {
   trending_skills: TrendingSkill[];
-  role_demand: RoleDemand[];
-  top_hiring_companies: string[];
-  salary_by_city: CityData[];
-  hot_sectors: Sector[];
-  skills_to_avoid: SkillToAvoid[];
-  market_summary: string;
-  data_freshness: string;
+  hot_roles: HotRole[];
+  hiring_companies: HiringCompany[];
+  trending_cities: TrendingCity[];
+  is_ai_estimate: boolean;
 };
 
-type MarketPayload = {
-  timestamp: string;
-  data: MarketData;
-  meta: {
-    total_jobs: number;
-    role_counts: Record<string, number>;
-  };
+type NewsPayload = {
+  scraped_at: string;
+  articles: Article[];
+  insights: Insights;
+  scrape_success: boolean;
 };
-
-// ── Sub-components ─────────────────────────────────────────────────────────
-
-function DemandBar({ score }: { score: number }) {
-  const color = score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444";
-  return (
-    <div className="mt-2">
-      <div className="flex items-center gap-1 mb-1.5">
-        <span className="text-xs text-gray-500">Demand Score</span>
-        <span
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-700 text-gray-600 text-[9px] cursor-help leading-none shrink-0"
-          title="Score out of 100 based on frequency in live Indian job postings. Higher = more employers are actively looking for this skill right now."
-        >
-          ?
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${Math.min(score, 100)}%`, backgroundColor: color }}
-          />
-        </div>
-        <span className="text-xs font-bold w-6 text-right shrink-0" style={{ color }}>
-          {score}
-        </span>
-      </div>
-      <p className="text-[10px] text-gray-700 mt-1 leading-tight">
-        Based on job posting frequency across 450+ live Indian listings from Adzuna
-      </p>
-    </div>
-  );
-}
-
-function TrendBadge({ trend }: { trend: TrendingSkill["trend"] }) {
-  if (trend === "rising")
-    return (
-      <span className="text-xs px-2 py-0.5 rounded-full border bg-green-500/15 text-green-400 border-green-500/30 font-medium">
-        ↑ Rising
-      </span>
-    );
-  if (trend === "falling")
-    return (
-      <span className="text-xs px-2 py-0.5 rounded-full border bg-red-500/15 text-red-400 border-red-500/30 font-medium">
-        ↓ Falling
-      </span>
-    );
-  return (
-    <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-700/50 text-gray-400 border-gray-600 font-medium">
-      → Stable
-    </span>
-  );
-}
-
-const SECTOR_STYLES: Record<Sector["status"], string> = {
-  Booming: "bg-green-500/15 text-green-400 border-green-500/30",
-  Stable: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  Slow: "bg-red-500/15 text-red-400 border-red-500/30",
-};
-
-const COL_STYLES: Record<CityData["cost_of_living"], string> = {
-  High: "bg-red-500/15 text-red-400 border-red-500/30",
-  Medium: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  Low: "bg-green-500/15 text-green-400 border-green-500/30",
-};
-
-function Tag({ label, color = "blue" }: { label: string; color?: "blue" | "gray" | "purple" }) {
-  const cls =
-    color === "blue"
-      ? "bg-blue-500/15 text-blue-400 border-blue-500/25"
-      : color === "purple"
-      ? "bg-purple-500/15 text-purple-400 border-purple-500/25"
-      : "bg-gray-700/50 text-gray-400 border-gray-600";
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border ${cls}`}>{label}</span>
-  );
-}
-
-// ── Main page ──────────────────────────────────────────────────────────────
 
 export default function MarketPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [payload, setPayload] = useState<MarketPayload | null>(null);
+  const [payload, setPayload] = useState<NewsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [userCity, setUserCity] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
 
   useEffect(() => {
-    if (status === "authenticated") fetchData();
-  }, [status]);
+    if (status === "authenticated") {
+      fetchData();
+      try {
+        const raw = localStorage.getItem("placeiq_profile");
+        if (raw) {
+          const profile = JSON.parse(raw);
+          if (profile.city) {
+            setUserCity(profile.city);
+            setCityFilter(profile.city);
+          }
+        }
+      } catch {}
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchData = async (url = "http://localhost:8000/api/market/intelligence") => {
+  async function fetchData(refresh = false) {
     setLoading(true);
     setError("");
     try {
+      const url = refresh
+        ? `${config.apiUrl}/api/market/news/refresh`
+        : `${config.apiUrl}/api/market/news`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch market data");
-      const json = await res.json();
-      setPayload(json);
+      setPayload(await res.json());
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Could not load market data. Make sure the backend is running."
-      );
+      setError(err instanceof Error ? err.message : "Could not load market data. Make sure the backend is running.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }
 
-  const forceRefresh = async () => {
-    if (!window.confirm("This will fetch fresh data from Adzuna and regenerate the analysis. It may take ~30 seconds. Continue?"))
-      return;
+  async function forceRefresh() {
+    if (!window.confirm("This will re-scrape news sources and may take ~30 seconds. Continue?")) return;
     setRefreshing(true);
-    await fetchData("http://localhost:8000/api/market/refresh");
-  };
+    await fetchData(true);
+  }
 
-  const data = payload?.data;
-  const meta = payload?.meta;
+  const insights = payload?.insights;
+  const articles = payload?.articles ?? [];
 
-  // Format timestamp
-  const freshAt = payload?.timestamp
-    ? new Date(payload.timestamp).toLocaleString("en-IN", {
+  const freshAt = payload?.scraped_at
+    ? new Date(payload.scraped_at).toLocaleString("en-IN", {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -199,75 +108,66 @@ export default function MarketPage() {
       }) + " IST"
     : null;
 
-  if (status === "loading")
-    return (
-      <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+  const cityLower = cityFilter.trim().toLowerCase();
+
+  const filteredCities = cityLower
+    ? (insights?.trending_cities ?? []).filter(c => c.city.toLowerCase().includes(cityLower))
+    : (insights?.trending_cities ?? []);
+
+  const cityArticles = cityLower
+    ? articles.filter(
+        a =>
+          a.title.toLowerCase().includes(cityLower) ||
+          (a.summary && a.summary.toLowerCase().includes(cityLower))
+      )
+    : [];
+
+  if (status === "loading") return (
+    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <p className="text-gray-400">Loading...</p>
+    </main>
+  );
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h1
-            className="text-xl font-bold cursor-pointer"
-            onClick={() => router.push("/dashboard")}
-          >
-            Place<span className="text-blue-500">IQ</span>
-          </h1>
-          <div className="flex gap-6">
-            <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-400 hover:text-white transition">
-              Dashboard
-            </button>
-            <button onClick={() => router.push("/skills")} className="text-sm text-gray-400 hover:text-white transition">
-              Skill Gap
-            </button>
-            <button onClick={() => router.push("/companies")} className="text-sm text-gray-400 hover:text-white transition">
-              Companies
-            </button>
-            <button onClick={() => router.push("/roadmap")} className="text-sm text-gray-400 hover:text-white transition">
-              Roadmap
-            </button>
-            <button className="text-sm text-white border-b border-blue-500 pb-0.5">
-              Market
-            </button>
-            <button onClick={() => router.push("/resume")} className="text-sm text-gray-400 hover:text-white transition">
-              Resume Analyser
-            </button>
-            <button onClick={() => router.push("/tracker")} className="text-sm text-gray-400 hover:text-white transition">
-              Tracker
-            </button>
-            <button onClick={() => router.push("/company-directory")} className="text-sm text-gray-400 hover:text-white transition">
-              Directory
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src={session?.user?.image || ""} className="w-8 h-8 rounded-full" alt="" />
-          <span className="text-gray-400 text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm text-gray-500 hover:text-white transition">
-            Sign out
-          </button>
-        </div>
-      </nav>
-
       <div className="max-w-6xl mx-auto px-8 py-10">
 
-        {/* Page header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold">Market Intelligence</h2>
-          <p className="text-gray-400 mt-2">
-            Live Indian job market trends for 2026 — powered by real Adzuna listings.
-          </p>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-8 flex-wrap">
+          <div>
+            <h2 className="text-3xl font-bold">Market Intelligence</h2>
+            <p className="text-gray-400 mt-1">
+              Live hiring trends scraped from India&apos;s top job news sources
+              {!insights?.is_ai_estimate && articles.length > 0 && freshAt && (
+                <span className="text-gray-500 ml-1">
+                  · {articles.length} articles · scraped {freshAt}
+                </span>
+              )}
+            </p>
+          </div>
+          {freshAt && (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-xs px-2.5 py-1 rounded-full border bg-green-500/10 text-green-400 border-green-500/20 font-medium">
+                ● Updated {freshAt}
+              </span>
+              <button
+                onClick={forceRefresh}
+                disabled={refreshing}
+                className="text-xs border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+              >
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="mt-24 flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400 text-sm">Analysing Indian job market trends for 2026...</p>
+            <p className="text-gray-400 text-sm">
+              Scraping latest hiring news from India&apos;s job sources...
+            </p>
           </div>
         )}
 
@@ -275,130 +175,79 @@ export default function MarketPage() {
         {error && !loading && (
           <div className="bg-red-950/30 border border-red-500/25 rounded-2xl p-6 text-center">
             <p className="text-red-400 mb-4">{error}</p>
-            <button onClick={() => fetchData()} className="border border-gray-700 text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
+            <button
+              onClick={() => fetchData()}
+              className="border border-gray-700 text-gray-400 hover:text-white px-4 py-2 rounded-lg text-sm transition"
+            >
               Try again
             </button>
           </div>
         )}
 
-        {data && !loading && (
+        {!loading && payload && (
           <div className="space-y-10">
 
-            {/* ── 1. Market Summary ──────────────────────────────────────── */}
-            <div className="bg-blue-600/5 border border-blue-500/20 rounded-2xl px-6 py-5">
-              <div className="flex items-center gap-3 mb-3">
-                <p className="text-xs text-blue-400 uppercase tracking-widest font-semibold">Market Summary</p>
-                <span className="text-xs px-2 py-0.5 rounded-full border bg-green-500/15 text-green-400 border-green-500/30 font-medium">
-                  ● Live data from Adzuna API
-                </span>
-                {meta && (
-                  <span className="text-xs text-gray-600">
-                    {meta.total_jobs.toLocaleString()} jobs analysed
-                  </span>
-                )}
+            {/* Fallback estimate banner */}
+            {insights?.is_ai_estimate && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl px-5 py-4">
+                <p className="text-yellow-400 text-sm font-medium">
+                  Estimated data — live scrape unavailable
+                </p>
+                <p className="text-yellow-300/70 text-xs mt-1">
+                  News sources could not be scraped right now. Showing curated baseline data for Indian job market trends.
+                </p>
               </div>
-              <p className="text-gray-300 leading-relaxed">{data.market_summary}</p>
+            )}
+
+            {/* City filter */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-sm text-gray-400 shrink-0">Filter by city:</label>
+              <input
+                value={cityFilter}
+                onChange={e => setCityFilter(e.target.value)}
+                placeholder={userCity || "e.g. Bangalore, Hyderabad..."}
+                className="bg-[#111] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition w-56"
+              />
+              {cityFilter && (
+                <button
+                  onClick={() => setCityFilter("")}
+                  className="text-xs text-gray-500 hover:text-white transition"
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
-            {/* ── 2. Trending Skills ─────────────────────────────────────── */}
-            <section>
-              <h3 className="text-xl font-semibold mb-4">Trending Skills</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {(data.trending_skills ?? []).map((s) => (
-                  <div key={s.skill} className="bg-[#111] border border-gray-800 rounded-2xl p-5 flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-white">{s.skill}</p>
-                      <TrendBadge trend={s.trend} />
-                    </div>
-                    <DemandBar score={s.demand_score} />
-                    {s.why_trending && (
-                      <p className="text-xs text-gray-500 leading-relaxed mt-1">{s.why_trending}</p>
-                    )}
-                    <div className="flex items-center justify-between mt-auto pt-2">
-                      <span className="text-xs text-gray-600">
-                        ~{s.job_count?.toLocaleString()} jobs · ₹{s.avg_salary_lpa}L avg
-                      </span>
-                    </div>
-                    {s.top_companies && s.top_companies.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {s.top_companies.slice(0, 3).map((c) => (
-                          <Tag key={c} label={c} color="blue" />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* ── 3. Hottest Roles ───────────────────────────────────────── */}
-            <section>
-              <h3 className="text-xl font-semibold mb-4">Hottest Roles</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(data.role_demand ?? []).map((r) => (
-                  <div key={r.role} className="bg-[#111] border border-gray-800 rounded-2xl p-5 flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-white">{r.role}</p>
-                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium ${
-                        r.yoy_change?.startsWith("+")
-                          ? "bg-green-500/15 text-green-400 border-green-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
-                      }`}>
-                        {r.yoy_change} YoY
-                      </span>
-                    </div>
-                    <div className="flex items-end gap-1">
-                      <p className="text-3xl font-bold text-blue-400">₹{r.avg_lpa}L</p>
-                      <p className="text-gray-500 text-sm mb-0.5">avg package</p>
-                    </div>
-                    <p className="text-gray-600 text-xs">{r.openings?.toLocaleString()} active openings</p>
-                    {r.top_companies && r.top_companies.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.top_companies.slice(0, 4).map((c) => (
-                          <Tag key={c} label={c} color="gray" />
-                        ))}
-                      </div>
-                    )}
-                    {r.key_skills && r.key_skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.key_skills.slice(0, 5).map((sk) => (
-                          <Tag key={sk} label={sk} color="purple" />
-                        ))}
-                      </div>
-                    )}
-                    {r.reality_check && (
-                      <p className="text-xs text-red-400/80 italic leading-relaxed border-t border-gray-800 pt-2 mt-1">
-                        {r.reality_check}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* ── 4. Salary by City ─────────────────────────────────────── */}
-            {data.salary_by_city && data.salary_by_city.length > 0 && (
+            {/* Trending This Week */}
+            {(insights?.trending_skills ?? []).length > 0 && (
               <section>
-                <h3 className="text-xl font-semibold mb-4">Salary by City</h3>
-                <div className="flex gap-4 overflow-x-auto pb-2">
-                  {data.salary_by_city.map((city) => (
+                <h3 className="text-xl font-semibold mb-1">Trending This Week</h3>
+                <p className="text-gray-500 text-sm mb-4">
+                  Skills appearing most in recent Indian hiring news
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(insights?.trending_skills ?? []).slice(0, 10).map((s, i) => (
                     <div
-                      key={city.city}
-                      className="shrink-0 bg-[#111] border border-gray-800 rounded-2xl p-5 w-52 flex flex-col gap-2"
+                      key={s.skill}
+                      className="bg-[#111] border border-gray-800 rounded-2xl p-5"
                     >
-                      <p className="font-semibold text-white">{city.city}</p>
-                      <p className="text-2xl font-bold text-green-400">₹{city.avg_lpa}L</p>
-                      <p className="text-xs text-gray-500">avg fresher package</p>
-                      <span className={`self-start text-xs px-2 py-0.5 rounded-full border font-medium ${COL_STYLES[city.cost_of_living] ?? COL_STYLES.Medium}`}>
-                        {city.cost_of_living} cost
-                      </span>
-                      {city.best_for_roles && city.best_for_roles.length > 0 && (
-                        <div className="flex flex-col gap-1 mt-1">
-                          <p className="text-xs text-gray-600">Best for:</p>
-                          {city.best_for_roles.slice(0, 2).map((role) => (
-                            <p key={role} className="text-xs text-gray-400">{role}</p>
-                          ))}
-                        </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs text-gray-600 w-5 shrink-0">#{i + 1}</span>
+                        <p className="font-semibold text-white">{s.skill}</p>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Mentioned in {s.article_count}{" "}
+                        article{s.article_count !== 1 ? "s" : ""}
+                      </p>
+                      {s.sample_article_url && (
+                        <a
+                          href={s.sample_article_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition line-clamp-1"
+                        >
+                          {s.sample_article_title || "Read article →"}
+                        </a>
                       )}
                     </div>
                   ))}
@@ -406,53 +255,152 @@ export default function MarketPage() {
               </section>
             )}
 
-            {/* ── 5. Hot Sectors ────────────────────────────────────────── */}
-            {data.hot_sectors && data.hot_sectors.length > 0 && (
+            {/* Hottest Roles Right Now */}
+            {(insights?.hot_roles ?? []).length > 0 && (
               <section>
-                <h3 className="text-xl font-semibold mb-4">Hot Sectors</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.hot_sectors.map((s) => (
-                    <div key={s.sector} className="bg-[#111] border border-gray-800 rounded-2xl p-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold text-white">{s.sector}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${SECTOR_STYLES[s.status] ?? SECTOR_STYLES.Stable}`}>
-                          {s.status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400 leading-relaxed">{s.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── 6. Skills to Avoid ────────────────────────────────────── */}
-            {data.skills_to_avoid && data.skills_to_avoid.length > 0 && (
-              <section>
-                <h3 className="text-xl font-semibold mb-4">Skills to Avoid</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {data.skills_to_avoid.map((s) => (
+                <h3 className="text-xl font-semibold mb-1">Hottest Roles Right Now</h3>
+                <p className="text-gray-500 text-sm mb-4">
+                  Job roles getting the most coverage in hiring news this week
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(insights?.hot_roles ?? []).slice(0, 8).map(r => (
                     <div
-                      key={s.skill}
-                      className="bg-red-950/20 border border-red-500/20 rounded-2xl p-5"
+                      key={r.role}
+                      className="bg-[#111] border border-gray-800 rounded-2xl p-5"
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-red-500 font-bold text-lg leading-none">!</span>
-                        <p className="font-semibold text-red-300">{s.skill}</p>
-                      </div>
-                      <p className="text-xs text-gray-400 leading-relaxed">{s.reason}</p>
+                      <p className="font-semibold text-white mb-1 text-sm">{r.role}</p>
+                      <p className="text-xs text-gray-500">
+                        {r.article_count} mention{r.article_count !== 1 ? "s" : ""}
+                      </p>
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* ── Footer ────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-800">
-              <p className="text-xs text-gray-600">
-                Data refreshes every 24 hours from live Adzuna job listings.
-                {freshAt && <span> Last updated: {freshAt}.</span>}
-              </p>
+            {/* Companies Actively Hiring */}
+            {(insights?.hiring_companies ?? []).length > 0 && (
+              <section>
+                <h3 className="text-xl font-semibold mb-1">Companies Actively Hiring</h3>
+                <p className="text-gray-500 text-sm mb-4">
+                  Companies mentioned in recent hiring or expansion news
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(insights?.hiring_companies ?? []).map((c, i) => (
+                    <div
+                      key={i}
+                      className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 flex items-center gap-4"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0">
+                        {c.company[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-white text-sm">{c.company}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{c.context}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* In Your City */}
+            {cityFilter && (filteredCities.length > 0 || cityArticles.length > 0) && (
+              <section>
+                <h3 className="text-xl font-semibold mb-1">In {cityFilter}</h3>
+                <p className="text-gray-500 text-sm mb-4">
+                  What the news says about hiring in your city
+                </p>
+                {filteredCities.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    {filteredCities.map((c, i) => (
+                      <div key={i} className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4">
+                        <p className="font-medium text-white text-sm mb-1">{c.city}</p>
+                        <p className="text-xs text-gray-400">{c.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {cityArticles.length > 0 && (
+                  <div className="space-y-3">
+                    {cityArticles.slice(0, 5).map((a, i) => (
+                      <div
+                        key={i}
+                        className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 flex items-start justify-between gap-4"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium leading-snug mb-1">{a.title}</p>
+                          <span className="text-xs text-gray-600">{a.source_name}</span>
+                        </div>
+                        {a.source_url && (
+                          <a
+                            href={a.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-400 hover:text-blue-300 transition shrink-0"
+                          >
+                            Read →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Latest News */}
+            {articles.length > 0 && (
+              <section>
+                <h3 className="text-xl font-semibold mb-1">Latest News</h3>
+                <p className="text-gray-500 text-sm mb-4">
+                  Most recent articles from Indian hiring news sources
+                </p>
+                <div className="space-y-3">
+                  {articles.slice(0, 10).map((a, i) => (
+                    <div
+                      key={i}
+                      className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 flex items-start justify-between gap-4"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium leading-snug mb-1.5">
+                          {a.title}
+                        </p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs text-gray-600">{a.source_name}</span>
+                          {a.published_date && (
+                            <span className="text-xs text-gray-700">{a.published_date}</span>
+                          )}
+                        </div>
+                      </div>
+                      {a.source_url && (
+                        <a
+                          href={a.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition shrink-0 font-medium"
+                        >
+                          Read →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-800 flex-wrap gap-3">
+              <div>
+                <p className="text-xs text-gray-600">
+                  Live data from {articles.length} articles scraped from Economic Times, TimesJobs, YourStory, Naukri Blog, and LinkedIn Talent Blog.
+                </p>
+                {freshAt && (
+                  <p className="text-xs text-gray-700 mt-0.5">
+                    Last scraped: {freshAt} · Auto-refreshes every 24 hours · No AI used for trend extraction
+                  </p>
+                )}
+              </div>
               <button
                 onClick={forceRefresh}
                 disabled={refreshing}
@@ -461,7 +409,6 @@ export default function MarketPage() {
                 {refreshing ? "Refreshing..." : "Force Refresh"}
               </button>
             </div>
-
           </div>
         )}
       </div>
