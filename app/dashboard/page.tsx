@@ -240,7 +240,6 @@ export default function Dashboard() {
   }, [status]);
 
   useEffect(() => {
-    if (!mounted) return
     if (status !== "authenticated" || !session?.user?.email) return;
 
     // Primary: read from localStorage (source of truth)
