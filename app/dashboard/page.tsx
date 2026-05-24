@@ -225,6 +225,7 @@ export default function Dashboard() {
   const [backendSleeping, setBackendSleeping] = useState(false);
   const [liveScore, setLiveScore] = useState<LiveScore | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [scoreTimedOut, setScoreTimedOut] = useState(false);
   const [skillGaps, setSkillGaps] = useState<SkillItem[] | null>(null);
   const [skillGapLoading, setSkillGapLoading] = useState(false);
   const [companyMatches, setCompanyMatches] = useState<Array<{ name: string; type: string }> | null>(null);
@@ -251,7 +252,7 @@ export default function Dashboard() {
 
     // Fallback: fetch from backend and cache locally
     const email = encodeURIComponent(session.user.email);
-    fetchWithTimeout(`${config.apiUrl}/api/user/profile/${email}`, {}, 10000)
+    fetchWithTimeout(`${config.apiUrl}/api/user/profile/${email}`, {}, 30000)
       .then(res => {
         if (res.status === 404) return null;
         if (!res.ok) throw new Error("fetch failed");
@@ -299,10 +300,16 @@ export default function Dashboard() {
         certifications: "0",
         githubActive: profile.githubActive || "no",
       }),
-    }, 10000)
+    }, 30000)
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setLiveScore(data); })
-      .catch((e) => { console.error('Dashboard error:', e) })
+      .catch((e) => {
+        if (e instanceof Error && e.name === 'AbortError') {
+          setScoreTimedOut(true);
+        } else {
+          console.error('Dashboard error:', e);
+        }
+      })
       .finally(() => setScoreLoading(false));
   }, [profile]);
 
@@ -321,7 +328,7 @@ export default function Dashboard() {
             branch: profile.branch,
             cgpa: profile.cgpa,
           }),
-        }, 10000);
+        }, 30000);
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
@@ -357,7 +364,7 @@ export default function Dashboard() {
             hackathons: profile.hackathons || "0",
             github_active: profile.githubActive || "no",
           }),
-        }, 15000);
+        }, 30000);
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.companies)) {
@@ -377,7 +384,7 @@ export default function Dashboard() {
     })();
   }, [profile]);
 
-  const displayScore = liveScore?.score ?? profile?.placementScore;
+  const displayScore = scoreTimedOut ? undefined : (liveScore?.score ?? profile?.placementScore);
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
 
   if (status === "loading") return <LoadingScreen />;
