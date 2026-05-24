@@ -232,7 +232,7 @@ export default function RoadmapPage() {
           cgpa: p.cgpa,
         }),
       }, 10000);
-      if (gapRes.ok) {
+      if (gapRes && gapRes.ok) {
         const gapData = await gapRes.json();
         if (gapData && Array.isArray(gapData.must_have_missing)) {
           mustHaveMissing = gapData.must_have_missing
@@ -265,6 +265,7 @@ export default function RoadmapPage() {
         }),
       });
 
+      if (!res) return;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Failed to generate roadmap");

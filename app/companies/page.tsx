@@ -261,6 +261,7 @@ export default function Companies() {
         body: JSON.stringify(p),
       }, 10000);
 
+      if (!res) return;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Failed to fetch company matches");

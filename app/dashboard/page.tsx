@@ -238,6 +238,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
+    let isMounted = true;
 
     // Primary: read from localStorage (source of truth)
     try {
@@ -246,7 +247,7 @@ export default function Dashboard() {
         setProfile(JSON.parse(stored));
         setProfileLoading(false);
         setProfileChecked(true);
-        return;
+        return () => { isMounted = false };
       }
     } catch (e) { console.error('Dashboard error:', e) }
 
@@ -259,13 +260,20 @@ export default function Dashboard() {
         return res.json();
       })
       .then(data => {
+        if (!isMounted) return;
         if (data) localStorage.setItem("placeiq_profile", JSON.stringify(data));
         setProfile(data);
       })
       .catch(() => {
+        if (!isMounted) return;
         setProfile(null);
       })
-      .finally(() => { setProfileLoading(false); setProfileChecked(true); });
+      .finally(() => {
+        if (!isMounted) return;
+        setProfileLoading(false);
+        setProfileChecked(true);
+      });
+    return () => { isMounted = false };
   }, [status, session?.user?.email]);
 
   // Redirect to onboarding if no profile found after 2 seconds
@@ -278,6 +286,7 @@ export default function Dashboard() {
   // Fetch live score from backend (never use cached placementScore)
   useEffect(() => {
     if (!profile?.email) return;
+    let isMounted = true;
     setScoreLoading(true);
     fetch(`${config.apiUrl}/api/placement/probability`, {
       method: "POST",
@@ -301,13 +310,21 @@ export default function Dashboard() {
       }),
     })
       .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data) setLiveScore(data); })
-      .catch((e) => { console.error('Dashboard error:', e); })
-      .finally(() => setScoreLoading(false));
+      .then(data => {
+        if (!isMounted) return;
+        if (data) setLiveScore(data);
+      })
+      .catch((e) => {
+        if (!isMounted) return;
+        console.error('Dashboard error:', e);
+      })
+      .finally(() => { if (isMounted) setScoreLoading(false); });
+    return () => { isMounted = false };
   }, [profile]);
 
   useEffect(() => {
     if (!profile) return;
+    let isMounted = true;
     setSkillGapLoading(true);
     (async () => {
       try {
@@ -322,21 +339,25 @@ export default function Dashboard() {
             cgpa: profile.cgpa,
           }),
         });
-        if (!res.ok) return;
+        if (!res.ok || !isMounted) return;
         const parsed = await res.json();
+        if (!isMounted) return;
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
           setSkillGaps(parsed.must_have_missing.slice(0, 3));
         }
       } catch (e) {
+        if (!isMounted) return;
         console.error('Dashboard error:', e)
       } finally {
-        setSkillGapLoading(false);
+        if (isMounted) setSkillGapLoading(false);
       }
     })();
+    return () => { isMounted = false };
   }, [profile]);
 
   useEffect(() => {
     if (!profile) return;
+    let isMounted = true;
     setCompanyMatchLoading(true);
     (async () => {
       try {
@@ -358,8 +379,9 @@ export default function Dashboard() {
             github_active: profile.githubActive || "no",
           }),
         });
-        if (!res.ok) return;
+        if (!res.ok || !isMounted) return;
         const parsed = await res.json();
+        if (!isMounted) return;
         if (parsed && !parsed.error && Array.isArray(parsed.companies)) {
           setCompanyCount(parsed.companies.length);
           setCompanyMatches(
@@ -370,11 +392,13 @@ export default function Dashboard() {
           );
         }
       } catch (e) {
+        if (!isMounted) return;
         console.error('Dashboard error:', e)
       } finally {
-        setCompanyMatchLoading(false);
+        if (isMounted) setCompanyMatchLoading(false);
       }
     })();
+    return () => { isMounted = false };
   }, [profile]);
 
   const displayScore = scoreTimedOut ? undefined : (liveScore?.score ?? profile?.placementScore);

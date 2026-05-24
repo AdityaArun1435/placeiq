@@ -159,7 +159,7 @@ export default function Onboarding() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }, 10000);
-      if (!res.ok) throw new Error("backend error");
+      if (!res || !res.ok) throw new Error("backend error");
       const data = await res.json();
       localStorage.setItem("placeiq_profile", JSON.stringify(data));
     } catch {

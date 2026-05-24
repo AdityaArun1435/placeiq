@@ -240,6 +240,7 @@ export default function SkillGap() {
         }),
       }, 10000);
 
+      if (!res) return;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Analysis failed");

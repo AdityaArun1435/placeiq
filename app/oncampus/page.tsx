@@ -118,10 +118,12 @@ export default function OnCampus() {
 
   useEffect(() => {
     if (!profile?.college) return;
+    let isMounted = true;
     fetch(`${config.apiUrl}/api/placement/sources?college=${encodeURIComponent(profile.college)}`)
       .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data) setSourcesData(data); })
+      .then(data => { if (isMounted && data) setSourcesData(data); })
       .catch(() => {});
+    return () => { isMounted = false };
   }, [profile?.college]);
 
   async function predict() {

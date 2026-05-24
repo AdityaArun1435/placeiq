@@ -6,14 +6,18 @@ export default config
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  ms = 10000,
-): Promise<Response> {
+  ms = 30000,
+): Promise<Response | null> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
+    const res = await fetch(url, { ...options, signal: controller.signal });
     clearTimeout(id);
+    return res;
+  } catch (e) {
+    clearTimeout(id);
+    if (e instanceof Error && e.name === 'AbortError') return null;
+    throw e;
   }
 }
 
