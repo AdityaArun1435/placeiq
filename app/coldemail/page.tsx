@@ -150,11 +150,11 @@ export default function ColdEmail() {
                   <div>
                     <p className="text-gray-500 mb-2">Top Skills</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {profile.skills.slice(0, 6).map(s => (
+                      {(Array.isArray(profile.skills) ? profile.skills : []).slice(0, 6).map(s => (
                         <span key={s} className="bg-blue-600/10 border border-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded-full">{s}</span>
                       ))}
-                      {profile.skills.length > 6 && (
-                        <span className="text-gray-600 text-xs px-2 py-0.5">+{profile.skills.length - 6} more</span>
+                      {(profile?.skills?.length ?? 0) > 6 && (
+                        <span className="text-gray-600 text-xs px-2 py-0.5">+{(profile.skills?.length ?? 0) - 6} more</span>
                       )}
                     </div>
                   </div>
