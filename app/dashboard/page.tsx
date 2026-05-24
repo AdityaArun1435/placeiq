@@ -219,7 +219,6 @@ const SOURCE_LINKS: Record<string, string> = {
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileChecked, setProfileChecked] = useState(false);
@@ -232,10 +231,7 @@ export default function Dashboard() {
   const [companyCount, setCompanyCount] = useState(0);
   const [companyMatchLoading, setCompanyMatchLoading] = useState(false);
 
-  useEffect(() => { setMounted(true) }, [])
-
   useEffect(() => {
-    if (!mounted) return
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
 
@@ -274,7 +270,6 @@ export default function Dashboard() {
 
   // Redirect to onboarding if no profile found after 2 seconds
   useEffect(() => {
-    if (!mounted) return
     if (!profileChecked || profile) return;
     const timer = setTimeout(() => router.push('/onboarding'), 2000);
     return () => clearTimeout(timer);
@@ -282,7 +277,6 @@ export default function Dashboard() {
 
   // Fetch live score from backend (never use cached placementScore)
   useEffect(() => {
-    if (!mounted) return
     if (!profile?.email) return;
     setScoreLoading(true);
     fetchWithTimeout(`${config.apiUrl}/api/placement/probability`, {
@@ -294,7 +288,7 @@ export default function Dashboard() {
         branch: profile.branch,
         year: "",
         cgpa: profile.cgpa,
-        skills: profile.skills,
+        skills: (profile?.skills ?? []),
         targetRole: profile.targetRole,
         projectsCount: profile.projectsCount || "0",
         hasInternship: profile.hasInternship || "no",
@@ -313,7 +307,6 @@ export default function Dashboard() {
   }, [profile]);
 
   useEffect(() => {
-    if (!mounted) return
     if (!profile) return;
     setSkillGapLoading(true);
     (async () => {
@@ -323,7 +316,7 @@ export default function Dashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             target_role: profile.targetRole,
-            skills: profile.skills,
+            skills: (profile?.skills ?? []),
             college_tier: profile.collegeTier,
             branch: profile.branch,
             cgpa: profile.cgpa,
@@ -343,7 +336,6 @@ export default function Dashboard() {
   }, [profile]);
 
   useEffect(() => {
-    if (!mounted) return
     if (!profile) return;
     setCompanyMatchLoading(true);
     (async () => {
@@ -356,7 +348,7 @@ export default function Dashboard() {
             college_tier: profile.collegeTier,
             branch: profile.branch,
             cgpa: profile.cgpa,
-            skills: profile.skills,
+            skills: (profile?.skills ?? []),
             target_role: profile.targetRole,
             projects_count: profile.projectsCount || "0",
             has_internship: profile.hasInternship || "no",
@@ -388,7 +380,6 @@ export default function Dashboard() {
   const displayScore = liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
 
-  if (!mounted) return <LoadingScreen />;
   if (status === "loading") return <LoadingScreen />;
 
   if (backendSleeping && !profile) return (
@@ -463,7 +454,7 @@ export default function Dashboard() {
             )}
 
             {/* Per-source placement rate — each source on its own line */}
-            {liveScore && (liveScore.nirf_stats?.matched || liveScore.sources.length > 0) && (
+            {liveScore && (liveScore.nirf_stats?.matched || (liveScore.sources?.length ?? 0) > 0) && (
               <div className="mt-3 pt-3 border-t border-gray-800 space-y-1.5">
                 {liveScore.nirf_stats?.matched && liveScore.nirf_stats.placement_rate != null && (
                   <div className="flex items-center justify-between">
@@ -478,7 +469,7 @@ export default function Dashboard() {
                     <span className="text-[11px] text-gray-300 font-medium">{liveScore.nirf_stats.placement_rate}%</span>
                   </div>
                 )}
-                {liveScore.sources.map((src, i) => src.placement_rate != null && (
+                {(liveScore.sources ?? []).map((src, i) => src.placement_rate != null && (
                   <div key={i} className="flex items-center justify-between">
                     <a
                       href={src.url || SOURCE_LINKS[src.source_name] || "#"}
@@ -548,7 +539,7 @@ export default function Dashboard() {
               <div className="h-10 w-16 bg-gray-800 rounded animate-pulse" />
             ) : (
               <p className="text-4xl font-bold text-yellow-500">
-                {profile ? (profile.skills?.length ?? 0) : "--"}
+                {profile ? (profile?.skills?.length ?? 0) : "--"}
               </p>
             )}
             <p className="text-gray-600 text-xs mt-2">
@@ -606,7 +597,7 @@ export default function Dashboard() {
         </div>
 
         {/* Multi-source placement data panel */}
-        {!profileLoading && profile && liveScore && (liveScore.nirf_stats?.matched || liveScore.sources.length > 0) && (
+        {!profileLoading && profile && liveScore && (liveScore.nirf_stats?.matched || (liveScore.sources?.length ?? 0) > 0) && (
           <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -652,7 +643,7 @@ export default function Dashboard() {
               )}
 
               {/* Shiksha / Careers360 rows */}
-              {liveScore.sources.map((src, i) => (
+              {(liveScore.sources ?? []).map((src, i) => (
                 <div key={i} className="flex items-center justify-between py-2.5 px-3 bg-gray-900/60 rounded-xl">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
@@ -713,7 +704,7 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {(Array.isArray(profile.skills) ? profile.skills : []).map(skill => (
+              {(Array.isArray(profile?.skills) ? profile.skills : []).map(skill => (
                 <span key={skill} className="bg-gray-800 text-gray-300 text-xs px-3 py-1 rounded-full">
                   {skill}
                 </span>
