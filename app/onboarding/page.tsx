@@ -294,7 +294,7 @@ export default function Onboarding() {
             <h2 className="text-2xl font-bold mb-1">Your Skills</h2>
             <p className="text-gray-400 mb-4">Select all that apply. Be honest - this affects your score.</p>
 
-            {form.skills.length > 0 && (
+            {(form?.skills?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {form.skills.map(skill => (
                   <span key={skill} className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
@@ -348,7 +348,7 @@ export default function Onboarding() {
               <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
               <button
                 onClick={next}
-                disabled={form.skills.length === 0}
+                disabled={(form?.skills?.length ?? 0) === 0}
                 className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
               >
                 Next

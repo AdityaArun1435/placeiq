@@ -79,7 +79,13 @@ const PROFILES_KEY = "placeiq_coding_profiles";
 function loadData(): ProgressData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+        streak: parsed.streak ?? { lastDate: "", count: 0 },
+      };
+    }
   } catch {}
   return { skills: [], streak: { lastDate: "", count: 0 } };
 }
