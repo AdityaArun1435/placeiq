@@ -197,7 +197,7 @@ export default function OnCampus() {
             </div>
 
             {/* Your College Stats card */}
-            {sourcesData && (sourcesData.nirf_stats?.matched || sourcesData.sources.length > 0) && (
+            {sourcesData && (sourcesData.nirf_stats?.matched || (sourcesData.sources?.length ?? 0) > 0) && (
               <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <div>

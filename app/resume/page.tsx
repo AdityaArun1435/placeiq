@@ -327,7 +327,7 @@ export default function ResumeAnalyser() {
             </div>
 
             {/* Missing skills */}
-            {result.missing_skills.length > 0 && (
+            {(result.missing_skills?.length ?? 0) > 0 && (
               <div className="bg-yellow-950/30 border border-yellow-500/25 rounded-2xl p-6 mb-4">
                 <h3 className="font-semibold text-yellow-400 mb-4">Missing Skills for {targetRole}</h3>
                 <div className="flex flex-wrap gap-2">
@@ -341,7 +341,7 @@ export default function ResumeAnalyser() {
             )}
 
             {/* ATS issues */}
-            {result.ats_issues.length > 0 && (
+            {(result.ats_issues?.length ?? 0) > 0 && (
               <div className="bg-orange-950/30 border border-orange-500/25 rounded-2xl p-6">
                 <h3 className="font-semibold text-orange-400 mb-4">ATS Issues</h3>
                 <ul className="space-y-2">
