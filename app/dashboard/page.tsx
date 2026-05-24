@@ -219,6 +219,7 @@ const SOURCE_LINKS: Record<string, string> = {
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileChecked, setProfileChecked] = useState(false);
@@ -231,11 +232,15 @@ export default function Dashboard() {
   const [companyCount, setCompanyCount] = useState(0);
   const [companyMatchLoading, setCompanyMatchLoading] = useState(false);
 
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
+    if (!mounted) return
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
 
   useEffect(() => {
+    if (!mounted) return
     if (status !== "authenticated" || !session?.user?.email) return;
 
     // Primary: read from localStorage (source of truth)
@@ -247,7 +252,7 @@ export default function Dashboard() {
         setProfileChecked(true);
         return;
       }
-    } catch {}
+    } catch (e) { console.error('Dashboard error:', e) }
 
     // Fallback: fetch from backend and cache locally
     const email = encodeURIComponent(session.user.email);
@@ -270,6 +275,7 @@ export default function Dashboard() {
 
   // Redirect to onboarding if no profile found after 2 seconds
   useEffect(() => {
+    if (!mounted) return
     if (!profileChecked || profile) return;
     const timer = setTimeout(() => router.push('/onboarding'), 2000);
     return () => clearTimeout(timer);
@@ -277,6 +283,7 @@ export default function Dashboard() {
 
   // Fetch live score from backend (never use cached placementScore)
   useEffect(() => {
+    if (!mounted) return
     if (!profile?.email) return;
     setScoreLoading(true);
     fetchWithTimeout(`${config.apiUrl}/api/placement/probability`, {
@@ -302,11 +309,12 @@ export default function Dashboard() {
     }, 10000)
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setLiveScore(data); })
-      .catch(() => {})
+      .catch((e) => { console.error('Dashboard error:', e) })
       .finally(() => setScoreLoading(false));
-  }, [profile?.email]);
+  }, [profile]);
 
   useEffect(() => {
+    if (!mounted) return
     if (!profile) return;
     setSkillGapLoading(true);
     (async () => {
@@ -327,8 +335,8 @@ export default function Dashboard() {
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
           setSkillGaps(parsed.must_have_missing.slice(0, 3));
         }
-      } catch {
-        // silently fail — dashboard preview is best-effort
+      } catch (e) {
+        console.error('Dashboard error:', e)
       } finally {
         setSkillGapLoading(false);
       }
@@ -336,6 +344,7 @@ export default function Dashboard() {
   }, [profile]);
 
   useEffect(() => {
+    if (!mounted) return
     if (!profile) return;
     setCompanyMatchLoading(true);
     (async () => {
@@ -357,7 +366,7 @@ export default function Dashboard() {
             hackathons: profile.hackathons || "0",
             github_active: profile.githubActive || "no",
           }),
-        });
+        }, 15000);
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.companies)) {
@@ -369,8 +378,8 @@ export default function Dashboard() {
               .map((c: { name: string; type: string }) => ({ name: c.name, type: c.type }))
           );
         }
-      } catch {
-        // silently fail — dashboard preview is best-effort
+      } catch (e) {
+        console.error('Dashboard error:', e)
       } finally {
         setCompanyMatchLoading(false);
       }
@@ -380,6 +389,7 @@ export default function Dashboard() {
   const displayScore = liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
 
+  if (!mounted) return <LoadingScreen />;
   if (status === "loading") return <LoadingScreen />;
 
   if (backendSleeping && !profile) return (
@@ -402,7 +412,7 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <div className="max-w-6xl mx-auto px-8 py-10">
-        <h2 className="text-3xl font-bold mb-2">Welcome, {session?.user?.name?.split(" ")[0]}</h2>
+        <h2 className="text-3xl font-bold mb-2">Welcome, {session?.user?.name?.split(" ")?.[0] ?? "there"}</h2>
         <p className="text-gray-400 mb-10">
           {profile ? `Targeting ${profile.targetRole} · ${profile.college}` : "Complete your profile to get your placement score."}
         </p>
@@ -539,7 +549,7 @@ export default function Dashboard() {
               <div className="h-10 w-16 bg-gray-800 rounded animate-pulse" />
             ) : (
               <p className="text-4xl font-bold text-yellow-500">
-                {profile ? profile.skills.length : "--"}
+                {profile ? (profile.skills?.length ?? 0) : "--"}
               </p>
             )}
             <p className="text-gray-600 text-xs mt-2">
@@ -704,7 +714,7 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {profile.skills.map(skill => (
+              {(Array.isArray(profile.skills) ? profile.skills : []).map(skill => (
                 <span key={skill} className="bg-gray-800 text-gray-300 text-xs px-3 py-1 rounded-full">
                   {skill}
                 </span>

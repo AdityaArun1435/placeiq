@@ -1,0 +1,5 @@
+INFO:     Started server process [14368]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Run time of job "refresh_market_cache (trigger: cron[hour='0', minute='0'], next run at: 2026-05-25 00:00:00 IST)" was missed by 3:10:56.547919

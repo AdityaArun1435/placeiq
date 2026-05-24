@@ -1,0 +1,260 @@
+{
+  "timestamp": "2026-05-22T18:30:26.121509+00:00",
+  "data": {
+    "trending_skills": [
+      {
+        "skill": "Python",
+        "demand_score": 95,
+        "trend": "rising",
+        "avg_salary_lpa": 12,
+        "job_count": 4200,
+        "why_trending": "Python is in high demand due to its widespread adoption in the Indian tech industry, particularly in data science and machine learning applications.",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Zoho"
+        ]
+      },
+      {
+        "skill": "Java",
+        "demand_score": 90,
+        "trend": "stable",
+        "avg_salary_lpa": 11,
+        "job_count": 3000,
+        "why_trending": "Java remains a popular choice for Indian companies due to its platform independence and vast ecosystem of libraries and frameworks.",
+        "top_companies": [
+          "Wipro",
+          "HCL",
+          "Tech Mahindra"
+        ]
+      },
+      {
+        "skill": "JavaScript",
+        "demand_score": 85,
+        "trend": "rising",
+        "avg_salary_lpa": 10,
+        "job_count": 2500,
+        "why_trending": "JavaScript is gaining traction in the Indian job market due to the increasing demand for front-end developers and full-stack engineers.",
+        "top_companies": [
+          "Flipkart",
+          "Paytm",
+          "Ola"
+        ]
+      }
+    ],
+    "role_demand": [
+      {
+        "role": "Software Engineer",
+        "openings": 29259,
+        "avg_lpa": 14,
+        "yoy_change": "+18%",
+        "top_companies": [
+          "TCS",
+          "Wipro",
+          "Infosys"
+        ],
+        "key_skills": [
+          "Python",
+          "Java",
+          "DSA"
+        ],
+        "reality_check": "The competition for software engineer roles is extremely high, with thousands of freshers vying for a limited number of positions."
+      },
+      {
+        "role": "Data Scientist",
+        "openings": 11909,
+        "avg_lpa": 18,
+        "yoy_change": "+25%",
+        "top_companies": [
+          "Google",
+          "Microsoft",
+          "Amazon"
+        ],
+        "key_skills": [
+          "Python",
+          "Machine Learning",
+          "Statistics"
+        ],
+        "reality_check": "Data scientist roles are highly competitive, requiring a strong foundation in mathematics, statistics, and programming skills."
+      }
+    ],
+    "top_hiring_companies": [
+      "TCS",
+      "Infosys",
+      "Wipro"
+    ],
+    "salary_by_city": [
+      {
+        "city": "Bangalore",
+        "avg_lpa": 18,
+        "cost_of_living": "High",
+        "best_for_roles": [
+          "Software Engineer",
+          "Data Scientist"
+        ]
+      },
+      {
+        "city": "Hyderabad",
+        "avg_lpa": 15,
+        "cost_of_living": "Medium",
+        "best_for_roles": [
+          "Software Engineer",
+          "Product Manager"
+        ]
+      },
+      {
+        "city": "Pune",
+        "avg_lpa": 12,
+        "cost_of_living": "Low",
+        "best_for_roles": [
+          "Software Engineer",
+          "QA Engineer"
+        ]
+      }
+    ],
+    "hot_sectors": [
+      {
+        "sector": "FinTech",
+        "status": "Booming",
+        "reason": "The Indian FinTech sector is experiencing rapid growth due to increasing demand for digital payment solutions and online banking services."
+      },
+      {
+        "sector": "HealthTech",
+        "status": "Stable",
+        "reason": "The Indian HealthTech sector is witnessing steady growth due to the government's initiatives to promote digital health services and telemedicine."
+      },
+      {
+        "sector": "E-commerce",
+        "status": "Slow",
+        "reason": "The Indian e-commerce sector is facing intense competition and regulatory challenges, leading to a slowdown in growth."
+      },
+      {
+        "sector": "EdTech",
+        "status": "Booming",
+        "reason": "The Indian EdTech sector is experiencing rapid growth due to the increasing demand for online education and skill development platforms."
+      },
+      {
+        "sector": "CyberSecurity",
+        "status": "Booming",
+        "reason": "The Indian CyberSecurity sector is witnessing rapid growth due to the increasing threat of cyber attacks and data breaches."
+      },
+      {
+        "sector": "Renewable Energy",
+        "status": "Stable",
+        "reason": "The Indian Renewable Energy sector is experiencing steady growth due to the government's initiatives to promote sustainable energy sources and reduce carbon emissions."
+      }
+    ],
+    "skills_to_avoid": [
+      {
+        "skill": "COBOL",
+        "reason": "COBOL is an outdated programming language with limited job prospects and no relevance in modern software development."
+      },
+      {
+        "skill": "Flash",
+        "reason": "Flash is a deprecated technology with no future prospects, and its skills are no longer in demand in the industry."
+      },
+      {
+        "skill": "VBScript",
+        "reason": "VBScript is an outdated scripting language with limited job prospects and no relevance in modern software development."
+      }
+    ],
+    "market_summary": "The Indian job market is experiencing rapid growth in the tech sector, with high demand for skills like Python, Java, and JavaScript. However, the competition is intense, and freshers need to have a strong foundation in programming skills and be adaptable to new technologies. The market is also witnessing a shift towards emerging sectors like FinTech, HealthTech, and EdTech.",
+    "data_freshness": "Live data from Adzuna \u2014 fetched today"
+  },
+  "meta": {
+    "total_jobs": 450,
+    "role_counts": {
+      "software engineer": 29259,
+      "data scientist": 11909,
+      "frontend developer": 3791,
+      "backend developer": 6982,
+      "devops engineer": 4612,
+      "machine learning engineer": 1517,
+      "full stack developer": 7125,
+      "android developer": 2739,
+      "product manager": 27483
+    },
+    "top_skills": [
+      {
+        "skill": "C",
+        "count": 450
+      },
+      {
+        "skill": "Go",
+        "count": 87
+      },
+      {
+        "skill": "Java",
+        "count": 60
+      },
+      {
+        "skill": "Git",
+        "count": 51
+      },
+      {
+        "skill": "Android",
+        "count": 50
+      },
+      {
+        "skill": "Machine Learning",
+        "count": 49
+      },
+      {
+        "skill": "React",
+        "count": 42
+      },
+      {
+        "skill": "Python",
+        "count": 34
+      },
+      {
+        "skill": "SQL",
+        "count": 29
+      },
+      {
+        "skill": "AWS",
+        "count": 22
+      },
+      {
+        "skill": "Microservices",
+        "count": 21
+      },
+      {
+        "skill": "Azure",
+        "count": 20
+      },
+      {
+        "skill": "Kotlin",
+        "count": 19
+      },
+      {
+        "skill": "JavaScript",
+        "count": 18
+      },
+      {
+        "skill": "iOS",
+        "count": 17
+      },
+      {
+        "skill": "Kubernetes",
+        "count": 16
+      },
+      {
+        "skill": "TypeScript",
+        "count": 12
+      },
+      {
+        "skill": "Rust",
+        "count": 12
+      },
+      {
+        "skill": "Spring Boot",
+        "count": 12
+      },
+      {
+        "skill": "Docker",
+        "count": 11
+      }
+    ]
+  }
+}

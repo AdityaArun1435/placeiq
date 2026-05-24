@@ -1,0 +1,22 @@
+{
+  "infosys": {
+    "url": null,
+    "verified_at": "2026-05-22T12:22:36.410543+00:00"
+  },
+  "tcs": {
+    "url": null,
+    "verified_at": "2026-05-22T12:22:44.544677+00:00"
+  },
+  "zepto": {
+    "url": "https://www.zepto.com/careers",
+    "verified_at": "2026-05-22T12:22:49.432385+00:00"
+  },
+  "wipro": {
+    "url": "https://careers.wipro.com",
+    "verified_at": "2026-05-22T12:22:53.710124+00:00"
+  },
+  "flipkart": {
+    "url": null,
+    "verified_at": "2026-05-22T12:22:56.316699+00:00"
+  }
+}

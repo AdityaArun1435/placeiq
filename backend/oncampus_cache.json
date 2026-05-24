@@ -1,0 +1,50 @@
+{
+  "tcs": {
+    "data": {
+      "difficulty": "Moderate",
+      "avg_salary": "N/A",
+      "topics": [
+        "Interviews",
+        "Company interviews",
+        "Share interview questions",
+        "View 1 answer",
+        "View all HR interview questions",
+        "read more"
+      ],
+      "source": "ambitionbox"
+    },
+    "cached_at": "2026-05-21T09:02:58.226857+00:00"
+  },
+  "freshworks": {
+    "data": {
+      "difficulty": "Moderate",
+      "avg_salary": "N/A",
+      "topics": [
+        "Interviews",
+        "Company interviews",
+        "Share interview questions",
+        "View all HR interview questions",
+        "read more",
+        "Senior Software Engineer Interview Questions"
+      ],
+      "source": "ambitionbox"
+    },
+    "cached_at": "2026-05-21T09:03:11.681594+00:00"
+  },
+  "amazon": {
+    "data": {
+      "difficulty": "Moderate",
+      "avg_salary": "N/A",
+      "topics": [
+        "Interview Questions",
+        "View all HR interview questions",
+        "read more",
+        "Software Developer Interview Questions",
+        "Associate Interview Questions",
+        "Customer Care Executive Interview Questions"
+      ],
+      "source": "ambitionbox"
+    },
+    "cached_at": "2026-05-23T08:48:24.036542+00:00"
+  }
+}

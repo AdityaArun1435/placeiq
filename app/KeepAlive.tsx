@@ -4,7 +4,11 @@ import { startKeepAlive } from '@/lib/config';
 
 export default function KeepAlive() {
   useEffect(() => {
-    startKeepAlive();
+    try {
+      startKeepAlive();
+    } catch (e) {
+      console.error('KeepAlive error:', e);
+    }
   }, []);
   return null;
 }

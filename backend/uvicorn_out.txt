@@ -1,0 +1,89 @@
+[Market] Scheduler started — daily refresh at midnight UTC
+INFO:     127.0.0.1:52282 - "GET /api/colleges/list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54581 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62408 - "OPTIONS /api/oncampus/predict HTTP/1.1" 200 OK
+[DEBUG] Groq oncampus response: '{\n  "companies": [\n    {\n      "name": "TCS",\n      "probability": 90,\n      "visit_timing": "August-September 2026",\n      "role_offered": "Software Engineer",\n      "package_range": "3.36-7 LPA",\n      "cgpa_cutoff": 7.0,\n      "student_eligible": true,\n      "hiring_rounds": ["Written Test", "Technical Interview", "HR Interview"],\n      "topics_tested": ["Data Structures", "Algorithms", "Java", "C++"],\n      "sample_questions": ["Write a program to find the maximum element in an array", "How '
+INFO:     127.0.0.1:62408 - "POST /api/oncampus/predict HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57898 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57898 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57898 - "OPTIONS /api/skills/gap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57898 - "OPTIONS /api/companies/match HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://leetcode.com"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {'
+INFO:     127.0.0.1:57898 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:64183 - "POST /api/companies/match HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://leetcode.com"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {'
+INFO:     127.0.0.1:62395 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:56545 - "POST /api/companies/match HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "OPTIONS /api/user/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "POST /api/user/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60785 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://leetcode.com"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems involving complex data structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {\n     '
+INFO:     127.0.0.1:60785 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:58275 - "POST /api/companies/match HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://leetcode.com"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {'
+INFO:     127.0.0.1:63507 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:50970 - "POST /api/companies/match HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex problems in software engineering",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.geeksforge'
+INFO:     127.0.0.1:58275 - "POST /api/skills/gap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "OPTIONS /api/roadmap/generate HTTP/1.1" 200 OK
+[DEBUG] Groq roadmap response: '```\n{\n  "overview": "As a Computer Science student from SRM KTR with a CGPA of 8.4, this 90-day roadmap addresses the critical skill gaps in Dynamic Programming, Graph Algorithms, and System Design to increase chances of getting placed in top companies. The focus is on bridging these gaps while leveraging existing skills in Python, Java, and React. Given the competitive job market, especially for Tier 2 college students, a structured approach is essential.",\n  "day_30": {\n    "goal": "Solidify f'
+INFO:     127.0.0.1:58275 - "POST /api/roadmap/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "GET /api/market/intelligence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "GET /api/market/intelligence HTTP/1.1" 200 OK
+[DEBUG] Groq oncampus response: '{\n  "companies": [\n    {\n      "name": "TCS",\n      "probability": 90,\n      "visit_timing": "August-September 2026",\n      "role_offered": "Software Engineer",\n      "package_range": "3.36-6 LPA",\n      "cgpa_cutoff": "6.0",\n      "student_eligible": true,\n      "hiring_rounds": ["Written Test", "Technical Interview", "HR Interview"],\n      "topics_tested": ["Data Structures", "Algorithms", "C Programming"],\n      "sample_questions": ["Write a program to find the maximum element in an array", "'
+INFO:     127.0.0.1:52965 - "POST /api/oncampus/predict HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53640 - "OPTIONS /api/offcampus/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53640 - "POST /api/offcampus/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52761 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52761 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63224 - "GET /api/directory/companies?page=1&rating=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63224 - "GET /api/directory/companies?page=1&rating=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63224 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53411 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50614 - "GET /api/internships/list?skills=Python%2CC%2CJava%2CReact%2CFastAPI%2CSpring%20Boot%2CVue.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50614 - "OPTIONS /api/internships/ai-match HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50614 - "POST /api/internships/ai-match HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56580 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56580 - "GET /api/directory/companies?page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56580 - "POST /api/internships/ai-match HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58885 - "GET /api/referral/list HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60735 - "GET /api/referral/list HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60735 - "GET /api/internships/list?skills=Python%2CC%2CJava%2CReact%2CFastAPI%2CSpring%20Boot%2CVue.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60735 - "GET /api/internships/list?skills=Python%2CC%2CJava%2CReact%2CFastAPI%2CSpring%20Boot%2CVue.js HTTP/1.1" 404 Not Found
+[Market] Refreshing market cache from Adzuna…
+[Adzuna] Failed for role 'frontend developer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=frontend+developer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'backend developer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=backend+developer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'devops engineer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=devops+engineer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'machine learning engineer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=machine+learning+engineer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'full stack developer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=full+stack+developer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'android developer': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=android+developer&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Adzuna] Failed for role 'product manager': Server error '503 Service Temporarily Unavailable' for url 'https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=6cc05a61&app_key=6ca2ece34b800bf4558d701c66b3d2cc&results_per_page=50&what=product+manager&content-type=application%2Fjson'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+[Market] Groq response preview: '```json\n{\n  "trending_skills": [\n    {\n      "skill": "Python",\n      "demand_score": 95,\n      "trend": "rising",\n      "avg_salary_lpa": 12,\n      "job_count": 4200,\n      "why_trending": "Python is in high demand due to its widespread adoption in Indian startups and enterprises for data science, '
+[Market] Cache written to C:\Users\HP\placeiq\backend\market_cache.json
+INFO:     127.0.0.1:62677 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62677 - "OPTIONS /api/skills/gap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59727 - "OPTIONS /api/companies/match HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.geeksforgeeks.org/grap'
+INFO:     127.0.0.1:59727 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:62677 - "POST /api/companies/match HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59727 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.geeksforgeeks.org/grap'
+INFO:     127.0.0.1:59727 - "POST /api/skills/gap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50642 - "GET /api/user/profile/arunaditya1435%40gmail.com HTTP/1.1" 200 OK
+[DEBUG] Groq skill gap response: '```\n{\n  "must_have_missing": [\n    {\n      "skill": "Dynamic Programming",\n      "why_important": "Essential for solving complex algorithmic problems",\n      "time_to_learn": "2-3 months",\n      "free_resource_link": "https://leetcode.com"\n    },\n    {\n      "skill": "Graph Algorithms",\n      "why_important": "Crucial for solving problems related to network and graph structures",\n      "time_to_learn": "1-2 months",\n      "free_resource_link": "https://www.youtube.com/@takeUforward"\n    },\n    {'
+INFO:     127.0.0.1:50642 - "POST /api/skills/gap HTTP/1.1" 200 OK
+[DEBUG] Groq company match response: '```\n{\n  "companies": [\n    {\n      "name": "TCS",\n      "type": "Service",\n      "match_score": 70,\n      "cgpa_cutoff": "6.0",\n      "visits_college_tier": "Tier 1 & 2",\n      "likely_to_visit": true,\n      "hiring_mode": "On Campus",\n      "role_offered": "Systems Engineer",\n      "package_range": "3.36-7 LPA",\n      "why_match": "Your CGPA clears TCS NQT cutoff and Python is one of the languages tested in their coding section — SRM is a regular TCS recruitment campus",\n      "biggest_gap": "T'
+INFO:     127.0.0.1:56798 - "POST /api/companies/match HTTP/1.1" 200 OK
