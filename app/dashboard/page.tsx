@@ -8,7 +8,7 @@ import {
   BookOpen, BarChart2, Database,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
-import config, { fetchWithTimeout } from '@/lib/config'
+import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
 type Profile = {
@@ -252,7 +252,7 @@ export default function Dashboard() {
 
     // Fallback: fetch from backend and cache locally
     const email = encodeURIComponent(session.user.email);
-    fetchWithTimeout(`${config.apiUrl}/api/user/profile/${email}`, {}, 30000)
+    fetch(`${config.apiUrl}/api/user/profile/${email}`)
       .then(res => {
         if (res.status === 404) return null;
         if (!res.ok) throw new Error("fetch failed");
@@ -262,8 +262,7 @@ export default function Dashboard() {
         if (data) localStorage.setItem("placeiq_profile", JSON.stringify(data));
         setProfile(data);
       })
-      .catch((err) => {
-        if (err instanceof Error && err.name === 'AbortError') setBackendSleeping(true);
+      .catch(() => {
         setProfile(null);
       })
       .finally(() => { setProfileLoading(false); setProfileChecked(true); });
@@ -280,7 +279,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!profile?.email) return;
     setScoreLoading(true);
-    fetchWithTimeout(`${config.apiUrl}/api/placement/probability`, {
+    fetch(`${config.apiUrl}/api/placement/probability`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -300,16 +299,10 @@ export default function Dashboard() {
         certifications: "0",
         githubActive: profile.githubActive || "no",
       }),
-    }, 30000)
+    })
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setLiveScore(data); })
-      .catch((e) => {
-        if (e instanceof Error && e.name === 'AbortError') {
-          setScoreTimedOut(true);
-        } else {
-          console.error('Dashboard error:', e);
-        }
-      })
+      .catch((e) => { console.error('Dashboard error:', e); })
       .finally(() => setScoreLoading(false));
   }, [profile]);
 
@@ -318,7 +311,7 @@ export default function Dashboard() {
     setSkillGapLoading(true);
     (async () => {
       try {
-        const res = await fetchWithTimeout(`${config.apiUrl}/api/skills/gap`, {
+        const res = await fetch(`${config.apiUrl}/api/skills/gap`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -328,7 +321,7 @@ export default function Dashboard() {
             branch: profile.branch,
             cgpa: profile.cgpa,
           }),
-        }, 30000);
+        });
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
@@ -347,7 +340,7 @@ export default function Dashboard() {
     setCompanyMatchLoading(true);
     (async () => {
       try {
-        const res = await fetchWithTimeout(`${config.apiUrl}/api/companies/match`, {
+        const res = await fetch(`${config.apiUrl}/api/companies/match`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -364,7 +357,7 @@ export default function Dashboard() {
             hackathons: profile.hackathons || "0",
             github_active: profile.githubActive || "no",
           }),
-        }, 30000);
+        });
         if (!res.ok) return;
         const parsed = await res.json();
         if (parsed && !parsed.error && Array.isArray(parsed.companies)) {
@@ -452,6 +445,10 @@ export default function Dashboard() {
             <p className="text-gray-600 text-xs mt-2">
               {profile ? "out of 100 · Predicted by ML model trained on NIRF data" : "Complete profile to unlock"}
             </p>
+
+            {scoreLoading && !liveScore && (
+              <p className="text-yellow-500/80 text-xs mt-2">Backend waking up... this takes ~30s on first load</p>
+            )}
             {liveScore?.model_last_retrained && (
               <p className="text-gray-700 text-[10px] mt-1">
                 Model last retrained:{" "}
