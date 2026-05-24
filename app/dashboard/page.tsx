@@ -518,7 +518,12 @@ export default function Dashboard() {
           {/* Score reasoning — spans full width, below the 3-card row */}
           {!profileLoading && profile?.scoreReasoning && (
             <div className="md:col-span-3 bg-blue-600/5 border border-blue-500/20 rounded-2xl px-6 py-4">
-              <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">ML Score Analysis</p>
+              <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Why is your score {displayScore}?</p>
+              {displayScore !== undefined && liveScore?.nirf_stats?.placement_rate != null && (
+                <p className="text-xs text-blue-300/60 mb-2">
+                  Your score ({displayScore}) = personal probability based on your profile · College placement rate ({liveScore.nirf_stats.placement_rate}%) = % of all students placed at {profile.college} per NIRF 2024
+                </p>
+              )}
               <p className="text-gray-300 text-sm leading-relaxed">{profile.scoreReasoning}</p>
               <p className="text-xs text-gray-700 mt-2">Predicted by ML model trained on NIRF placement data</p>
             </div>
