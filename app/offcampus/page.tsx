@@ -23,7 +23,18 @@ type Job = {
   created: string;
   hiring_status: string | null;
   days_ago: number | null;
+  source?: string;
 };
+
+const TIER1_NAMES = new Set([
+  "google", "amazon", "microsoft", "meta", "apple", "netflix", "uber", "airbnb",
+  "stripe", "atlassian", "salesforce", "adobe", "oracle", "sap", "intel", "qualcomm", "nvidia",
+  "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "cred", "meesho", "zepto", "ola",
+  "paytm", "groww", "zerodha", "dream11", "freshworks", "zoho", "postman",
+  "tcs", "infosys", "wipro", "hcl", "tech mahindra", "cognizant", "capgemini", "accenture", "ibm", "deloitte",
+]);
+
+function isTier1(company: string) { return TIER1_NAMES.has(company.toLowerCase().trim()); }
 
 function matchColor(score: number) {
   if (score >= 60) return "bg-green-500";
@@ -132,8 +143,8 @@ export default function OffCampus() {
       <div className="max-w-5xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Off Campus Jobs</h2>
         <p className="text-gray-400 mb-8">
-          Live jobs from Adzuna India · match score based on your skill profile
-          {profile?.skills?.length ? ` (${profile.skills.length} skills matched)` : ""}
+          Live jobs from Adzuna · Arbeitnow · Remotive · Tier 1 companies sorted first · match score based on your skill profile
+          {profile?.skills?.length ? ` (${profile.skills.length} skills)` : ""}
         </p>
 
         {/* Search form */}
@@ -221,14 +232,22 @@ export default function OffCampus() {
         {!loading && jobs.length > 0 && (
           <>
             <p className="text-sm text-gray-500 mb-4">
-              Showing <span className="text-white">{jobs.length}</span> of {total.toLocaleString()} results · sorted by match score
+              Showing <span className="text-white">{jobs.length}</span> results · Tier 1 companies first, then by recency
             </p>
             <div className="space-y-4">
               {jobs.map(job => (
-                <div key={job.id} className="bg-[#111] border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition">
+                <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${isTier1(job.company) ? "border-blue-800/50" : "border-gray-800"}`}>
                   <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
                     <div>
-                      <h3 className="font-semibold text-white mb-1">{job.title}</h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-white">{job.title}</h3>
+                        {isTier1(job.company) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium">Tier 1</span>
+                        )}
+                        {job.source && job.source !== "Adzuna" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 border border-gray-700">{job.source}</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
                         <span>{job.company}</span>
                         <span className="text-gray-700">·</span>

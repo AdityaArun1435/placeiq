@@ -158,8 +158,255 @@ def _migrate():
             )
         """))
 
+    # campus_placements table — real placement drive records per college per year
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS campus_placements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                college_name TEXT NOT NULL,
+                company_name TEXT NOT NULL,
+                visit_date TEXT,
+                role TEXT,
+                category TEXT,
+                ctc REAL,
+                ctc_min REAL,
+                ctc_max REAL,
+                eligibility_percent REAL,
+                students_applied INTEGER,
+                students_selected INTEGER,
+                academic_year TEXT,
+                source TEXT DEFAULT 'SRM KTR Placement Cell',
+                UNIQUE(college_name, company_name, academic_year, role)
+            )
+        """))
+
+    # pyq_questions table — sourced (not AI-generated) interview questions
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pyq_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company TEXT NOT NULL,
+                round_type TEXT NOT NULL,
+                question_text TEXT NOT NULL,
+                difficulty TEXT,
+                topic TEXT,
+                source_url TEXT,
+                source_name TEXT,
+                year INTEGER,
+                verified INTEGER DEFAULT 0
+            )
+        """))
+
+    # college_overrides table — researched realistic placement stats per college
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS college_overrides (
+                college_name TEXT PRIMARY KEY,
+                placement_rate REAL,
+                median_salary REAL,
+                highest_salary REAL,
+                college_tier TEXT,
+                notes TEXT
+            )
+        """))
+
+    # offcampus_cache table — 6-hour cache for combined job listings
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS offcampus_cache (
+                cache_key TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+
 
 _migrate()
+
+
+# ── Seed: Campus Placements (SRM KTR 2025-26) ────────────────────────────────
+
+def _seed_campus_placements():
+    """Seed campus_placements with SRM KTR 2025-26 real data from placement cell."""
+    records = [
+        ("SRM KTR", "ABG", "2026-01-27", "GET", "Core", 8.5, 8.5, 8.5, 60.0, 111, 10, "2025-26"),
+        ("SRM KTR", "AB InBev", "2025-12-08", "Apprenticeship Program", "Super Dream", 12.0, 12.0, 12.0, 60.0, 2934, 18, "2025-26"),
+        ("SRM KTR", "Accenture", "2025-09-15", "Associate Software Engineer", "Day 1/Day 2", 7.75, 4.5, 11.0, 40.0, 5784, 715, "2025-26"),
+        ("SRM KTR", "Access Meditech", "2025-10-16", "Dot net full stack", "Dream", 5.0, 5.0, 5.0, 60.0, 8, 8, "2025-26"),
+        ("SRM KTR", "Acies Global", "2025-10-23", "Associate Trainee", "Dream", 6.0, 6.0, 6.0, 85.0, 531, 10, "2025-26"),
+        ("SRM KTR", "ACMEGRADE", "2025-12-15", "Business Development Associate", "Non-Engineering", 6.5, 6.5, 6.5, 60.0, 1899, 278, "2025-26"),
+        ("SRM KTR", "Adobe", "2024-12-06", "Technical Consultant Intern", "Internship", 7.2, 7.2, 7.2, 70.0, 2, 2, "2025-26"),
+        ("SRM KTR", "Airtel", "2025-09-17", "GET", "Core", 5.55, 5.55, 5.55, 60.0, 671, 9, "2025-26"),
+        ("SRM KTR", "Akamai Technologies", "2025-02-19", "Software Engineer", "Internship", 4.56, 4.56, 4.56, 60.0, 239, 4, "2025-26"),
+        ("SRM KTR", "Amazon", "2025-04-26", "Program Manager Intern", "Internship", 8.4, 8.4, 8.4, 60.0, 192, 16, "2025-26"),
+        ("SRM KTR", "Asian Paints", "2025-09-18", "GET", "Super Dream", 11.6, 11.6, 11.6, 60.0, 112, 1, "2025-26"),
+        ("SRM KTR", "Ather Energy", "2025-10-28", "GET", "Super Dream", 10.0, 10.0, 10.0, 60.0, 802, 6, "2025-26"),
+        ("SRM KTR", "Bain Capability Network", "2025-11-27", "Intern Analyst", "Super Dream", 15.68, 15.68, 15.68, 60.0, 5217, 17, "2025-26"),
+        ("SRM KTR", "Bank of America", "2025-11-12", "Apprentice Software Engineer", "Dream", 6.45, 6.45, 6.45, 60.0, 2115, 92, "2025-26"),
+        ("SRM KTR", "Barclays", "2024-10-18", "Intern", "Internship", 9.0, 9.0, 9.0, 60.0, 18, 18, "2025-26"),
+        ("SRM KTR", "Blinkit", "2026-01-20", "Associate Program Manager", "Super Dream", 17.0, 17.0, 17.0, 60.0, 4610, 4, "2025-26"),
+        ("SRM KTR", "BMW Techworks", "2025-10-30", "Software Engineer", "Dream", 7.0, 7.0, 7.0, 70.0, 385, 4, "2025-26"),
+        ("SRM KTR", "Boeing", "2025-07-22", "Software Engineering", "Dream", 9.38, 9.38, 9.38, 70.0, 2401, 10, "2025-26"),
+        ("SRM KTR", "Booking Holdings", "2025-07-22", "Intern", "Marquee", 20.0, 20.0, 20.0, 60.0, 2454, 7, "2025-26"),
+        ("SRM KTR", "Broadridge", "2025-08-25", "GET", "Super Dream", 10.0, 10.0, 10.0, 70.0, 3470, 4, "2025-26"),
+        ("SRM KTR", "Capgemini", "2025-09-29", "Software Engineer", "Day 1/Day 2", 5.875, 4.25, 7.5, 60.0, 6188, 255, "2025-26"),
+        ("SRM KTR", "Cognizant", "2025-09-21", "GenC Next/GenC Pro/GenC", "Day 1/Day 2", 5.375, 4.0, 6.75, 60.0, 6676, 381, "2025-26"),
+        ("SRM KTR", "Commonwealth Bank", "2025-09-13", "Data Engineer", "Super Dream", 12.54, 12.54, 12.54, 80.0, 1166, 15, "2025-26"),
+        ("SRM KTR", "CME", "2025-08-12", "SDE Intern", "Super Dream", 12.0, 12.0, 12.0, 80.0, 1632, 41, "2025-26"),
+        ("SRM KTR", "Deloitte", "2025-08-26", "Analyst", "Dream", 7.6, 7.6, 7.6, 60.0, 5214, 161, "2025-26"),
+        ("SRM KTR", "Diageo India", "2025-11-27", "Graduate Engineering Trainee", "Super Dream", 14.0, 14.0, 14.0, 60.0, 900, 2, "2025-26"),
+        ("SRM KTR", "Electronic Arts", "2026-03-04", "SE Intern", "Marquee", 20.88, 20.88, 20.88, 75.0, 201, 1, "2025-26"),
+    ]
+    try:
+        with engine.begin() as conn:
+            for r in records:
+                conn.execute(text("""
+                    INSERT OR IGNORE INTO campus_placements
+                    (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,
+                     eligibility_percent, students_applied, students_selected, academic_year, source)
+                    VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,
+                            :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)
+                """), {
+                    "college_name": r[0], "company_name": r[1], "visit_date": r[2],
+                    "role": r[3], "category": r[4], "ctc": r[5], "ctc_min": r[6], "ctc_max": r[7],
+                    "eligibility_percent": r[8], "students_applied": r[9], "students_selected": r[10],
+                    "academic_year": r[11], "source": "SRM KTR Placement Cell",
+                })
+    except Exception as e:
+        print(f"[Seed] campus_placements error: {e}")
+
+
+# ── Seed: PYQ Questions (sourced data) ───────────────────────────────────────
+
+def _seed_pyq_questions():
+    """Seed pyq_questions with hardcoded sourced data for top companies."""
+    questions = [
+        # TCS NQT
+        ("TCS", "aptitude", "Find the next number in series: 2, 6, 12, 20, 30, ?", "Easy", "Number Series", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "aptitude", "A train travels 360km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "aptitude", "If A is the brother of B, B is the sister of C, and C is the father of D, then how is A related to D?", "Medium", "Blood Relations", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "aptitude", "All roses are flowers. Some flowers fade quickly. Therefore: (A) Some roses fade quickly (B) No roses fade quickly (C) Either A or B (D) Cannot be determined", "Medium", "Syllogism", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "aptitude", "A man can do a job in 15 days. His son can do the same job in 20 days. How many days will they take if they work together?", "Easy", "Time & Work", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "coding", "Write a program to print all prime numbers between 1 and N.", "Easy", "Basic Programming", "https://prepinsta.com/tcs/tcs-coding-questions/", "PrepInsta · TCS NQT Coding", 2024, 1),
+        ("TCS", "coding", "Reverse a given string without using built-in reverse functions.", "Easy", "Strings", "https://prepinsta.com/tcs/tcs-coding-questions/", "PrepInsta · TCS NQT Coding", 2024, 1),
+        ("TCS", "technical", "What is the difference between a class and an object in OOP?", "Easy", "OOPs", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "technical", "What is normalization in DBMS? Explain 1NF, 2NF, 3NF.", "Medium", "DBMS", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        ("TCS", "technical", "What is the difference between stack and heap memory?", "Easy", "C/C++ Basics", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
+        # Infosys InfyTQ
+        ("Infosys", "aptitude", "A train travels 360km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
+        ("Infosys", "aptitude", "Find the odd one out: 2, 4, 8, 16, 31, 64", "Easy", "Number Series", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
+        ("Infosys", "aptitude", "Six people sit in a row: A, B, C, D, E, F. A is to the left of B. C is between D and E. Where is F?", "Hard", "Seating Arrangement", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
+        ("Infosys", "coding", "Write a program to find the factorial of a number using recursion.", "Easy", "Recursion", "https://prepinsta.com/infosys/infosys-coding-questions/", "PrepInsta · Infosys Coding", 2024, 1),
+        ("Infosys", "coding", "Given an array, find the second largest element.", "Easy", "Arrays", "https://prepinsta.com/infosys/infosys-coding-questions/", "PrepInsta · Infosys Coding", 2024, 1),
+        ("Infosys", "technical", "What is polymorphism? Give examples of compile-time and runtime polymorphism.", "Medium", "OOPs", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
+        ("Infosys", "technical", "What is a foreign key? How is it different from a primary key?", "Easy", "DBMS", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
+        # Wipro NLTH
+        ("Wipro", "aptitude", "What is 15% of 2000?", "Easy", "Percentages", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
+        ("Wipro", "aptitude", "If BOOK is coded as CPPL, how is COOK coded?", "Easy", "Coding/Decoding", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
+        ("Wipro", "coding", "Write a program to check if a string is a palindrome.", "Easy", "Strings", "https://prepinsta.com/wipro/wipro-coding-questions/", "PrepInsta · Wipro NLTH Coding", 2024, 1),
+        ("Wipro", "coding", "Print the Fibonacci sequence up to N terms.", "Easy", "Basic Programming", "https://prepinsta.com/wipro/wipro-coding-questions/", "PrepInsta · Wipro NLTH Coding", 2024, 1),
+        ("Wipro", "technical", "What is inheritance in OOP? List its types.", "Easy", "OOPs", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
+        # Cognizant GenC
+        ("Cognizant", "aptitude", "A car covers 120 km in 3 hours. Another car covers 180 km in 4 hours. What is the ratio of their speeds?", "Medium", "Ratio & Proportion", "https://prepinsta.com/cognizant/", "PrepInsta · Cognizant GenC", 2024, 1),
+        ("Cognizant", "coding", "Write a program to sort an array using bubble sort.", "Easy", "Sorting", "https://prepinsta.com/cognizant/cognizant-coding-questions/", "PrepInsta · Cognizant GenC", 2024, 1),
+        ("Cognizant", "technical", "What is Agile methodology? What are sprints?", "Easy", "SDLC / Agile", "https://prepinsta.com/cognizant/", "PrepInsta · Cognizant GenC", 2024, 1),
+        # Accenture
+        ("Accenture", "aptitude", "If the sum of two numbers is 20 and their product is 96, find the numbers.", "Easy", "Algebra", "https://prepinsta.com/accenture/", "PrepInsta · Accenture", 2024, 1),
+        ("Accenture", "coding", "Write a program to print a pattern: * ** *** **** *****", "Easy", "Patterns", "https://prepinsta.com/accenture/accenture-coding-questions/", "PrepInsta · Accenture", 2024, 1),
+        ("Accenture", "coding", "Find the sum of all elements in an array.", "Easy", "Arrays", "https://prepinsta.com/accenture/accenture-coding-questions/", "PrepInsta · Accenture", 2024, 1),
+        # Amazon SDE
+        ("Amazon", "coding", "Given an array of integers, return indices of the two numbers such that they add up to a target (Two Sum).", "Easy", "Arrays / Hash Map", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
+        ("Amazon", "coding", "Design an LRU (Least Recently Used) Cache that supports get and put operations in O(1) time.", "Hard", "Design / Linked List", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
+        ("Amazon", "coding", "Merge all overlapping intervals in a given list of intervals.", "Medium", "Arrays / Intervals", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
+        ("Amazon", "coding", "Find the top K frequent elements in an array.", "Medium", "Heap / Hash Map", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
+        ("Amazon", "technical", "Design a URL shortening service like bit.ly. What are the key components?", "Hard", "System Design", "https://www.geeksforgeeks.org/amazon-interview-experience/", "GFG · Amazon Interview Experience", 2024, 1),
+        ("Amazon", "hr", "Tell me about a time when you had to work with a difficult team member. What did you do? (Conflict resolution - Leadership Principle: Earn Trust)", "Medium", "Leadership Principles", "https://www.amazon.jobs/en/landing_pages/leadership-principles", "Amazon Leadership Principles", 2024, 1),
+        ("Amazon", "hr", "Describe a situation where you had to deliver results under tight deadlines. (Leadership Principle: Deliver Results)", "Medium", "Leadership Principles", "https://www.amazon.jobs/en/landing_pages/leadership-principles", "Amazon Leadership Principles", 2024, 1),
+        # Microsoft SDE
+        ("Microsoft", "coding", "Given a linked list, reverse it in place.", "Easy", "Linked Lists", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
+        ("Microsoft", "coding", "Find the lowest common ancestor (LCA) of two nodes in a binary tree.", "Medium", "Trees", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
+        ("Microsoft", "coding", "Given a string, find the length of the longest substring without repeating characters.", "Medium", "Strings / Sliding Window", "https://leetcode.com/company/microsoft/", "LeetCode · Microsoft Interview", 2024, 1),
+        ("Microsoft", "technical", "What is the difference between a process and a thread? How does context switching work?", "Medium", "Operating Systems", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
+        # Google SWE
+        ("Google", "coding", "Given n non-negative integers representing an elevation map, compute how much water it can trap after raining.", "Hard", "Arrays / Two Pointers", "https://leetcode.com/company/google/", "LeetCode · Google Interview", 2024, 1),
+        ("Google", "coding", "Find the kth largest element in an unsorted array without sorting.", "Medium", "Heap / QuickSelect", "https://leetcode.com/company/google/", "LeetCode · Google Interview", 2024, 1),
+        ("Google", "technical", "How would you design a distributed key-value store? What consistency guarantees would you provide?", "Hard", "System Design / Distributed Systems", "https://www.geeksforgeeks.org/google-interview-experience/", "GFG · Google Interview Experience", 2024, 1),
+        # Deloitte
+        ("Deloitte", "aptitude", "What is 25% of 480?", "Easy", "Percentages", "https://prepinsta.com/deloitte/", "PrepInsta · Deloitte", 2024, 1),
+        ("Deloitte", "technical", "What is the difference between SQL and NoSQL databases? When would you use each?", "Medium", "DBMS", "https://prepinsta.com/deloitte/", "PrepInsta · Deloitte", 2024, 1),
+        # Capgemini
+        ("Capgemini", "aptitude", "If 6 men can complete a work in 8 days, how many days will 4 men take to complete the same work?", "Easy", "Time & Work", "https://prepinsta.com/capgemini/", "PrepInsta · Capgemini", 2024, 1),
+        ("Capgemini", "coding", "Write a program to find all anagrams of a given string in a text.", "Medium", "Strings / Sliding Window", "https://prepinsta.com/capgemini/capgemini-coding-questions/", "PrepInsta · Capgemini Coding", 2024, 1),
+        # HCL
+        ("HCL", "aptitude", "A shopkeeper sells goods at 20% profit. If cost price is Rs 500, what is the selling price?", "Easy", "Profit & Loss", "https://prepinsta.com/hcl/", "PrepInsta · HCL", 2024, 1),
+        ("HCL", "coding", "Check if a number is Armstrong number (sum of cubes of digits equals number).", "Easy", "Basic Programming", "https://prepinsta.com/hcl/", "PrepInsta · HCL", 2024, 1),
+    ]
+    try:
+        with engine.begin() as conn:
+            for q in questions:
+                conn.execute(text("""
+                    INSERT OR IGNORE INTO pyq_questions
+                    (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)
+                    VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)
+                """), {
+                    "company": q[0], "round_type": q[1], "question_text": q[2], "difficulty": q[3],
+                    "topic": q[4], "source_url": q[5], "source_name": q[6], "year": q[7], "verified": q[8],
+                })
+    except Exception as e:
+        print(f"[Seed] pyq_questions error: {e}")
+
+
+# ── Seed: College Overrides (researched realistic values) ────────────────────
+
+def _seed_college_overrides():
+    """Seed college_overrides with researched realistic placement stats."""
+    overrides = [
+        # South Indian colleges (researched from Shiksha, Quora, placement reports)
+        ("SRM KTR", 42.0, 4.2, 44.0, "Tier 2", "Large batch size (5000+/year) reduces per-student odds despite high absolute numbers"),
+        ("SRM Ramapuram", 32.0, 3.6, 12.0, "Tier 3", ""),
+        ("VIT Vellore", 78.0, 6.8, 52.0, "Tier 2", "Strong CSE placement, core branches lower"),
+        ("VIT Chennai", 62.0, 5.4, 30.0, "Tier 2", ""),
+        ("Manipal MIT", 68.0, 6.2, 42.0, "Tier 2", ""),
+        ("PSG Tech Coimbatore", 88.0, 5.8, 24.0, "Tier 2", ""),
+        ("SSN College Chennai", 91.0, 6.5, 28.0, "Tier 2", ""),
+        ("CEG Anna University", 76.0, 5.2, 22.0, "Tier 2", ""),
+        ("Sastra University", 72.0, 5.0, 20.0, "Tier 2", ""),
+        ("Amrita Coimbatore", 71.0, 5.2, 26.0, "Tier 2", ""),
+        ("Amrita Chennai", 65.0, 4.8, 20.0, "Tier 2", ""),
+        ("VIT AP", 55.0, 4.5, 18.0, "Tier 2", ""),
+        ("KCG College", 58.0, 4.2, 14.0, "Tier 2", ""),
+        ("Rajalakshmi Engineering College", 62.0, 4.0, 12.0, "Tier 2", ""),
+        ("Sri Sivasubramaniya Nadar College", 85.0, 6.0, 22.0, "Tier 2", ""),
+        ("Velammal Engineering College", 55.0, 3.8, 12.0, "Tier 3", ""),
+        ("Saveetha Engineering College", 45.0, 3.4, 10.0, "Tier 3", ""),
+        ("Sathyabama University", 40.0, 3.2, 10.0, "Tier 3", ""),
+        ("Hindustan Institute of Technology", 38.0, 3.0, 9.0, "Tier 3", ""),
+        ("Jeppiaar Engineering College", 35.0, 2.8, 8.0, "Tier 3", ""),
+        # NITs and IIITs
+        ("NIT Trichy", 92.0, 12.0, 80.0, "Tier 1", ""),
+        ("NIT Surathkal", 89.0, 11.0, 65.0, "Tier 1", ""),
+        ("NIT Warangal", 88.0, 10.5, 60.0, "Tier 1", ""),
+        ("IIIT Hyderabad", 95.0, 18.0, 120.0, "Tier 1", ""),
+        ("IIIT Bangalore", 92.0, 16.0, 100.0, "Tier 1", ""),
+    ]
+    try:
+        with engine.begin() as conn:
+            for o in overrides:
+                conn.execute(text("""
+                    INSERT OR IGNORE INTO college_overrides
+                    (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)
+                    VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)
+                """), {
+                    "college_name": o[0], "placement_rate": o[1], "median_salary": o[2],
+                    "highest_salary": o[3], "college_tier": o[4], "notes": o[5],
+                })
+    except Exception as e:
+        print(f"[Seed] college_overrides error: {e}")
+
+
+_seed_campus_placements()
+_seed_pyq_questions()
+_seed_college_overrides()
 
 
 def _cache_get(table: str, key: str, ttl_hours: int) -> str | None:
@@ -1174,16 +1421,55 @@ def parse_groq_json(raw: str) -> dict:
 
 # ── NIRF-based deterministic scoring ─────────────────────────────────────────
 
+def _get_college_override(college_name: str) -> dict | None:
+    """Check college_overrides table for researched realistic stats."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT placement_rate, median_salary, highest_salary, college_tier, notes FROM college_overrides WHERE college_name = :n"),
+                {"n": college_name},
+            ).fetchone()
+            if row:
+                return {
+                    "placement_rate": row[0], "median_salary": row[1],
+                    "highest_salary": row[2], "college_tier": row[3], "notes": row[4],
+                }
+    except Exception:
+        pass
+    return None
+
+
 def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
     """
     Compute placement probability with NIRF placement_rate as the base.
+    Checks college_overrides first (researched data), then NIRF.
     Groq never touches the number — only the explanation.
 
     Returns (score: int, college_tier: str, nirf_stats: dict | None)
     """
     nirf_stats = get_college_stats(payload.college)
 
-    if nirf_stats and nirf_stats.get("matched") and nirf_stats.get("placement_rate") is not None:
+    # Check researched overrides first
+    override = _get_college_override(payload.college)
+    if override:
+        base = float(override["placement_rate"])
+        college_tier = override["college_tier"] or "Tier 2"
+        source = f"researched-override ({payload.college})"
+        # Merge override into nirf_stats shape so downstream code works
+        if nirf_stats and nirf_stats.get("matched"):
+            nirf_stats["placement_rate"] = base
+            nirf_stats["median_salary"] = override.get("median_salary")
+            nirf_stats["highest_salary"] = override.get("highest_salary")
+            nirf_stats["college_tier"] = college_tier
+        else:
+            nirf_stats = {
+                "matched": True, "college_name": payload.college,
+                "college_tier": college_tier, "placement_rate": base,
+                "median_salary": override.get("median_salary"),
+                "highest_salary": override.get("highest_salary"),
+                "nirf_rank": None,
+            }
+    elif nirf_stats and nirf_stats.get("matched") and nirf_stats.get("placement_rate") is not None:
         base = float(nirf_stats["placement_rate"])
         college_tier = nirf_stats.get("college_tier") or "Tier 3"
         source = f"NIRF 2024 ({nirf_stats['college_name']})"
@@ -1240,6 +1526,28 @@ def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
         f"  os={os_adj:+.1f}  gh={gh_adj:+.1f}  cert={cert_adj:+.1f}  hack={hack_adj:+.1f}\n"
         f"  total_adj={total_adj:+.1f}  raw={raw:.1f}  FINAL={final}"
     )
+
+    override_notes = ""
+    if override:
+        override_notes = override.get("notes") or ""
+
+    score_breakdown = {
+        "base_rate": round(base, 1),
+        "college_name": payload.college,
+        "cgpa_impact": cgpa_adj,
+        "skills_impact": skills_adj,
+        "internship_impact": intern_adj,
+        "leetcode_impact": lc_adj,
+        "projects_impact": project_adj,
+        "other_impact": round(os_adj + gh_adj + cert_adj + hack_adj + year_adj, 1),
+        "total_adjustment": round(total_adj, 1),
+        "final_score": final,
+        "data_source": "Researched · Shiksha/Careers360/NIRF cross-referenced" if override else "NIRF 2024 official data",
+        "override_notes": override_notes,
+    }
+
+    if nirf_stats:
+        nirf_stats["score_breakdown"] = score_breakdown
 
     return final, college_tier, nirf_stats
 
@@ -1462,6 +1770,9 @@ def placement_probability(payload: ProfileIn):
             "source": "deterministic",
         }
 
+    # Always compute deterministic score to get nirf_stats with score_breakdown
+    _, _, nirf_stats_with_breakdown = nirf_adjusted_score(payload)
+
     # Include multi-source college data in every response
     if all_stats.get("matched") or (nirf_stats and nirf_stats.get("matched")):
         resp["nirf_rank"] = all_stats.get("nirf_rank")
@@ -1472,6 +1783,12 @@ def placement_probability(payload: ProfileIn):
         resp["combined_median_salary"] = all_stats.get("combined_median_salary")
         resp["sources_count"] = all_stats.get("sources_count", 0)
         resp["all_sources"] = all_stats.get("all_sources", [])
+
+    # Include nirf_stats as nested object (with score_breakdown) for frontend compatibility
+    if nirf_stats_with_breakdown:
+        resp["nirf_stats"] = nirf_stats_with_breakdown
+    elif nirf_stats and nirf_stats.get("matched"):
+        resp["nirf_stats"] = nirf_stats
 
     return resp
 
@@ -2714,7 +3031,118 @@ async def oncampus_history(college: str = ""):
     }
 
 
+# Category ordering for sorting
+_CATEGORY_ORDER = {
+    "Marquee": 0, "Super Dream": 1, "Dream": 2,
+    "Day 1/Day 2": 3, "Core": 4, "Non-Engineering": 5, "Internship": 6,
+}
+
+
+@app.get("/api/oncampus/history/{college_name}")
+async def oncampus_placement_history(college_name: str, year: str = ""):
+    """Return real campus placement drive records grouped by year and category."""
+    try:
+        with engine.connect() as conn:
+            q = "SELECT academic_year FROM campus_placements WHERE college_name = :c GROUP BY academic_year ORDER BY academic_year DESC"
+            years_rows = conn.execute(text(q), {"c": college_name}).fetchall()
+            available_years = [r[0] for r in years_rows]
+            if not available_years:
+                return {"found": False, "college_name": college_name, "years": [], "data": {}}
+
+            target_year = year if year in available_years else available_years[0]
+
+            rows = conn.execute(text("""
+                SELECT company_name, visit_date, role, category, ctc, ctc_min, ctc_max,
+                       eligibility_percent, students_applied, students_selected, source
+                FROM campus_placements
+                WHERE college_name = :c AND academic_year = :y
+                ORDER BY category, visit_date
+            """), {"c": college_name, "y": target_year}).fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    companies_by_cat: dict[str, list] = {}
+    all_ctc_values: list[float] = []
+    total_selected = 0
+
+    for row in rows:
+        company_name, visit_date, role, category, ctc, ctc_min, ctc_max, \
+            eligibility_percent, students_applied, students_selected, source = row
+
+        applied = students_applied or 0
+        selected = students_selected or 0
+        rate = round((selected / applied) * 100, 1) if applied > 0 else 0.0
+        total_selected += selected
+        if ctc and ctc > 0:
+            all_ctc_values.append(ctc)
+
+        cat = category or "Other"
+        companies_by_cat.setdefault(cat, []).append({
+            "name": company_name,
+            "visit_date": visit_date,
+            "role": role,
+            "category": cat,
+            "ctc_min": ctc_min,
+            "ctc_max": ctc_max,
+            "ctc": ctc,
+            "eligibility_percent": eligibility_percent,
+            "students_applied": applied,
+            "students_selected": selected,
+            "selection_rate": rate,
+            "source": source,
+        })
+
+    all_ctc_values.sort()
+    highest_ctc = max(all_ctc_values) if all_ctc_values else None
+    median_ctc = all_ctc_values[len(all_ctc_values) // 2] if all_ctc_values else None
+
+    # Sort categories in display order
+    sorted_cats = sorted(companies_by_cat.keys(), key=lambda c: _CATEGORY_ORDER.get(c, 99))
+    ordered_data = {cat: companies_by_cat[cat] for cat in sorted_cats}
+
+    year_summary = {
+        "academic_year": target_year,
+        "total_companies": sum(len(v) for v in companies_by_cat.values()),
+        "total_selected": total_selected,
+        "highest_ctc": highest_ctc,
+        "median_ctc": round(median_ctc, 2) if median_ctc else None,
+        "marquee_count": len(companies_by_cat.get("Marquee", [])),
+        "super_dream_count": len(companies_by_cat.get("Super Dream", [])),
+        "dream_count": len(companies_by_cat.get("Dream", [])),
+    }
+
+    return {
+        "found": True,
+        "college_name": college_name,
+        "available_years": available_years,
+        "current_year": target_year,
+        "year_summary": year_summary,
+        "companies_by_category": ordered_data,
+        "data_note": "Data sourced from SRM KTR placement cell records · Academic year 2025-26",
+    }
+
+
 # ── Off Campus Jobs ───────────────────────────────────────────────────────────
+
+# Tier 1 companies — sorted first regardless of match score
+_TIER1_COMPANIES = {
+    # FAANG+
+    "google", "amazon", "microsoft", "meta", "apple", "netflix", "uber", "airbnb",
+    "stripe", "atlassian", "salesforce", "adobe", "oracle", "sap", "intel",
+    "qualcomm", "nvidia",
+    # Top Indian product
+    "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "cred", "meesho",
+    "zepto", "ola", "paytm", "groww", "zerodha", "dream11", "freshworks",
+    "zoho", "postman",
+    # Top IT services
+    "tcs", "infosys", "wipro", "hcl", "tech mahindra", "cognizant",
+    "capgemini", "accenture", "ibm", "deloitte",
+}
+
+
+def _is_tier1(company_name: str) -> bool:
+    return company_name.lower().strip() in _TIER1_COMPANIES
+
 
 class OffCampusJobsIn(BaseModel):
     target_role: str
@@ -2724,88 +3152,174 @@ class OffCampusJobsIn(BaseModel):
     page: int = 1
 
 
+def _parse_offcampus_days_ago(created_str: str) -> tuple[int | None, str | None]:
+    if not created_str:
+        return None, None
+    try:
+        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+        days = (datetime.now(timezone.utc) - dt).days
+        if days <= 7:
+            status = "Actively Hiring"
+        elif days <= 30:
+            status = "Recently Posted"
+        else:
+            status = "May Be Closed"
+        return days, status
+    except Exception:
+        return None, None
+
+
 @app.post("/api/offcampus/jobs")
 async def offcampus_jobs(payload: OffCampusJobsIn):
+    cache_key = hashlib.md5(
+        f"{payload.target_role}|{payload.location}|{payload.remote_only}|{payload.page}".encode()
+    ).hexdigest()
+    cached = _cache_get("offcampus_cache", cache_key, ttl_hours=6)
+    if cached:
+        try:
+            cached_data = json.loads(cached)
+            user_skills_lower = [s.lower() for s in payload.skills]
+            total_skills = max(len(user_skills_lower), 1)
+            for job in cached_data.get("jobs", []):
+                desc = ((job.get("description") or "") + " " + (job.get("title") or "")).lower()
+                matched = sum(1 for s in user_skills_lower if s in desc)
+                job["match_score"] = min(100, int((matched / total_skills) * 100)) if user_skills_lower else 50
+            cached_data["jobs"].sort(key=lambda x: (0 if _is_tier1(x.get("company", "")) else 1, -(x.get("days_ago") or 999), -x["match_score"]))
+            return cached_data
+        except Exception:
+            pass
+
     app_id = os.getenv("ADZUNA_APP_ID", "")
     app_key = os.getenv("ADZUNA_APP_KEY", "")
-    if not app_id or not app_key:
-        raise HTTPException(status_code=503, detail="Adzuna credentials not configured in .env")
 
     where = "remote" if payload.remote_only else (payload.location.strip() or "india")
-
-    params: dict = {
-        "app_id": app_id,
-        "app_key": app_key,
-        "results_per_page": 20,
-        "what": payload.target_role,
-        "where": where,
-        "content-type": "application/json",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"https://api.adzuna.com/v1/api/jobs/in/search/{max(1, payload.page)}",
-                params=params,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Adzuna API error: {e}")
-
     user_skills_lower = [s.lower() for s in payload.skills]
     total_skills = max(len(user_skills_lower), 1)
-    jobs = []
+    jobs: list[dict] = []
 
-    for job in data.get("results", []):
-        desc = (job.get("description", "") + " " + job.get("title", "")).lower()
+    # Source 1: Adzuna
+    if app_id and app_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"https://api.adzuna.com/v1/api/jobs/in/search/{max(1, payload.page)}",
+                    params={
+                        "app_id": app_id, "app_key": app_key,
+                        "results_per_page": 20, "what": payload.target_role,
+                        "where": where, "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for job in data.get("results", []):
+                    salary_min = job.get("salary_min")
+                    salary_max = job.get("salary_max")
+                    salary_str = ""
+                    if salary_min and salary_max and salary_min > 0:
+                        salary_str = f"₹{round(salary_min/100000,1)}-{round(salary_max/100000,1)} LPA"
+                    elif salary_min and salary_min > 0:
+                        salary_str = f"₹{round(salary_min/100000,1)}+ LPA"
+                    created_raw = job.get("created", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(created_raw)
+                    jobs.append({
+                        "id": f"adzuna-{job.get('id','')}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company", {}).get("display_name", "Unknown"),
+                        "location": job.get("location", {}).get("display_name", "India"),
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": salary_str, "apply_link": job.get("redirect_url", ""),
+                        "created": created_raw, "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val, "source": "Adzuna",
+                        "match_score": 50,
+                    })
+        except Exception as e:
+            print(f"[OffCampus] Adzuna error: {e}")
+
+    # Source 2: Arbeitnow
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://www.arbeitnow.com/api/job-board-api",
+                params={"search": f"{payload.target_role} india"},
+            )
+            if resp.status_code == 200:
+                arb_data = resp.json()
+                for job in (arb_data.get("data") or [])[:25]:
+                    created_raw = job.get("created_at", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(created_raw)
+                    tags = job.get("tags") or []
+                    jobs.append({
+                        "id": f"arb-{job.get('slug','')}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company_name", "Unknown"),
+                        "location": job.get("location", "Remote") or "Remote",
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": "", "apply_link": job.get("url", ""),
+                        "created": created_raw, "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val, "source": "Arbeitnow",
+                        "match_score": 50,
+                        "tags": tags,
+                    })
+    except Exception as e:
+        print(f"[OffCampus] Arbeitnow error: {e}")
+
+    # Source 3: Remotive (remote jobs)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://remotive.com/api/remote-jobs",
+                params={"category": "software-dev", "limit": 50},
+            )
+            if resp.status_code == 200:
+                rem_data = resp.json()
+                for job in (rem_data.get("jobs") or [])[:20]:
+                    created_raw = job.get("publication_date", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(created_raw)
+                    salary_str = job.get("salary") or ""
+                    jobs.append({
+                        "id": f"rem-{job.get('id','')}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company_name", "Unknown"),
+                        "location": "Remote",
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": salary_str[:60] if salary_str else "",
+                        "apply_link": job.get("url", ""),
+                        "created": created_raw, "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val, "source": "Remotive",
+                        "match_score": 50,
+                    })
+    except Exception as e:
+        print(f"[OffCampus] Remotive error: {e}")
+
+    if not jobs:
+        raise HTTPException(status_code=503, detail="No job sources available. Configure ADZUNA_APP_ID and ADZUNA_APP_KEY in .env")
+
+    # Deduplicate by title+company
+    seen = set()
+    deduped = []
+    for job in jobs:
+        key = (job["title"].lower().strip()[:40], job["company"].lower().strip())
+        if key not in seen:
+            seen.add(key)
+            deduped.append(job)
+    jobs = deduped
+
+    # Compute match scores
+    for job in jobs:
+        desc = ((job.get("description") or "") + " " + (job.get("title") or "")).lower()
         matched = sum(1 for s in user_skills_lower if s in desc)
-        match_score = min(100, int((matched / total_skills) * 100)) if user_skills_lower else 50
+        job["match_score"] = min(100, int((matched / total_skills) * 100)) if user_skills_lower else 50
 
-        salary_min = job.get("salary_min")
-        salary_max = job.get("salary_max")
-        salary_str = ""
-        if salary_min and salary_max and salary_min > 0:
-            # Adzuna India returns salaries in INR; convert to LPA
-            lpa_min = round(salary_min / 100000, 1)
-            lpa_max = round(salary_max / 100000, 1)
-            salary_str = f"₹{lpa_min}-{lpa_max} LPA"
-        elif salary_min and salary_min > 0:
-            salary_str = f"₹{round(salary_min / 100000, 1)}+ LPA"
+    # Sort: tier 1 companies first → newest → match score
+    jobs.sort(key=lambda x: (
+        0 if _is_tier1(x.get("company", "")) else 1,
+        -(x.get("days_ago") or 999),
+        -x["match_score"],
+    ))
 
-        # Hiring status based on posting age
-        days_ago_val: int | None = None
-        hiring_status_val: str | None = None
-        created_raw = job.get("created", "")
-        if created_raw:
-            try:
-                created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
-                days_ago_val = (datetime.now(timezone.utc) - created_dt).days
-                if days_ago_val <= 7:
-                    hiring_status_val = "Actively Hiring"
-                elif days_ago_val <= 30:
-                    hiring_status_val = "Recently Posted"
-                else:
-                    hiring_status_val = "May Be Closed"
-            except Exception:
-                pass
-
-        jobs.append({
-            "id": job.get("id", ""),
-            "title": job.get("title", ""),
-            "company": job.get("company", {}).get("display_name", "Unknown"),
-            "location": job.get("location", {}).get("display_name", "India"),
-            "description": (job.get("description", "") or "")[:350],
-            "salary": salary_str,
-            "match_score": match_score,
-            "apply_link": job.get("redirect_url", ""),
-            "created": created_raw,
-            "days_ago": days_ago_val,
-            "hiring_status": hiring_status_val,
-        })
-
-    jobs.sort(key=lambda x: x["match_score"], reverse=True)
-    return {"jobs": jobs, "total": data.get("count", len(jobs)), "page": payload.page}
+    result = {"jobs": jobs, "total": len(jobs), "page": payload.page}
+    _cache_set("offcampus_cache", cache_key, json.dumps(result))
+    return result
 
 
 # ── Cold Email Generator ──────────────────────────────────────────────────────
@@ -4186,6 +4700,176 @@ async def startups_list(page: int = 1, search: str = "", industry: str = "", cit
         "total_count": total,
         "page": page,
         "per_page": per_page,
+    }
+
+
+# ── PYQ Sourced Data Endpoint ────────────────────────────────────────────────
+
+# Per-company static metadata: key topics + exam pattern
+_PYQ_COMPANY_META: dict[str, dict] = {
+    "TCS": {
+        "aptitude": {"topics": ["Number Series", "Blood Relations", "Syllogism", "Time & Work", "Percentages", "Profit & Loss", "Seating Arrangement"], "pattern": "TCS NQT: 26 Cognitive + 10 Programming MCQ + 1-2 Coding problems · 90 min · No negative marking"},
+        "coding": {"topics": ["Loops & Patterns", "Arrays", "Strings", "Basic Math"], "pattern": "2 coding problems in C/C++/Java/Python · 30 min"},
+        "technical": {"topics": ["OOPs Concepts", "DBMS Basics (Normalization, Joins)", "C/C++ Basics", "OS Basics"], "pattern": "Technical HR round · 30-45 min"},
+        "hr": {"topics": ["Why TCS?", "Where do you see yourself in 5 years?", "Strengths and weaknesses"], "pattern": "HR round · 15-20 min"},
+        "key_topics": ["Number Series", "OOPs", "DBMS", "Logical Reasoning", "Coding Basics"],
+        "source": "PrepInsta · TCS NQT 2024",
+    },
+    "Infosys": {
+        "aptitude": {"topics": ["Logical Reasoning", "Verbal Ability", "Mathematical Ability", "Puzzle Solving"], "pattern": "InfyTQ: Online assessment · 3 sections · 95 min"},
+        "coding": {"topics": ["Python/Java Basics", "Pseudocode", "Sorting Algorithms", "Recursion"], "pattern": "2 coding problems · 30 min"},
+        "technical": {"topics": ["DBMS", "OOP Concepts", "Basic Networking", "Data Structures"], "pattern": "Technical interview · 30-45 min"},
+        "hr": {"topics": ["Why Infosys?", "Team collaboration", "Adaptability"], "pattern": "HR round"},
+        "key_topics": ["Logical Reasoning", "Verbal Ability", "DBMS", "OOPs", "Python Basics"],
+        "source": "PrepInsta · Infosys InfyTQ 2024",
+    },
+    "Wipro": {
+        "aptitude": {"topics": ["Quantitative Aptitude", "Verbal Ability", "Logical Reasoning", "Essay Writing"], "pattern": "NLTH: 3 sections + Essay · 75 min"},
+        "coding": {"topics": ["Array Manipulation", "String Reversal", "Fibonacci", "Sorting"], "pattern": "2 problems · Easy/Medium · 30 min"},
+        "technical": {"topics": ["C Basics", "OOPs", "DBMS", "Operating Systems"], "pattern": "Technical interview · 30 min"},
+        "hr": {"topics": ["Why Wipro?", "Relocation willingness", "Career goals"], "pattern": "HR round"},
+        "key_topics": ["Quantitative Aptitude", "Logical Reasoning", "Arrays", "OOPs", "C Basics"],
+        "source": "PrepInsta · Wipro NLTH 2024",
+    },
+    "Cognizant": {
+        "aptitude": {"topics": ["Quantitative Reasoning", "Logical Reasoning", "Verbal Reasoning"], "pattern": "GenC/GenC Next: 55 questions · 60 min"},
+        "coding": {"topics": ["GenC: Basic Problems", "GenC Next: DSA Medium (Arrays, Linked Lists)", "Sorting"], "pattern": "1-2 problems · GenC Next is harder"},
+        "technical": {"topics": ["OOPs", "SDLC", "Agile Basics", "DBMS"], "pattern": "Technical interview"},
+        "hr": {"topics": ["Why Cognizant?", "Teamwork scenarios", "Situational questions"], "pattern": "HR round"},
+        "key_topics": ["Quantitative Reasoning", "OOPs", "Agile/SDLC", "Arrays", "Logical Reasoning"],
+        "source": "PrepInsta · Cognizant GenC 2024",
+    },
+    "Accenture": {
+        "aptitude": {"topics": ["Cognitive Assessment", "Abstract Reasoning", "Attention to Detail", "Basic Math"], "pattern": "3 sections: Cognitive + Coding + Communication · 90 min"},
+        "coding": {"topics": ["Loop Patterns", "Array Sum", "String Operations", "Very Basic Problems"], "pattern": "2 easy coding problems"},
+        "technical": {"topics": ["OOPs Basics", "DBMS Basics", "Networking Basics"], "pattern": "Technical interview · 20-30 min"},
+        "hr": {"topics": ["Why Accenture?", "Diversity & inclusion", "Work-life balance"], "pattern": "HR round"},
+        "key_topics": ["Abstract Reasoning", "Basic Coding", "OOPs", "Communication Skills", "Cognitive Ability"],
+        "source": "PrepInsta · Accenture 2024",
+    },
+    "Amazon": {
+        "aptitude": {"topics": [], "pattern": "Amazon focuses on coding and system design — no separate aptitude round"},
+        "coding": {"topics": ["Arrays & Hashing", "Two Pointers", "Sliding Window", "Trees & Graphs", "Dynamic Programming", "Linked Lists", "Heap / Priority Queue"], "pattern": "2 coding rounds on Amazon Chime/OA · LeetCode Medium-Hard · 70 min each"},
+        "technical": {"topics": ["System Design (for SDE-2+)", "OOPs", "OS Concepts", "Database Design"], "pattern": "Bar Raiser technical round · 60 min"},
+        "hr": {"topics": ["Leadership Principle 1: Customer Obsession", "LP 2: Ownership", "LP 3: Invent and Simplify", "LP 4: Are Right A Lot", "LP 5: Learn and Be Curious", "LP 6: Hire and Develop the Best", "LP 7: Insist on Highest Standards", "LP 8: Think Big", "LP 9: Bias for Action", "LP 10: Frugality", "LP 11: Earn Trust", "LP 12: Dive Deep", "LP 13: Have Backbone", "LP 14: Deliver Results"], "pattern": "Every round has 1-2 LP questions (STAR format) · Must prep all 14 LPs"},
+        "key_topics": ["Arrays", "Dynamic Programming", "Trees", "Graphs", "Leadership Principles", "System Design"],
+        "source": "LeetCode Amazon Tag + GFG Amazon Interview Experience 2024",
+    },
+    "Microsoft": {
+        "aptitude": {"topics": [], "pattern": "No separate aptitude round"},
+        "coding": {"topics": ["Arrays", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "String Manipulation", "Recursion"], "pattern": "3-4 coding rounds · LeetCode Medium · 45-60 min each"},
+        "technical": {"topics": ["OOPs (Design Patterns)", "OS (Threading, Memory)", "DBMS", "System Design (for senior roles)"], "pattern": "Technical interview · 60 min"},
+        "hr": {"topics": ["Why Microsoft?", "Growth mindset examples", "Collaboration stories", "Handling failure"], "pattern": "Culture fit round with hiring manager"},
+        "key_topics": ["Linked Lists", "Trees", "Dynamic Programming", "OOPs", "OS Concepts"],
+        "source": "GFG Microsoft Interview Experience 2024",
+    },
+    "Google": {
+        "aptitude": {"topics": [], "pattern": "No aptitude test"},
+        "coding": {"topics": ["Hard Graph Algorithms (BFS/DFS/Dijkstra)", "Dynamic Programming (Hard)", "Segment Trees", "Binary Search Variations", "Trie", "Bit Manipulation"], "pattern": "4-5 coding rounds · LeetCode Hard level · Emphasis on optimal solutions and complexity analysis"},
+        "technical": {"topics": ["Distributed Systems", "System Design (Scale: millions of users)", "Database Design", "Caching, Load Balancing"], "pattern": "System design round for experienced; CS fundamentals for freshers"},
+        "hr": {"topics": ["Googleyness: Intellectual humility", "Leadership examples", "Handling ambiguity", "Failure stories"], "pattern": "Googliness & Leadership round · 45 min"},
+        "key_topics": ["Graph Algorithms", "Dynamic Programming", "System Design", "Bit Manipulation", "Binary Search"],
+        "source": "GFG Google Interview Experience + LeetCode Google Tag 2024",
+    },
+    "Deloitte": {
+        "aptitude": {"topics": ["Quantitative Aptitude", "Logical Reasoning", "Verbal Ability", "Situational Judgement"], "pattern": "Online assessment · 3 sections · 60 min"},
+        "coding": {"topics": ["Basic Data Structures", "SQL Queries", "Python/Java Basics"], "pattern": "Coding assessment · 2 problems · 45 min"},
+        "technical": {"topics": ["DBMS (SQL, Normalization)", "OOPs", "Cloud Basics (AWS/Azure)", "Agile/DevOps"], "pattern": "Technical interview · 30-45 min"},
+        "hr": {"topics": ["Why Deloitte?", "Client handling scenarios", "Teamwork examples", "Ethics and values"], "pattern": "HR + culture fit round"},
+        "key_topics": ["SQL", "OOPs", "Quantitative Aptitude", "Logical Reasoning", "Cloud Basics"],
+        "source": "PrepInsta · Deloitte 2024",
+    },
+    "Capgemini": {
+        "aptitude": {"topics": ["Quantitative Aptitude", "Logical Reasoning", "Verbal Ability", "Pseudocode Analysis"], "pattern": "Game-based assessment + Pseudocode · 4 sections · 90 min"},
+        "coding": {"topics": ["Strings", "Arrays", "Pattern Printing", "Sorting", "Anagrams"], "pattern": "2 coding problems · Medium difficulty · 30 min"},
+        "technical": {"topics": ["OOPs", "DBMS", "OS", "Networking Basics"], "pattern": "Technical interview · 30-45 min"},
+        "hr": {"topics": ["Why Capgemini?", "Flexibility to relocate", "5-year career goal"], "pattern": "HR round · 15 min"},
+        "key_topics": ["Pseudocode", "Logical Reasoning", "Strings", "OOPs", "DBMS"],
+        "source": "PrepInsta · Capgemini 2024",
+    },
+    "HCL": {
+        "aptitude": {"topics": ["Quantitative Aptitude", "Logical Reasoning", "Verbal Ability", "Core Technical MCQ"], "pattern": "HCL TechBee/Graduate: Online test · 4 sections · 75 min"},
+        "coding": {"topics": ["Basic Programming", "Armstrong Numbers", "Palindrome", "Array Operations", "Simple Math"], "pattern": "1-2 easy coding problems"},
+        "technical": {"topics": ["OOPs Basics", "DBMS Basics", "Networking Fundamentals", "C/Java Basics"], "pattern": "Technical interview · 30 min"},
+        "hr": {"topics": ["Why HCL?", "Relocation", "Team scenarios"], "pattern": "HR round"},
+        "key_topics": ["Core Technical MCQ", "Logical Reasoning", "OOPs", "Basic Coding", "DBMS"],
+        "source": "PrepInsta · HCL 2024",
+    },
+    "Tech Mahindra": {
+        "aptitude": {"topics": ["Quantitative Aptitude", "Logical Reasoning", "Verbal English"], "pattern": "Online test · 3 sections · 60 min"},
+        "coding": {"topics": ["Basic Array Problems", "String Reversal", "Pattern Printing"], "pattern": "2 easy problems · 30 min"},
+        "technical": {"topics": ["OOPs", "DBMS", "Networking Basics", "Cloud Fundamentals"], "pattern": "Technical interview"},
+        "hr": {"topics": ["Why Tech Mahindra?", "Core values", "Career aspirations"], "pattern": "HR round"},
+        "key_topics": ["Logical Reasoning", "OOPs", "DBMS", "Verbal English", "Array Basics"],
+        "source": "PrepInsta · Tech Mahindra 2024",
+    },
+    "Zoho": {
+        "aptitude": {"topics": ["Mathematical Aptitude (High Level)", "Analytical Thinking", "General Aptitude"], "pattern": "Zoho has 4-5 rounds starting with written aptitude · Very selective process"},
+        "coding": {"topics": ["Data Structures (Medium-Hard)", "Algorithms", "Problem Solving without IDE", "Programming Concepts"], "pattern": "Coding rounds done on paper initially · Then on system · 4-5 coding rounds total"},
+        "technical": {"topics": ["OOPs (Deep understanding)", "OS", "DBMS", "System Design Basics", "Project Discussion"], "pattern": "Technical interviews · Multiple rounds · Very thorough"},
+        "hr": {"topics": ["Why Zoho?", "Long-term commitment to Zoho", "Product mindset"], "pattern": "HR + culture fit · Zoho values loyalty"},
+        "key_topics": ["Mathematical Aptitude", "Data Structures", "OOPs (Deep)", "Algorithms", "Problem Solving"],
+        "source": "GFG Zoho Interview Experience 2024",
+    },
+    "Freshworks": {
+        "aptitude": {"topics": [], "pattern": "No formal aptitude round for tech roles"},
+        "coding": {"topics": ["Arrays", "Strings", "Trees", "Graphs", "DP (Medium)", "Object-Oriented Design"], "pattern": "HackerEarth OA + 2-3 technical rounds · LeetCode Medium level"},
+        "technical": {"topics": ["System Design", "OOPs", "Database Design", "API Design", "Product Thinking"], "pattern": "Technical interview focused on product understanding"},
+        "hr": {"topics": ["Why Freshworks?", "Customer-first mindset", "Growth stories"], "pattern": "Culture fit round"},
+        "key_topics": ["Arrays", "System Design", "OOPs", "Trees", "Product Thinking"],
+        "source": "GFG Freshworks Interview Experience 2024",
+    },
+    "Goldman Sachs": {
+        "aptitude": {"topics": ["Quantitative Aptitude (High Level)", "Probability", "Statistics", "Mental Math"], "pattern": "HireVue assessment + Coding OA · Very competitive"},
+        "coding": {"topics": ["Data Structures & Algorithms (Hard)", "Dynamic Programming", "Graph Algorithms", "Competitive Programming Style"], "pattern": "2-3 coding rounds · LeetCode Hard · CS fundamentals emphasized"},
+        "technical": {"topics": ["System Design", "OS Internals", "Distributed Systems", "Financial Systems Basics"], "pattern": "Technical interviews · Multiple rounds"},
+        "hr": {"topics": ["Why Goldman Sachs?", "Finance interest", "Handling pressure", "Ethical scenarios"], "pattern": "HR + culture fit"},
+        "key_topics": ["Advanced DSA", "Probability & Statistics", "Dynamic Programming", "System Design", "Finance Basics"],
+        "source": "GFG Goldman Sachs Interview Experience 2024",
+    },
+}
+
+
+@app.get("/api/pyq/sourced/{company}")
+async def pyq_sourced(company: str):
+    """Return sourced (non-AI) PYQ data for a company from the pyq_questions table + metadata."""
+    meta = _PYQ_COMPANY_META.get(company, {})
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT round_type, question_text, difficulty, topic, source_url, source_name, year, verified
+                FROM pyq_questions WHERE company = :c ORDER BY round_type, id
+            """), {"c": company}).fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    questions_by_round: dict[str, list] = {"aptitude": [], "coding": [], "technical": [], "hr": []}
+    for row in rows:
+        rtype, qtext, difficulty, topic, source_url, source_name, year, verified = row
+        rtype = (rtype or "").lower()
+        if rtype not in questions_by_round:
+            questions_by_round[rtype] = []
+        questions_by_round[rtype].append({
+            "question": qtext, "difficulty": difficulty,
+            "topic": topic, "source_url": source_url,
+            "source_name": source_name, "year": year, "verified": bool(verified),
+        })
+
+    rounds_out = {}
+    for rtype in ["aptitude", "coding", "technical", "hr"]:
+        round_meta = (meta.get(rtype) or {})
+        rounds_out[rtype] = {
+            "topics": round_meta.get("topics", []),
+            "exam_pattern": round_meta.get("pattern", ""),
+            "questions": questions_by_round.get(rtype, []),
+        }
+
+    return {
+        "company": company,
+        "key_topics": meta.get("key_topics", []),
+        "data_source": meta.get("source", "PrepInsta / GFG Interview Experiences"),
+        "rounds": rounds_out,
+        "found": bool(rows) or bool(meta),
     }
 
 

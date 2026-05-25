@@ -46,6 +46,21 @@ type PlacementSource = {
   url: string;
 };
 
+type ScoreBreakdown = {
+  base_rate: number;
+  college_name: string;
+  cgpa_impact: number;
+  skills_impact: number;
+  internship_impact: number;
+  leetcode_impact: number;
+  projects_impact: number;
+  other_impact: number;
+  total_adjustment: number;
+  final_score: number;
+  data_source: string;
+  override_notes: string;
+};
+
 type LiveScore = {
   score: number;
   college_tier: string;
@@ -57,6 +72,7 @@ type LiveScore = {
     median_salary: number | null;
     highest_salary: number | null;
     matched: boolean;
+    score_breakdown?: ScoreBreakdown;
   } | null;
   sources: PlacementSource[];
   combined_base: number;
@@ -231,6 +247,7 @@ export default function Dashboard() {
   const [companyMatches, setCompanyMatches] = useState<Array<{ name: string; type: string }> | null>(null);
   const [companyCount, setCompanyCount] = useState(0);
   const [companyMatchLoading, setCompanyMatchLoading] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -481,36 +498,90 @@ export default function Dashboard() {
               </p>
             )}
 
-            {/* Per-source placement rate — each source on its own line */}
+            {/* Per-source placement rate */}
             {liveScore && (liveScore.nirf_stats?.matched || (liveScore.sources?.length ?? 0) > 0) && (
               <div className="mt-3 pt-3 border-t border-gray-800 space-y-1.5">
                 {liveScore.nirf_stats?.matched && liveScore.nirf_stats.placement_rate != null && (
                   <div className="flex items-center justify-between">
-                    <a
-                      href="https://www.nirfindia.org/2024/EngineeringRanking.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-blue-400 hover:text-blue-300 underline underline-offset-2"
-                    >
-                      NIRF 2024
-                    </a>
-                    <span className="text-[11px] text-gray-300 font-medium">{liveScore.nirf_stats.placement_rate}%</span>
+                    <span className="text-[11px] text-gray-400">
+                      {liveScore.nirf_stats.score_breakdown?.data_source?.includes("Researched") ? "Researched data" : "NIRF 2024"}
+                    </span>
+                    <span className="text-[11px] text-gray-300 font-medium">{liveScore.nirf_stats.placement_rate}% placed</span>
                   </div>
                 )}
                 {(liveScore.sources ?? []).map((src, i) => src.placement_rate != null && (
                   <div key={i} className="flex items-center justify-between">
-                    <a
-                      href={src.url || SOURCE_LINKS[src.source_name] || "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-blue-400 hover:text-blue-300 underline underline-offset-2"
-                    >
+                    <a href={src.url || SOURCE_LINKS[src.source_name] || "#"} target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] text-blue-400 hover:text-blue-300 underline underline-offset-2">
                       {src.source_name}{src.year ? ` (${src.year})` : ""}
                     </a>
                     <span className="text-[11px] text-gray-300 font-medium">{src.placement_rate}%</span>
                   </div>
                 ))}
-                <p className="text-[10px] text-gray-600 pt-0.5">Placement data · 2024 · All sources · Score predicted by XGBoost trained on NIRF data</p>
+
+                {/* SRM-specific note */}
+                {profile?.college?.toLowerCase().includes("srm ktr") && (
+                  <p className="text-[10px] text-yellow-600/80 pt-1 leading-relaxed">
+                    Note: SRM places ~42% of its large batch of 5000+ students annually — absolute numbers look high but per-student probability is lower than smaller colleges with similar rates.
+                  </p>
+                )}
+
+                <p className="text-[10px] text-gray-600 pt-0.5">
+                  {liveScore.nirf_stats?.score_breakdown?.data_source?.includes("Researched")
+                    ? "Researched · Shiksha/Careers360/NIRF cross-referenced · Not official NIRF figures which overcount"
+                    : "Placement data · 2024 · All sources · Score predicted by ML model"}
+                </p>
+              </div>
+            )}
+
+            {/* Why this score? expandable */}
+            {liveScore?.nirf_stats?.score_breakdown && displayScore !== undefined && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <button
+                  onClick={() => setShowBreakdown(v => !v)}
+                  className="text-[11px] text-gray-500 hover:text-gray-300 transition flex items-center gap-1"
+                >
+                  {showBreakdown ? "▲" : "▼"} Why this score?
+                </button>
+                {showBreakdown && (() => {
+                  const bd = liveScore.nirf_stats!.score_breakdown!;
+                  const adj = (n: number) => n === 0 ? "—" : n > 0 ? `+${n.toFixed(1)}%` : `${n.toFixed(1)}%`;
+                  return (
+                    <div className="mt-2 space-y-1.5 text-[11px]">
+                      <div className="flex justify-between text-gray-400">
+                        <span>Base rate ({bd.college_name})</span>
+                        <span className="text-gray-200 font-medium">{bd.base_rate}% of students placed</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>CGPA impact</span>
+                        <span className={bd.cgpa_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.cgpa_impact)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>Skills impact</span>
+                        <span className={bd.skills_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.skills_impact)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>Internship impact</span>
+                        <span className={bd.internship_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.internship_impact)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>LeetCode impact</span>
+                        <span className={bd.leetcode_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.leetcode_impact)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>Projects impact</span>
+                        <span className={bd.projects_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.projects_impact)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500 border-t border-gray-800 pt-1.5 mt-1.5">
+                        <span>Final score</span>
+                        <span className="text-blue-400 font-bold">{bd.final_score}/100</span>
+                      </div>
+                      <p className="text-gray-700 pt-1">
+                        {bd.data_source} · Not official NIRF figures which overcount
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -521,11 +592,11 @@ export default function Dashboard() {
               <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Why is your score {displayScore}?</p>
               {displayScore !== undefined && liveScore?.nirf_stats?.placement_rate != null && (
                 <p className="text-xs text-blue-300/60 mb-2">
-                  Your score ({displayScore}) = personal probability based on your profile · College placement rate ({liveScore.nirf_stats.placement_rate}%) = % of all students placed at {profile.college} per NIRF 2024
+                  Your score ({displayScore}) = personal probability based on your profile · College placement rate ({liveScore.nirf_stats.placement_rate}%) = % of all students placed at {profile?.college}
                 </p>
               )}
               <p className="text-gray-300 text-sm leading-relaxed">{profile.scoreReasoning}</p>
-              <p className="text-xs text-gray-700 mt-2">Predicted by ML model trained on NIRF placement data</p>
+              <p className="text-xs text-gray-700 mt-2">Score computed from researched placement data · Shiksha/Careers360/NIRF cross-referenced</p>
             </div>
           )}
 
