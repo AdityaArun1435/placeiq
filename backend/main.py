@@ -220,6 +220,16 @@ def _migrate():
             )
         """))
 
+    # college_recruiter_cache — scraped company lists per college (30-day TTL)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS college_recruiter_cache (
+                college_name TEXT PRIMARY KEY,
+                companies_json TEXT NOT NULL,
+                scraped_at TEXT NOT NULL
+            )
+        """))
+
 
 _migrate()
 
@@ -1439,11 +1449,51 @@ def _get_college_override(college_name: str) -> dict | None:
     return None
 
 
-def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
+def groq_skill_score(skills: list, target_role: str, college_tier: str) -> tuple[float, str]:
+    """Ask Groq to rate the skill portfolio relevance for a specific role. Returns (score 0-25, one-sentence reasoning)."""
+    if _groq is None or not skills:
+        return round(min(8.0, len(skills) * 1.0), 1), ""
+    skills_list = ", ".join(skills)
+    prompt = (
+        f"You are a brutally honest Indian placement advisor. The user is targeting {target_role} "
+        f"at a {college_tier} college. Their skills are: {skills_list}.\n\n"
+        "Rate the overall skill portfolio for THIS specific role on a scale of 0 to 25 "
+        "(this will be added as a bonus % to their placement score). Consider:\n"
+        "- How relevant each skill is to the role specifically\n"
+        "- How rare/niche vs common the skills are\n"
+        "- Whether the combination of skills makes a credible profile\n"
+        "- Indian job market demand for these skills in 2025\n"
+        "- Quantity vs quality tradeoff (10 weak skills < 3 strong relevant ones)\n\n"
+        "Examples to calibrate your rating:\n"
+        "- DSA + System Design + React for SWE role = 20-22\n"
+        "- Python + ML + PyTorch for Data Science role = 18-20\n"
+        "- RPA + UiPath + Automation for automation role = 15-17 (niche but relevant)\n"
+        "- RPA for SWE role = 5-7 (not relevant)\n"
+        "- C + C++ + Java (basic) for SWE = 8-10 (common, not impressive)\n"
+        "- CUDA + OpenGL + Computer Vision for ML role = 22-24 (rare and valuable)\n"
+        "- MS Office + Canva + Photoshop for SWE = 2-3 (irrelevant)\n\n"
+        'Return ONLY a JSON object: {"score": <number 0-25>, "reasoning": "<one sentence why>"}'
+    )
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.3,
+        )
+        result = parse_groq_json(completion.choices[0].message.content or "")
+        raw = float(result.get("score", 8))
+        return round(max(0.0, min(25.0, raw)), 1), str(result.get("reasoning", ""))
+    except Exception as exc:
+        print(f"[groq_skill_score] Failed: {exc}")
+        return round(min(8.0, len(skills) * 1.0), 1), ""
+
+
+def nirf_adjusted_score(payload: ProfileIn, skill_bonus: float | None = None, skill_reasoning: str = "") -> tuple[int, str, dict | None]:
     """
     Compute placement probability with NIRF placement_rate as the base.
     Checks college_overrides first (researched data), then NIRF.
-    Groq never touches the number — only the explanation.
+    skill_bonus (0-25) replaces the hardcoded skill count formula when provided.
 
     Returns (score: int, college_tier: str, nirf_stats: dict | None)
     """
@@ -1485,9 +1535,9 @@ def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
     tier_cgpa_avg = {"Tier 1": 8.0, "Tier 2": 7.5, "Tier 3": 6.5, "Tier 4": 6.0}.get(college_tier, 7.0)
     cgpa_adj = round(max(-15.0, min(10.0, (payload.cgpa - tier_cgpa_avg) * 3.0)), 1)
 
-    # Skills count (generous but bounded)
+    # Skills: AI-rated portfolio bonus (0-25) or simple count fallback (0-8)
     skills_count = len(payload.skills) if payload.skills else 0
-    skills_adj = round(min(8.0, skills_count * 1.0), 1)
+    skills_adj = round(min(25.0, skill_bonus), 1) if skill_bonus is not None else round(min(8.0, skills_count * 1.0), 1)
 
     # Projects (no projects is a big penalty)
     project_adj = {"0": -8.0, "1-2": 0.0, "3-5": 4.0, "5+": 7.0}.get(str(payload.projectsCount), 0.0)
@@ -1536,6 +1586,7 @@ def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
         "college_name": payload.college,
         "cgpa_impact": cgpa_adj,
         "skills_impact": skills_adj,
+        "skill_reasoning": skill_reasoning,
         "internship_impact": intern_adj,
         "leetcode_impact": lc_adj,
         "projects_impact": project_adj,
@@ -1555,9 +1606,11 @@ def nirf_adjusted_score(payload: ProfileIn) -> tuple[int, str, dict | None]:
 def groq_score(payload: ProfileIn) -> tuple[int, str, str]:
     """
     Score is computed deterministically by nirf_adjusted_score().
-    Groq is called only to write the explanation text — it cannot change the number.
+    Groq rates the skill portfolio (0-25 bonus) and writes the explanation text.
     """
-    score, college_tier, nirf_stats = nirf_adjusted_score(payload)
+    college_tier_hint = get_college_tier(payload.college)
+    skill_bonus, _skill_reasoning = groq_skill_score(payload.skills or [], payload.targetRole, college_tier_hint)
+    score, college_tier, nirf_stats = nirf_adjusted_score(payload, skill_bonus=skill_bonus, skill_reasoning=_skill_reasoning)
 
     if _groq is None:
         return score, "", college_tier
@@ -1707,7 +1760,7 @@ def get_profile(email: str, db: Session = Depends(get_db)):
 def placement_probability(payload: ProfileIn):
     """
     Returns placement probability score using XGBoost ML model.
-    No Groq — score is always from ML or deterministic fallback.
+    Uses Groq to score skill relevance (0-25 bonus) for the deterministic component.
     Always includes NIRF 2024 college stats when available.
     """
     # Fetch multi-source college data
@@ -1718,6 +1771,12 @@ def placement_probability(payload: ProfileIn):
         f"[/placement/probability] college={payload.college!r} | "
         f"combined_rate={_base_rate}% | tier={all_stats.get('college_tier')} | "
         f"sources={all_stats.get('sources_count')}"
+    )
+
+    # AI skill scoring — used by all deterministic calculations in this request
+    college_tier_hint = get_college_tier(payload.college)
+    skill_bonus, skill_reasoning = groq_skill_score(
+        payload.skills or [], payload.targetRole, college_tier_hint
     )
 
     try:
@@ -1732,6 +1791,7 @@ def placement_probability(payload: ProfileIn):
             "college_tier": result["tier"],
             "breakdown": result.get("breakdown", {}),
             "source": "ml",
+            "skill_reasoning": skill_reasoning,
         }
     except FileNotFoundError:
         # Train-on-demand if model not yet built
@@ -1748,30 +1808,33 @@ def placement_probability(payload: ProfileIn):
                 "college_tier": result["tier"],
                 "breakdown": result.get("breakdown", {}),
                 "source": "ml",
+                "skill_reasoning": skill_reasoning,
             }
         except Exception as exc2:
             print(f"[placement/probability] Auto-train failed: {exc2} — using deterministic fallback")
-            score, college_tier, _ = nirf_adjusted_score(payload)
+            score, college_tier, _ = nirf_adjusted_score(payload, skill_bonus=skill_bonus, skill_reasoning=skill_reasoning)
             resp = {
                 "score": score,
                 "reasoning": "Computed deterministically from NIRF placement data and profile attributes.",
                 "college_tier": college_tier,
                 "breakdown": {},
                 "source": "deterministic",
+                "skill_reasoning": skill_reasoning,
             }
     except Exception as exc:
         print(f"[placement/probability] ML error: {exc} — using deterministic fallback")
-        score, college_tier, _ = nirf_adjusted_score(payload)
+        score, college_tier, _ = nirf_adjusted_score(payload, skill_bonus=skill_bonus, skill_reasoning=skill_reasoning)
         resp = {
             "score": score,
             "reasoning": "Computed deterministically from NIRF placement data and profile attributes.",
             "college_tier": college_tier,
             "breakdown": {},
             "source": "deterministic",
+            "skill_reasoning": skill_reasoning,
         }
 
     # Always compute deterministic score to get nirf_stats with score_breakdown
-    _, _, nirf_stats_with_breakdown = nirf_adjusted_score(payload)
+    _, _, nirf_stats_with_breakdown = nirf_adjusted_score(payload, skill_bonus=skill_bonus, skill_reasoning=skill_reasoning)
 
     # Include multi-source college data in every response
     if all_stats.get("matched") or (nirf_stats and nirf_stats.get("matched")):
@@ -2938,6 +3001,36 @@ async def oncampus_predict(payload: OnCampusIn):
     else:
         tier_company_rule = "Tier 3 and 4: TCS, Infosys, Wipro, HCL, Tech Mahindra, Mphasis, Hexaware, Capgemini."
 
+    # Scrape real recruiter data for this college
+    scraped_context = ""
+    scrape_used = False
+    try:
+        from scrapers.college_recruiters_scraper import get_college_recruiters
+        recruiter_items = get_college_recruiters(payload.college)
+        if recruiter_items:
+            company_names = [item["company"] for item in recruiter_items]
+            sources_used = list({item["source"] for item in recruiter_items})
+            scraped_context = (
+                f"\nSCRAPED RECRUITER DATA — These companies have ACTUALLY visited {payload.college} "
+                f"for placements based on data from {', '.join(sources_used)}:\n"
+                f"{', '.join(company_names)}\n\n"
+                f"Using this as your base, predict which are likely to visit this season for a "
+                f"{payload.branch} student with {payload.cgpa} CGPA. "
+                f"Also suggest 3-5 new companies hiring from this tier in 2025-26 that are NOT in this list. "
+                f"Be branch-specific: Mechanical/EE/Civil students should NOT get pure software companies "
+                f"unless the company has a specific hardware/manufacturing/core role.\n"
+            )
+            scrape_used = True
+            print(f"[DEBUG] Scraped {len(company_names)} recruiters for {payload.college}")
+    except Exception as _scrape_err:
+        print(f"[DEBUG] Recruiter scrape failed: {_scrape_err}")
+
+    if not scrape_used:
+        scraped_context = (
+            "\nNOTE: Live recruiter scrape returned no data. "
+            "Use tier-based prediction with known campus visit patterns.\n"
+        )
+
     prompt = (
         "You are a placement prediction expert with deep knowledge of Indian campus recruitment in 2026. "
         "Based on this student's college profile, predict which companies are likely to visit their campus "
@@ -2950,6 +3043,7 @@ async def oncampus_predict(payload: OnCampusIn):
         f"- Skills: {skills_str}\n"
         f"- CGPA: {payload.cgpa}/10\n"
         f"{nirf_context}"
+        f"{scraped_context}"
         "Return a JSON object with this exact structure:\n"
         "{\n"
         '  "companies": [\n'
@@ -2974,7 +3068,8 @@ async def oncampus_predict(payload: OnCampusIn):
         '}\n\n'
         "Rules:\n"
         f"- {tier_company_rule}\n"
-        "- Return exactly 8-10 companies relevant to their tier.\n"
+        "- Prioritise companies from the SCRAPED RECRUITER DATA above all else.\n"
+        "- Return exactly 8-10 companies relevant to their tier and branch.\n"
         "- probability reflects actual historical campus visit frequency for that college tier, weighted by the NIRF placement_rate if provided.\n"
         "- student_eligible is strictly CGPA >= cgpa_cutoff (compute accurately).\n"
         "- sample_questions must be REAL questions specific to each company's known hiring pattern.\n"
