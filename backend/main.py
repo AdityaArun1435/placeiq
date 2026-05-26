@@ -230,6 +230,36 @@ def _migrate():
             )
         """))
 
+    # seed_config table for versioned one-time seeding
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS seed_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """))
+
+    # Add MCQ columns to pyq_questions if missing
+    if "pyq_questions" in inspector.get_table_names():
+        pyq_cols = {col["name"] for col in inspector.get_columns("pyq_questions")}
+        new_pyq_cols = {
+            "options": "TEXT DEFAULT '[]'",
+            "correct_answer": "TEXT DEFAULT ''",
+            "explanation": "TEXT DEFAULT ''",
+            "answer_guidance": "TEXT DEFAULT ''",
+        }
+        with engine.begin() as conn:
+            for col, dfn in new_pyq_cols.items():
+                if col not in pyq_cols:
+                    conn.execute(text(f"ALTER TABLE pyq_questions ADD COLUMN {col} {dfn}"))
+
+    # Add internships JSON column to user_profiles
+    if "user_profiles" in inspector.get_table_names():
+        up_cols = {col["name"] for col in inspector.get_columns("user_profiles")}
+        if "internships" not in up_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE user_profiles ADD COLUMN internships TEXT DEFAULT '[]'"))
+
 
 _migrate()
 
@@ -288,69 +318,852 @@ def _seed_campus_placements():
 
 # ── Seed: PYQ Questions (sourced data) ───────────────────────────────────────
 
+_TCS = ("TCS", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1)
+_TCS_C = ("TCS", "https://prepinsta.com/tcs/tcs-coding-questions/", "PrepInsta · TCS NQT Coding", 2024, 1)
+
+def _get_tcs_questions():
+    c, u, s, y, v = _TCS
+    cc, uc, sc, yc, vc = _TCS_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "Find the next number in series: 2, 6, 12, 20, 30, ?", "Easy", "Number Series", u, s, y, v),
+        (c, "aptitude", "A train travels 360 km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "If A is the brother of B, B is the sister of C, and C is the father of D, how is A related to D?", "Medium", "Blood Relations", u, s, y, v),
+        (c, "aptitude", "All roses are flowers. Some flowers fade quickly. What can be concluded? (A) Some roses fade quickly (B) No roses fade quickly (C) Either A or B (D) Cannot be determined", "Medium", "Syllogism", u, s, y, v),
+        (c, "aptitude", "A man can do a job in 15 days. His son can do the same job in 20 days. How many days will they take working together?", "Easy", "Time & Work", u, s, y, v),
+        (c, "aptitude", "What is the compound interest on Rs 8000 at 10% per annum for 2 years?", "Medium", "Interest", u, s, y, v),
+        (c, "aptitude", "A cistern can be filled by two pipes in 12 min and 15 min respectively. Both are opened together, but after 3 min the first pipe is closed. How long to fill the cistern?", "Hard", "Pipes & Cisterns", u, s, y, v),
+        (c, "aptitude", "If 3 men or 6 boys can do a piece of work in 10 days, in how many days can 6 men and 8 boys do it?", "Medium", "Time & Work", u, s, y, v),
+        (c, "aptitude", "A boat travels 36 km upstream in 9 hrs and 36 km downstream in 6 hrs. Find the speed of the stream.", "Medium", "Boats & Streams", u, s, y, v),
+        (c, "aptitude", "Directions: A is south of B, C is east of B. In which direction is A with respect to C?", "Easy", "Directions", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to print all prime numbers between 1 and N.", "Easy", "Basic Programming", uc, sc, yc, vc),
+        (cc, "coding", "Reverse a given string without using built-in reverse functions.", "Easy", "Strings", uc, sc, yc, vc),
+        (cc, "coding", "Find the GCD of two numbers using Euclidean algorithm.", "Easy", "Math", uc, sc, yc, vc),
+        (cc, "coding", "Count the number of vowels and consonants in a given string.", "Easy", "Strings", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to find the missing number in an array of 1 to N.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Implement binary search on a sorted array.", "Easy", "Searching", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to rotate an array by K positions.", "Medium", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Print all permutations of a given string.", "Medium", "Recursion / Strings", uc, sc, yc, vc),
+        (cc, "coding", "Find the longest common prefix among an array of strings.", "Easy", "Strings", uc, sc, yc, vc),
+        (cc, "coding", "Given a matrix, print it in spiral order.", "Medium", "Arrays / Matrix", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is the difference between a class and an object in OOP?", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What is normalization in DBMS? Explain 1NF, 2NF, 3NF.", "Medium", "DBMS", u, s, y, v),
+        (c, "technical", "What is the difference between stack and heap memory?", "Easy", "C/C++ Basics", u, s, y, v),
+        (c, "technical", "Explain the concept of virtual functions in C++.", "Medium", "OOPs / C++", u, s, y, v),
+        (c, "technical", "What is a deadlock? How can it be prevented?", "Medium", "OS / Concurrency", u, s, y, v),
+        (c, "technical", "What is the difference between TCP and UDP?", "Easy", "Computer Networks", u, s, y, v),
+        (c, "technical", "Explain the OSI model and its seven layers.", "Medium", "Computer Networks", u, s, y, v),
+        (c, "technical", "What is a pointer? How is it different from a reference?", "Easy", "C/C++ Basics", u, s, y, v),
+        (c, "technical", "What are indexes in a database? Why are they used?", "Easy", "DBMS", u, s, y, v),
+        (c, "technical", "What is the difference between GET and POST HTTP methods?", "Easy", "Web / Networking", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why do you want to join TCS?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 5 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "What are your strengths and weaknesses?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Describe a situation where you demonstrated leadership.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you handle pressure and tight deadlines?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "Are you comfortable with relocation and night shifts?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "Tell me about a time you failed. What did you learn?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What do you know about TCS's business and services?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "How do you prioritize tasks when you have multiple deadlines?", "Easy", "Time Management", u, s, y, v),
+        (c, "hr", "Describe a time you worked in a team. What was your role?", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "What motivates you to perform your best at work?", "Easy", "Motivation", u, s, y, v),
+    ]
+
+
+_INFY = ("Infosys", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1)
+_INFY_C = ("Infosys", "https://prepinsta.com/infosys/infosys-coding-questions/", "PrepInsta · Infosys Coding", 2024, 1)
+
+def _get_infosys_questions():
+    c, u, s, y, v = _INFY
+    cc, uc, sc, yc, vc = _INFY_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A train travels 360 km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "Find the odd one out: 2, 4, 8, 16, 31, 64", "Easy", "Number Series", u, s, y, v),
+        (c, "aptitude", "Six people sit in a row: A, B, C, D, E, F. A is to the left of B. C is between D and E. Where is F?", "Hard", "Seating Arrangement", u, s, y, v),
+        (c, "aptitude", "A sum of money doubles itself in 8 years at simple interest. Find the rate of interest.", "Medium", "Interest", u, s, y, v),
+        (c, "aptitude", "In a class of 40 students, 25 play cricket and 20 play football. 10 play both. How many play neither?", "Medium", "Set Theory", u, s, y, v),
+        (c, "aptitude", "If the price of a commodity increases by 25%, by what percentage should consumption be reduced to keep expenditure unchanged?", "Medium", "Percentages", u, s, y, v),
+        (c, "aptitude", "A and B together can complete a job in 12 days. B alone can do it in 20 days. How many days does A alone take?", "Easy", "Time & Work", u, s, y, v),
+        (c, "aptitude", "Two dice are thrown simultaneously. Find the probability of getting a sum of 7.", "Medium", "Probability", u, s, y, v),
+        (c, "aptitude", "A shopkeeper buys an item for Rs 400 and sells it for Rs 500. What is the profit percentage?", "Easy", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "Find the next term: 3, 9, 27, 81, ?", "Easy", "Number Series", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to find the factorial of a number using recursion.", "Easy", "Recursion", uc, sc, yc, vc),
+        (cc, "coding", "Given an array, find the second largest element.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Check if two strings are anagrams of each other.", "Easy", "Strings", uc, sc, yc, vc),
+        (cc, "coding", "Find the sum of digits of a number until it becomes a single digit.", "Easy", "Math", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to find all pairs in an array that sum to a given value.", "Medium", "Arrays / Hashing", uc, sc, yc, vc),
+        (cc, "coding", "Implement a stack using queues.", "Medium", "Stack / Queue", uc, sc, yc, vc),
+        (cc, "coding", "Find the length of the longest increasing subsequence in an array.", "Hard", "Dynamic Programming", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to detect a cycle in a linked list.", "Medium", "Linked Lists", uc, sc, yc, vc),
+        (cc, "coding", "Given a sorted array, find the first and last positions of a given element.", "Medium", "Binary Search", uc, sc, yc, vc),
+        (cc, "coding", "Count words in a sentence and find the most frequent word.", "Easy", "Strings / Hashing", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is polymorphism? Give examples of compile-time and runtime polymorphism.", "Medium", "OOPs", u, s, y, v),
+        (c, "technical", "What is a foreign key? How is it different from a primary key?", "Easy", "DBMS", u, s, y, v),
+        (c, "technical", "What is the difference between abstract class and interface?", "Medium", "OOPs", u, s, y, v),
+        (c, "technical", "Explain the concept of encapsulation with a real-world example.", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What are joins in SQL? Explain INNER, LEFT, RIGHT, and FULL joins.", "Medium", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "What is the difference between a process and a thread?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "What is paging in operating systems?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "What is the use of the 'static' keyword in Java/C++?", "Easy", "Programming Languages", u, s, y, v),
+        (c, "technical", "What is DNS and how does it work?", "Easy", "Computer Networks", u, s, y, v),
+        (c, "technical", "What is the difference between compiled and interpreted languages?", "Easy", "Programming Concepts", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Infosys?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What are your short-term and long-term goals?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "Describe a challenging project you worked on.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you handle constructive criticism?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "Are you open to working in any technology stack assigned to you?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "What is your greatest achievement so far?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Tell me about a time you had a conflict with a teammate.", "Medium", "Conflict Resolution", u, s, y, v),
+        (c, "hr", "What do you know about Infosys InfyTQ and Springboard?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "How do you stay updated with new technologies?", "Easy", "Learning Attitude", u, s, y, v),
+        (c, "hr", "Why should we hire you over other candidates?", "Medium", "Self Promotion", u, s, y, v),
+        (c, "hr", "Are you comfortable with the service agreement bond?", "Easy", "Work Preferences", u, s, y, v),
+    ]
+
+
+_WIPRO = ("Wipro", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1)
+_WIPRO_C = ("Wipro", "https://prepinsta.com/wipro/wipro-coding-questions/", "PrepInsta · Wipro NLTH Coding", 2024, 1)
+
+def _get_wipro_questions():
+    c, u, s, y, v = _WIPRO
+    cc, uc, sc, yc, vc = _WIPRO_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "What is 15% of 2000?", "Easy", "Percentages", u, s, y, v),
+        (c, "aptitude", "If BOOK is coded as CPPL, how is COOK coded?", "Easy", "Coding/Decoding", u, s, y, v),
+        (c, "aptitude", "A pipe fills a tank in 6 hours. Another pipe empties it in 8 hours. If both are opened together, how long to fill the tank?", "Medium", "Pipes & Cisterns", u, s, y, v),
+        (c, "aptitude", "A man walks 4 km north, turns right and walks 3 km. How far is he from the starting point?", "Easy", "Directions", u, s, y, v),
+        (c, "aptitude", "Find the simple interest on Rs 5000 at 8% per annum for 3 years.", "Easy", "Interest", u, s, y, v),
+        (c, "aptitude", "In a bag there are 3 red, 5 blue, and 2 green balls. A ball is drawn at random. What is the probability it is blue?", "Easy", "Probability", u, s, y, v),
+        (c, "aptitude", "If 12 men can complete a work in 15 days, how many men are required to complete the work in 10 days?", "Easy", "Time & Work", u, s, y, v),
+        (c, "aptitude", "The ages of A and B are in the ratio 3:5. After 10 years the ratio becomes 5:7. Find their present ages.", "Medium", "Ages", u, s, y, v),
+        (c, "aptitude", "A salesman gets a commission of 12% on sales up to Rs 10,000 and 5% on sales above Rs 10,000. Total sales are Rs 18,000. Find his total commission.", "Medium", "Percentages", u, s, y, v),
+        (c, "aptitude", "Find the area of a triangle with base 12 cm and height 8 cm.", "Easy", "Geometry", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to check if a string is a palindrome.", "Easy", "Strings", uc, sc, yc, vc),
+        (cc, "coding", "Print the Fibonacci sequence up to N terms.", "Easy", "Basic Programming", uc, sc, yc, vc),
+        (cc, "coding", "Find the largest and smallest element in an array.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to remove duplicates from an array.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Check if a number is a perfect number (sum of divisors equals the number).", "Easy", "Math", uc, sc, yc, vc),
+        (cc, "coding", "Implement selection sort on a given array.", "Easy", "Sorting", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to convert a decimal number to binary.", "Easy", "Math / Bit Manipulation", uc, sc, yc, vc),
+        (cc, "coding", "Find the intersection of two arrays.", "Easy", "Arrays / Hashing", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to check if a given year is a leap year.", "Easy", "Basic Programming", uc, sc, yc, vc),
+        (cc, "coding", "Implement a queue using two stacks.", "Medium", "Stack / Queue", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is inheritance in OOP? List its types.", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What is the difference between overloading and overriding?", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What is ACID in database transactions?", "Medium", "DBMS", u, s, y, v),
+        (c, "technical", "What is a trigger in SQL? When is it used?", "Medium", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "Explain memory management in C (malloc, calloc, free).", "Medium", "C Programming", u, s, y, v),
+        (c, "technical", "What is the difference between == and equals() in Java?", "Easy", "Java", u, s, y, v),
+        (c, "technical", "What is a semaphore? How is it used for synchronization?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "What is the difference between IPv4 and IPv6?", "Easy", "Computer Networks", u, s, y, v),
+        (c, "technical", "What is an API? What is REST?", "Easy", "Web / Architecture", u, s, y, v),
+        (c, "technical", "Explain the concept of exception handling in Java/Python.", "Easy", "Programming Languages", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why do you want to work at Wipro?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What are your key technical skills?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Tell me about a time you went above and beyond for a project.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you deal with failure?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 3 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "Are you willing to travel or relocate for work?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "Describe your ideal work environment.", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "How do you manage stress at work?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "What is your biggest strength that makes you suitable for this role?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Tell me about a situation where you showed initiative.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "Do you have any questions for us?", "Easy", "Reverse Interview", u, s, y, v),
+    ]
+
+
+_COG = ("Cognizant", "https://prepinsta.com/cognizant/", "PrepInsta · Cognizant GenC", 2024, 1)
+_COG_C = ("Cognizant", "https://prepinsta.com/cognizant/cognizant-coding-questions/", "PrepInsta · Cognizant GenC", 2024, 1)
+
+def _get_cognizant_questions():
+    c, u, s, y, v = _COG
+    cc, uc, sc, yc, vc = _COG_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A car covers 120 km in 3 hours. Another car covers 180 km in 4 hours. What is the ratio of their speeds?", "Medium", "Ratio & Proportion", u, s, y, v),
+        (c, "aptitude", "The difference between two numbers is 18 and their sum is 62. Find the numbers.", "Easy", "Algebra", u, s, y, v),
+        (c, "aptitude", "A and B invest Rs 3000 and Rs 4000 respectively. Total profit is Rs 5600. Find A's share.", "Medium", "Partnership", u, s, y, v),
+        (c, "aptitude", "A clock shows 3:15. What is the angle between the hour and minute hands?", "Medium", "Clocks & Angles", u, s, y, v),
+        (c, "aptitude", "A man's speed with the current is 15 km/h and against the current is 9 km/h. Find the speed of the current.", "Easy", "Boats & Streams", u, s, y, v),
+        (c, "aptitude", "Find the number of ways to arrange 5 books on a shelf.", "Easy", "Permutations", u, s, y, v),
+        (c, "aptitude", "A person sells an article at 10% loss. If cost is Rs 2200, what is the selling price?", "Easy", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "What comes next: Z, X, V, T, R, ?", "Easy", "Letter Series", u, s, y, v),
+        (c, "aptitude", "Two workers finish a task in 8 and 12 days. They work together for 3 days, then the first stops. How many more days to finish?", "Medium", "Time & Work", u, s, y, v),
+        (c, "aptitude", "A 120 m long train crosses a platform of 80 m in 20 seconds. Find the speed of the train.", "Medium", "Time & Distance", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to sort an array using bubble sort.", "Easy", "Sorting", uc, sc, yc, vc),
+        (cc, "coding", "Find all prime factors of a given number.", "Easy", "Math", uc, sc, yc, vc),
+        (cc, "coding", "Reverse a linked list.", "Easy", "Linked Lists", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to find the maximum subarray sum (Kadane's Algorithm).", "Medium", "Arrays / DP", uc, sc, yc, vc),
+        (cc, "coding", "Check if a given string has balanced parentheses.", "Easy", "Stack / Strings", uc, sc, yc, vc),
+        (cc, "coding", "Write a function to flatten a nested list.", "Medium", "Recursion / Lists", uc, sc, yc, vc),
+        (cc, "coding", "Find the height of a binary tree.", "Easy", "Trees", uc, sc, yc, vc),
+        (cc, "coding", "Count the number of 1s in the binary representation of all numbers from 0 to N.", "Medium", "Bit Manipulation", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to merge two sorted arrays.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Find the minimum number of coins required to make a given amount.", "Medium", "Dynamic Programming", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is Agile methodology? What are sprints?", "Easy", "SDLC / Agile", u, s, y, v),
+        (c, "technical", "What is the difference between white-box and black-box testing?", "Easy", "Software Testing", u, s, y, v),
+        (c, "technical", "What is a design pattern? Name and explain Singleton.", "Medium", "Design Patterns", u, s, y, v),
+        (c, "technical", "What is version control? How does Git differ from SVN?", "Easy", "Tools / DevOps", u, s, y, v),
+        (c, "technical", "What is the difference between == and === in JavaScript?", "Easy", "JavaScript / Web", u, s, y, v),
+        (c, "technical", "What is a stored procedure in SQL?", "Medium", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "What is an operating system? What are its main functions?", "Easy", "Operating Systems", u, s, y, v),
+        (c, "technical", "Explain MVC architecture.", "Medium", "Software Architecture", u, s, y, v),
+        (c, "technical", "What is cloud computing? Explain SaaS, PaaS, and IaaS.", "Easy", "Cloud", u, s, y, v),
+        (c, "technical", "What is the difference between synchronous and asynchronous programming?", "Medium", "Programming Concepts", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Introduce yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why do you want to join Cognizant?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What do you know about Cognizant's GenC program?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "Tell me about a time you solved a complex problem.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you adapt to a fast-changing work environment?", "Easy", "Adaptability", u, s, y, v),
+        (c, "hr", "Describe your experience working in teams.", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "What are your hobbies and how do they contribute to your professional life?", "Easy", "Personality", u, s, y, v),
+        (c, "hr", "What is your expected salary?", "Easy", "Salary Expectations", u, s, y, v),
+        (c, "hr", "How do you handle multiple tasks simultaneously?", "Easy", "Time Management", u, s, y, v),
+        (c, "hr", "Tell me about a time you received negative feedback. How did you respond?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What are your plans for continuous learning and development?", "Easy", "Learning Attitude", u, s, y, v),
+        (c, "hr", "Are you comfortable working in rotational shifts?", "Easy", "Work Preferences", u, s, y, v),
+    ]
+
+
+_ACC = ("Accenture", "https://prepinsta.com/accenture/", "PrepInsta · Accenture", 2024, 1)
+_ACC_C = ("Accenture", "https://prepinsta.com/accenture/accenture-coding-questions/", "PrepInsta · Accenture", 2024, 1)
+
+def _get_accenture_questions():
+    c, u, s, y, v = _ACC
+    cc, uc, sc, yc, vc = _ACC_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "If the sum of two numbers is 20 and their product is 96, find the numbers.", "Easy", "Algebra", u, s, y, v),
+        (c, "aptitude", "Find the ratio in which a point divides the line segment joining (2,3) and (8,9) if the point is (5,6).", "Medium", "Coordinate Geometry", u, s, y, v),
+        (c, "aptitude", "How many 3-digit numbers are divisible by 7?", "Medium", "Divisibility", u, s, y, v),
+        (c, "aptitude", "A man covers half his journey at 30 km/h and the rest at 20 km/h. Find his average speed.", "Medium", "Average Speed", u, s, y, v),
+        (c, "aptitude", "If 40% of a number is 120, what is 75% of that number?", "Easy", "Percentages", u, s, y, v),
+        (c, "aptitude", "In how many ways can 4 boys and 3 girls be seated in a row such that no two girls sit together?", "Hard", "Permutations & Combinations", u, s, y, v),
+        (c, "aptitude", "What is the next term: 1, 4, 9, 16, 25, ?", "Easy", "Number Series", u, s, y, v),
+        (c, "aptitude", "A person invested Rs 12,000 at 10% per annum. After how many years will the amount double (simple interest)?", "Easy", "Interest", u, s, y, v),
+        (c, "aptitude", "Find the LCM of 12, 15, and 20.", "Easy", "LCM / HCF", u, s, y, v),
+        (c, "aptitude", "If 8 workers complete a job in 6 days, how many workers are needed to complete it in 4 days?", "Easy", "Time & Work", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to print a pattern: * ** *** **** *****", "Easy", "Patterns", uc, sc, yc, vc),
+        (cc, "coding", "Find the sum of all elements in an array.", "Easy", "Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to count occurrences of each character in a string.", "Easy", "Strings / Hashing", uc, sc, yc, vc),
+        (cc, "coding", "Find the first non-repeating character in a string.", "Easy", "Strings / Hashing", uc, sc, yc, vc),
+        (cc, "coding", "Implement insertion sort on a given array.", "Easy", "Sorting", uc, sc, yc, vc),
+        (cc, "coding", "Write a function to check if a number is a power of 2.", "Easy", "Math / Bit Manipulation", uc, sc, yc, vc),
+        (cc, "coding", "Find the number of islands in a binary matrix (BFS/DFS).", "Hard", "Graphs", uc, sc, yc, vc),
+        (cc, "coding", "Given two strings, find the longest common subsequence.", "Hard", "Dynamic Programming", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to convert Roman numerals to integers.", "Medium", "Strings / Math", uc, sc, yc, vc),
+        (cc, "coding", "Find all subsets of a given set.", "Medium", "Recursion / Backtracking", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is abstraction in OOP? How is it implemented in Java?", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What is a hash table? How does collision resolution work?", "Medium", "Data Structures", u, s, y, v),
+        (c, "technical", "What is the difference between stack and queue?", "Easy", "Data Structures", u, s, y, v),
+        (c, "technical", "Explain the concept of Big-O notation.", "Medium", "Algorithms", u, s, y, v),
+        (c, "technical", "What is a binary search tree (BST)? How does insertion work?", "Medium", "Trees", u, s, y, v),
+        (c, "technical", "What is the difference between DFS and BFS?", "Medium", "Graphs", u, s, y, v),
+        (c, "technical", "What is garbage collection in Java?", "Medium", "Java / Memory Management", u, s, y, v),
+        (c, "technical", "What is a RESTful API? What are HTTP status codes?", "Easy", "Web / APIs", u, s, y, v),
+        (c, "technical", "What is Scrum? How does it differ from Kanban?", "Easy", "Agile / SDLC", u, s, y, v),
+        (c, "technical", "What is the difference between a primary key and a unique key?", "Easy", "DBMS", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Accenture?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What do you know about Accenture's services and recent projects?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "Describe a time when you had to learn something quickly.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you handle ambiguity or unclear requirements?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What is your approach to solving a problem you've never faced before?", "Medium", "Problem Solving", u, s, y, v),
+        (c, "hr", "Tell me about a project where you used technology to solve a real-world problem.", "Medium", "Project Discussion", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 5 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "How do you handle disagreements with your manager?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What is your biggest professional achievement?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Are you comfortable working on client sites?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "How do you keep yourself motivated during repetitive tasks?", "Easy", "Behavioral", u, s, y, v),
+    ]
+
+
+_AMZ = ("Amazon", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1)
+_AMZ_H = ("Amazon", "https://www.amazon.jobs/en/landing_pages/leadership-principles", "Amazon Leadership Principles", 2024, 1)
+
+def _get_amazon_questions():
+    c, u, s, y, v = _AMZ
+    ch, uh, sh, yh, vh = _AMZ_H
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A train 150 m long passes a bridge 250 m long in 20 seconds. Find the speed of the train in km/h.", "Medium", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "If log(2) = 0.3010, find log(8).", "Medium", "Logarithms", u, s, y, v),
+        (c, "aptitude", "Two numbers are in ratio 3:4. If their LCM is 84, find the numbers.", "Medium", "LCM / HCF", u, s, y, v),
+        (c, "aptitude", "A seller marks up an item by 30% and offers a 10% discount. What is the effective profit%?", "Medium", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "Probability of selecting 2 red balls from a bag of 4 red and 6 blue balls.", "Medium", "Probability & Combinations", u, s, y, v),
+        (c, "aptitude", "An alloy of 40% copper is mixed with another alloy of 60% copper in ratio 2:3. Find the resultant copper%.", "Hard", "Mixtures & Alligation", u, s, y, v),
+        (c, "aptitude", "Work done by 3 men in 2 days = work by 4 women in 3 days. If 6 men and 6 women work together, how many days to finish work that 12 men finish in 5 days?", "Hard", "Time & Work", u, s, y, v),
+        (c, "aptitude", "What is the next prime number after 89?", "Easy", "Number Theory", u, s, y, v),
+        (c, "aptitude", "Find the value of √(6 + √(6 + √6 + ... ∞))", "Hard", "Infinite Series", u, s, y, v),
+        (c, "aptitude", "How many zeros are at the end of 100!?", "Medium", "Factorials / Divisibility", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Given an array of integers, return indices of the two numbers such that they add up to a target (Two Sum).", "Easy", "Arrays / Hash Map", u, s, y, v),
+        (c, "coding", "Design an LRU (Least Recently Used) Cache that supports get and put operations in O(1) time.", "Hard", "Design / Linked List", u, s, y, v),
+        (c, "coding", "Merge all overlapping intervals in a given list of intervals.", "Medium", "Arrays / Intervals", u, s, y, v),
+        (c, "coding", "Find the top K frequent elements in an array.", "Medium", "Heap / Hash Map", u, s, y, v),
+        (c, "coding", "Serialize and deserialize a binary tree.", "Hard", "Trees / BFS", u, s, y, v),
+        (c, "coding", "Given a matrix, find all unique paths from top-left to bottom-right.", "Medium", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Find the minimum window substring that contains all characters of pattern T.", "Hard", "Strings / Sliding Window", u, s, y, v),
+        (c, "coding", "Given a list of tasks with cooldown intervals, find the minimum time to finish all tasks.", "Hard", "Greedy / Heap", u, s, y, v),
+        (c, "coding", "Implement a Trie (prefix tree) with insert, search, and startsWith.", "Medium", "Trie / Strings", u, s, y, v),
+        (c, "coding", "Clone a graph (deep copy of an undirected graph).", "Medium", "Graphs / BFS", u, s, y, v),
+        # technical (10)
+        (c, "technical", "Design a URL shortening service like bit.ly. What are the key components?", "Hard", "System Design", u, s, y, v),
+        (c, "technical", "Explain CAP theorem and how Amazon DynamoDB addresses it.", "Hard", "Distributed Systems", u, s, y, v),
+        (c, "technical", "What is eventual consistency? Give a real-world example.", "Hard", "Distributed Systems", u, s, y, v),
+        (c, "technical", "How would you design Amazon's product recommendation system?", "Hard", "System Design / ML", u, s, y, v),
+        (c, "technical", "What is the difference between SQL and NoSQL? When would you choose each at scale?", "Medium", "DBMS / Architecture", u, s, y, v),
+        (c, "technical", "Explain microservices architecture. What are its advantages over monoliths?", "Medium", "Software Architecture", u, s, y, v),
+        (c, "technical", "What is a message queue? How does SQS help decouple services?", "Medium", "AWS / Architecture", u, s, y, v),
+        (c, "technical", "What is load balancing? Describe round-robin vs. least-connections.", "Medium", "Networking / Architecture", u, s, y, v),
+        (c, "technical", "Explain consistent hashing and its use in distributed caches.", "Hard", "Distributed Systems", u, s, y, v),
+        (c, "technical", "What is the difference between horizontal and vertical scaling?", "Easy", "System Design", u, s, y, v),
+        # hr (12)
+        (ch, "hr", "Tell me about a time when you had to work with a difficult team member. What did you do? (Earn Trust)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Describe a situation where you had to deliver results under tight deadlines. (Deliver Results)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Tell me about a time you disagreed with your manager. What did you do? (Have Backbone; Disagree and Commit)", "Hard", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Describe a time you took ownership of a failing project. (Ownership)", "Hard", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Give an example of when you used data to make a decision. (Are Right, A Lot)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Tell me about a time you went deep into a problem that no one else noticed. (Dive Deep)", "Hard", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Describe the most innovative idea you've implemented. (Invent and Simplify)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Tell me about a time you had to hire or develop talent. (Hire and Develop the Best)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Describe a time when you had to move fast without all the information. (Bias for Action)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Tell me about a time you saved resources or reduced cost. (Frugality)", "Easy", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Describe how you have earned the trust of peers or stakeholders.", "Medium", "Leadership Principles", uh, sh, yh, vh),
+        (ch, "hr", "Tell me about a time you used customer feedback to change your approach. (Customer Obsession)", "Medium", "Leadership Principles", uh, sh, yh, vh),
+    ]
+
+
+_MSFT = ("Microsoft", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1)
+_MSFT_L = ("Microsoft", "https://leetcode.com/company/microsoft/", "LeetCode · Microsoft Interview", 2024, 1)
+
+def _get_microsoft_questions():
+    c, u, s, y, v = _MSFT
+    cl, ul, sl, yl, vl = _MSFT_L
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A clock loses 2 minutes every 24 hours. How much time will it lose in one week?", "Easy", "Clocks", u, s, y, v),
+        (c, "aptitude", "If 5 men and 2 boys can do a work in 8 days, and 4 men and 4 boys can do it in 9 days, in how many days can 3 men and 3 boys finish it?", "Hard", "Time & Work", u, s, y, v),
+        (c, "aptitude", "What is 8% of 4350 + 20% of 225?", "Easy", "Percentages", u, s, y, v),
+        (c, "aptitude", "A boat can travel 20 km upstream in 4 hours and 28 km downstream in 4 hours. Find its speed in still water.", "Medium", "Boats & Streams", u, s, y, v),
+        (c, "aptitude", "In how many ways can the letters of 'MISSISSIPPI' be arranged?", "Hard", "Permutations", u, s, y, v),
+        (c, "aptitude", "If x + y = 10 and x² + y² = 58, find xy.", "Medium", "Algebra", u, s, y, v),
+        (c, "aptitude", "A pipe fills a tank in 10 hours. A leak can empty it in 20 hours. How long to fill the tank with the leak?", "Medium", "Pipes & Cisterns", u, s, y, v),
+        (c, "aptitude", "Find the compound interest on Rs 10,000 at 10% for 2 years compounded annually.", "Easy", "Interest", u, s, y, v),
+        (c, "aptitude", "Three candidates get votes in ratio 1:2:3. Winner gets 2400 votes. Find total votes.", "Easy", "Ratio & Proportion", u, s, y, v),
+        (c, "aptitude", "Find the probability of rolling two dice and getting a sum > 9.", "Medium", "Probability", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Given a linked list, reverse it in place.", "Easy", "Linked Lists", u, s, y, v),
+        (c, "coding", "Find the lowest common ancestor (LCA) of two nodes in a binary tree.", "Medium", "Trees", u, s, y, v),
+        (cl, "coding", "Given a string, find the length of the longest substring without repeating characters.", "Medium", "Strings / Sliding Window", ul, sl, yl, vl),
+        (c, "coding", "Implement a min-stack that supports push, pop, top, and getMin in O(1).", "Medium", "Stack", u, s, y, v),
+        (c, "coding", "Find if a given string matches a pattern (wildcard matching with * and ?).", "Hard", "Dynamic Programming / Strings", u, s, y, v),
+        (c, "coding", "Given a 2D grid, find the shortest path from top-left to bottom-right (BFS).", "Medium", "Graphs / BFS", u, s, y, v),
+        (c, "coding", "Design a data structure that supports insert, delete, and getRandom in O(1).", "Hard", "Design / Hashing", u, s, y, v),
+        (c, "coding", "Find all combinations that sum to target (Combination Sum).", "Medium", "Backtracking", u, s, y, v),
+        (c, "coding", "Implement a basic calculator that evaluates expressions with +, -, (, ).", "Hard", "Stack / Strings", u, s, y, v),
+        (c, "coding", "Find the maximum depth of a binary tree.", "Easy", "Trees / Recursion", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is the difference between a process and a thread? How does context switching work?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "What is virtual memory? How does page replacement work?", "Hard", "Operating Systems", u, s, y, v),
+        (c, "technical", "Explain SOLID principles with examples.", "Hard", "Software Design", u, s, y, v),
+        (c, "technical", "What is dependency injection? How is it used in .NET?", "Medium", "Software Design / .NET", u, s, y, v),
+        (c, "technical", "What is the difference between Azure SQL and Cosmos DB?", "Medium", "Azure / DBMS", u, s, y, v),
+        (c, "technical", "What is Docker? How does containerization differ from virtualization?", "Medium", "DevOps / Cloud", u, s, y, v),
+        (c, "technical", "What is CI/CD? What tools are typically used?", "Easy", "DevOps", u, s, y, v),
+        (c, "technical", "Explain the observer design pattern with an example.", "Medium", "Design Patterns", u, s, y, v),
+        (c, "technical", "What is async/await in C#? How does it differ from threads?", "Medium", ".NET / Concurrency", u, s, y, v),
+        (c, "technical", "What is sharding in databases?", "Medium", "Distributed Databases", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself and your technical journey.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Microsoft?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "Describe a project you're most proud of. What was your specific contribution?", "Medium", "Project Discussion", u, s, y, v),
+        (c, "hr", "Tell me about a time you had to debug a very tricky problem.", "Medium", "Behavioral / Technical", u, s, y, v),
+        (c, "hr", "How do you approach learning a completely new technology?", "Easy", "Learning Attitude", u, s, y, v),
+        (c, "hr", "Describe a time you worked under pressure and how you managed it.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What would you change about a product you use daily (e.g. Windows, Teams)?", "Medium", "Product Thinking", u, s, y, v),
+        (c, "hr", "Tell me about a time you had to mentor or help a colleague.", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 5 years at Microsoft?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "How do you handle feedback that you disagree with?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What is one technology trend you're excited about and why?", "Easy", "Curiosity / Awareness", u, s, y, v),
+        (c, "hr", "Describe a time you had to prioritize between quality and speed.", "Medium", "Engineering Values", u, s, y, v),
+    ]
+
+
+_GOOG = ("Google", "https://leetcode.com/company/google/", "LeetCode · Google Interview", 2024, 1)
+_GOOG_G = ("Google", "https://www.geeksforgeeks.org/google-interview-experience/", "GFG · Google Interview Experience", 2024, 1)
+
+def _get_google_questions():
+    c, u, s, y, v = _GOOG
+    cg, ug, sg, yg, vg = _GOOG_G
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A tank is 3/5 full. 18 liters are added and the tank is 4/5 full. Find the capacity.", "Easy", "Fractions", u, s, y, v),
+        (c, "aptitude", "What is the remainder when 7^100 is divided by 5?", "Medium", "Number Theory", u, s, y, v),
+        (c, "aptitude", "Three circles of equal radius r are placed such that each touches the other two. Find the area between them.", "Hard", "Geometry", u, s, y, v),
+        (c, "aptitude", "If f(x) = 2x² - 3x + 1, find f(3) - f(1).", "Medium", "Algebra / Functions", u, s, y, v),
+        (c, "aptitude", "In a group of 100 people: 70 speak English, 60 speak French, 40 speak both. How many speak neither?", "Medium", "Set Theory", u, s, y, v),
+        (c, "aptitude", "Two trains 180 m and 120 m long run at speeds of 40 km/h and 50 km/h in opposite directions. How long to cross each other?", "Medium", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "If the sides of a triangle are 5, 12, and 13, is it right-angled? Find its area.", "Easy", "Geometry", u, s, y, v),
+        (c, "aptitude", "A die is rolled twice. What is the probability that the second roll is greater than the first?", "Medium", "Probability", u, s, y, v),
+        (c, "aptitude", "Find the sum of all integers from 1 to 500 that are divisible by 3 but not by 9.", "Medium", "Number Theory", u, s, y, v),
+        (c, "aptitude", "The geometric mean of two numbers is 6 and their arithmetic mean is 6.5. Find the numbers.", "Medium", "Means", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Given n non-negative integers representing an elevation map, compute how much water it can trap after raining.", "Hard", "Arrays / Two Pointers", u, s, y, v),
+        (c, "coding", "Find the kth largest element in an unsorted array without sorting.", "Medium", "Heap / QuickSelect", u, s, y, v),
+        (c, "coding", "Given a list of words and a pattern, find all words that match the pattern.", "Medium", "Strings / Hashing", u, s, y, v),
+        (c, "coding", "Design an algorithm to compress a string (e.g. 'aabcccdddd' → 'a2bc3d4').", "Easy", "Strings", u, s, y, v),
+        (c, "coding", "Find the longest palindromic substring.", "Medium", "Dynamic Programming / Strings", u, s, y, v),
+        (c, "coding", "Implement a word search in a 2D grid.", "Medium", "Backtracking / Graphs", u, s, y, v),
+        (c, "coding", "Given a list of course prerequisites, determine if it's possible to finish all courses (cycle detection).", "Medium", "Graphs / Topological Sort", u, s, y, v),
+        (c, "coding", "Find the median of two sorted arrays in O(log n).", "Hard", "Binary Search / Divide & Conquer", u, s, y, v),
+        (c, "coding", "Count the number of distinct paths in a matrix from top-left to bottom-right with obstacles.", "Medium", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Implement an autocomplete system using a Trie.", "Hard", "Trie / Design", u, s, y, v),
+        # technical (10)
+        (cg, "technical", "How would you design a distributed key-value store? What consistency guarantees would you provide?", "Hard", "System Design / Distributed Systems", ug, sg, yg, vg),
+        (cg, "technical", "How does Google's MapReduce work?", "Hard", "Distributed Systems / Big Data", ug, sg, yg, vg),
+        (cg, "technical", "What is a consistent hash ring and why does Google use it?", "Hard", "Distributed Systems", ug, sg, yg, vg),
+        (cg, "technical", "How would you design Google Search's indexing pipeline?", "Hard", "System Design", ug, sg, yg, vg),
+        (cg, "technical", "What is the difference between a B-tree and a B+ tree?", "Hard", "Data Structures / DBMS", ug, sg, yg, vg),
+        (cg, "technical", "What is the time complexity of common operations in a skip list?", "Hard", "Data Structures", ug, sg, yg, vg),
+        (cg, "technical", "Explain the Raft consensus algorithm.", "Hard", "Distributed Systems", ug, sg, yg, vg),
+        (cg, "technical", "What is the difference between Kubernetes and Docker Swarm?", "Medium", "DevOps / Cloud", ug, sg, yg, vg),
+        (cg, "technical", "What is gRPC? How does it differ from REST?", "Medium", "APIs / Networking", ug, sg, yg, vg),
+        (cg, "technical", "How does Chrome's V8 engine optimize JavaScript execution?", "Hard", "Compilers / Runtime", ug, sg, yg, vg),
+        # hr (12)
+        (cg, "hr", "Tell me about yourself and why you want to join Google.", "Easy", "Introduction", ug, sg, yg, vg),
+        (cg, "hr", "Describe the most technically complex problem you've solved.", "Hard", "Behavioral / Technical", ug, sg, yg, vg),
+        (cg, "hr", "Tell me about a time you had a strong disagreement with a teammate and how you resolved it.", "Medium", "Conflict Resolution", ug, sg, yg, vg),
+        (cg, "hr", "How do you stay current with rapidly changing technology?", "Easy", "Learning Attitude", ug, sg, yg, vg),
+        (cg, "hr", "Describe a project where you had to make a critical architectural decision.", "Hard", "Engineering Judgment", ug, sg, yg, vg),
+        (cg, "hr", "Tell me about a time you took initiative beyond your assigned role.", "Medium", "Ownership", ug, sg, yg, vg),
+        (cg, "hr", "What Google product would you redesign and how?", "Medium", "Product Thinking", ug, sg, yg, vg),
+        (cg, "hr", "Describe a time you had a significant impact with limited resources.", "Medium", "Resourcefulness", ug, sg, yg, vg),
+        (cg, "hr", "How do you approach building things that will scale to millions of users?", "Hard", "Engineering Values", ug, sg, yg, vg),
+        (cg, "hr", "Tell me about a time you received feedback that changed your approach.", "Easy", "Growth Mindset", ug, sg, yg, vg),
+        (cg, "hr", "How do you handle ambiguity in project requirements?", "Medium", "Behavioral", ug, sg, yg, vg),
+        (cg, "hr", "What does 'Don't be evil' mean to you as an engineer?", "Medium", "Ethics / Culture", ug, sg, yg, vg),
+    ]
+
+
+_ZOHO = ("Zoho", "https://www.geeksforgeeks.org/zoho-interview-experience/", "GFG · Zoho Interview Experience", 2024, 1)
+
+def _get_zoho_questions():
+    c, u, s, y, v = _ZOHO
+    return [
+        # aptitude (10)
+        (c, "aptitude", "Find the number of trailing zeros in 50!.", "Medium", "Factorials", u, s, y, v),
+        (c, "aptitude", "What is the sum of first 50 natural numbers?", "Easy", "Arithmetic Series", u, s, y, v),
+        (c, "aptitude", "A man rows at 6 km/h in still water. River current is 2 km/h. Find time to go 16 km upstream.", "Easy", "Boats & Streams", u, s, y, v),
+        (c, "aptitude", "Find the remainder when 2^30 is divided by 7.", "Medium", "Number Theory", u, s, y, v),
+        (c, "aptitude", "How many diagonals does a polygon with 10 sides have?", "Medium", "Geometry / Combinatorics", u, s, y, v),
+        (c, "aptitude", "A sphere and a cylinder have the same radius and height. Find the ratio of their volumes.", "Medium", "Mensuration", u, s, y, v),
+        (c, "aptitude", "Two numbers are such that the ratio of the first to the second is 3:5. If 4 is added to each, the ratio becomes 5:7. Find the numbers.", "Medium", "Ratio & Algebra", u, s, y, v),
+        (c, "aptitude", "In how many ways can 4 letters be posted in 3 letterboxes?", "Medium", "Permutations & Combinations", u, s, y, v),
+        (c, "aptitude", "The product of two co-prime numbers is 117. Their LCM is also 117. What is their HCF?", "Easy", "LCM / HCF", u, s, y, v),
+        (c, "aptitude", "If MANGO is coded as NBNHP, how is GUAVA coded?", "Easy", "Coding / Decoding", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Write a program to find the GCD and LCM of two numbers.", "Easy", "Math", u, s, y, v),
+        (c, "coding", "Implement a basic linked list with insert, delete, and display operations.", "Easy", "Linked Lists", u, s, y, v),
+        (c, "coding", "Write a program to evaluate a postfix expression.", "Medium", "Stack / Expressions", u, s, y, v),
+        (c, "coding", "Find the number of distinct substrings of a string.", "Hard", "Strings / Hashing", u, s, y, v),
+        (c, "coding", "Implement a priority queue using a heap.", "Medium", "Heap / Data Structures", u, s, y, v),
+        (c, "coding", "Given an array, find the subarray with the maximum product.", "Medium", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Find all paths from root to leaf in a binary tree.", "Medium", "Trees / DFS", u, s, y, v),
+        (c, "coding", "Write a program to find the next permutation of an array.", "Medium", "Arrays / Math", u, s, y, v),
+        (c, "coding", "Implement a circular queue.", "Medium", "Queue / Arrays", u, s, y, v),
+        (c, "coding", "Find the kth smallest element in a BST.", "Medium", "BST / Inorder", u, s, y, v),
+        # technical (10)
+        (c, "technical", "Zoho is known for building everything in-house. What are the pros and cons of this approach?", "Medium", "Engineering Philosophy", u, s, y, v),
+        (c, "technical", "What is the difference between a process and a daemon process?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "Explain the concept of memory leaks and how to detect them.", "Medium", "Memory Management", u, s, y, v),
+        (c, "technical", "What is a graph? Explain adjacency matrix vs adjacency list representation.", "Easy", "Data Structures / Graphs", u, s, y, v),
+        (c, "technical", "What are the differences between TCP and UDP? When would you use each?", "Easy", "Computer Networks", u, s, y, v),
+        (c, "technical", "Explain the concept of recursion with a tree traversal example.", "Easy", "Recursion / Trees", u, s, y, v),
+        (c, "technical", "What is a callback function? How is it used in event-driven programming?", "Medium", "Programming Concepts", u, s, y, v),
+        (c, "technical", "What are the key differences between C and C++?", "Easy", "C / C++", u, s, y, v),
+        (c, "technical", "What is an ORM? Give an example.", "Easy", "DBMS / Web", u, s, y, v),
+        (c, "technical", "Explain the concept of multithreading and where you'd use it.", "Medium", "Concurrency", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Zoho over other service companies?", "Medium", "Company Fit", u, s, y, v),
+        (c, "hr", "Zoho values self-sufficiency. How do you approach problems without external help?", "Medium", "Problem Solving", u, s, y, v),
+        (c, "hr", "Tell me about a project where you built something from scratch.", "Medium", "Project Discussion", u, s, y, v),
+        (c, "hr", "How do you handle repetitive or mundane tasks?", "Easy", "Work Ethic", u, s, y, v),
+        (c, "hr", "Describe a time you helped a teammate overcome a technical challenge.", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 3 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "What open-source projects have you contributed to or are you familiar with?", "Medium", "Technical Interest", u, s, y, v),
+        (c, "hr", "How do you balance speed and code quality?", "Medium", "Engineering Values", u, s, y, v),
+        (c, "hr", "What are your thoughts on working in a product company vs a services company?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "Tell me about a time you disagreed with an approach and what you did.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What do you do in your free time to sharpen your skills?", "Easy", "Learning Attitude", u, s, y, v),
+    ]
+
+
+_FW = ("Freshworks", "https://www.geeksforgeeks.org/freshworks-interview-experience/", "GFG · Freshworks Interview Experience", 2024, 1)
+
+def _get_freshworks_questions():
+    c, u, s, y, v = _FW
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A 200 m long train at 72 km/h crosses a pole. How long does it take?", "Easy", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "Find the 10th term of the series: 5, 10, 20, 40, ...", "Easy", "Geometric Progression", u, s, y, v),
+        (c, "aptitude", "A sum triples in 15 years at simple interest. Find the rate of interest.", "Medium", "Interest", u, s, y, v),
+        (c, "aptitude", "In a room of 30 people, everyone shakes hands exactly once. How many handshakes?", "Easy", "Combinatorics", u, s, y, v),
+        (c, "aptitude", "The difference between the ages of A and B is 6 years. After 4 years, A's age will be twice B's. Find their ages.", "Medium", "Ages", u, s, y, v),
+        (c, "aptitude", "A cistern is filled by two pipes — one in 6 hrs, another in 8 hrs. A drain can empty it in 12 hrs. All three open together: how long to fill?", "Hard", "Pipes & Cisterns", u, s, y, v),
+        (c, "aptitude", "If 3 women and 5 girls can do a task in 4 days, and 5 women and 3 girls in 3 days, how long would 1 woman alone take?", "Hard", "Time & Work", u, s, y, v),
+        (c, "aptitude", "A card is drawn at random from a deck of 52. Find the probability it is a face card.", "Easy", "Probability", u, s, y, v),
+        (c, "aptitude", "Find x if 4^x = 256.", "Easy", "Indices / Logarithms", u, s, y, v),
+        (c, "aptitude", "A mixture has milk and water in ratio 4:1. How much water must be added to 20 litres of mixture to get ratio 2:1?", "Medium", "Mixtures", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Find the number of ways to climb n stairs taking 1 or 2 steps at a time.", "Easy", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Given a string, find the minimum number of characters to add to make it a palindrome.", "Hard", "Dynamic Programming / Strings", u, s, y, v),
+        (c, "coding", "Implement a basic calculator supporting +, -, *, / with parentheses.", "Hard", "Stack / Parsing", u, s, y, v),
+        (c, "coding", "Given a list of intervals, find minimum number of meeting rooms required.", "Medium", "Heap / Intervals", u, s, y, v),
+        (c, "coding", "Find the longest substring with at most K distinct characters.", "Medium", "Sliding Window / Strings", u, s, y, v),
+        (c, "coding", "Flatten a binary tree to a linked list in-place.", "Medium", "Trees", u, s, y, v),
+        (c, "coding", "Write a program to solve the N-Queens problem.", "Hard", "Backtracking", u, s, y, v),
+        (c, "coding", "Find the minimum number of jumps to reach the end of an array.", "Medium", "Greedy / Dynamic Programming", u, s, y, v),
+        (c, "coding", "Design a rate limiter (token bucket or leaky bucket algorithm).", "Hard", "System Design / Algorithms", u, s, y, v),
+        (c, "coding", "Find all duplicate numbers in an array of size n with values in [1, n].", "Medium", "Arrays / Bit Manipulation", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is the event loop in JavaScript? How does it handle async code?", "Medium", "JavaScript / Web", u, s, y, v),
+        (c, "technical", "What is the difference between REST and GraphQL?", "Medium", "APIs / Web", u, s, y, v),
+        (c, "technical", "Explain how a browser renders a web page (critical rendering path).", "Hard", "Web Performance", u, s, y, v),
+        (c, "technical", "What is Redis? When would you use it over a relational database?", "Medium", "Caching / Databases", u, s, y, v),
+        (c, "technical", "What is index bloat and how do you address it in PostgreSQL?", "Hard", "DBMS / Performance", u, s, y, v),
+        (c, "technical", "What are WebSockets? How do they differ from HTTP polling?", "Medium", "Web / Networking", u, s, y, v),
+        (c, "technical", "What is OAuth 2.0? How does it work?", "Medium", "Security / Auth", u, s, y, v),
+        (c, "technical", "What is N+1 query problem in ORM? How do you fix it?", "Medium", "DBMS / ORM", u, s, y, v),
+        (c, "technical", "Explain horizontal pod autoscaling in Kubernetes.", "Hard", "DevOps / Cloud", u, s, y, v),
+        (c, "technical", "What is a CDN and how does it improve performance?", "Easy", "Web Performance / Networking", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Freshworks?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What SaaS products have you used and what would you improve?", "Medium", "Product Thinking", u, s, y, v),
+        (c, "hr", "Describe a time you solved a customer-facing bug under pressure.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "How do you approach understanding end-user needs?", "Medium", "Customer Focus", u, s, y, v),
+        (c, "hr", "Tell me about your most impactful side project or internship.", "Medium", "Project Discussion", u, s, y, v),
+        (c, "hr", "How do you handle disagreements in a code review?", "Medium", "Collaboration", u, s, y, v),
+        (c, "hr", "What is your approach to testing your code before shipping?", "Easy", "Engineering Values", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 2 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "Tell me about a time you improved a process or workflow.", "Medium", "Ownership", u, s, y, v),
+        (c, "hr", "How do you stay motivated when working on long-running projects?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "Do you prefer working alone or in a team? Why?", "Easy", "Work Style", u, s, y, v),
+    ]
+
+
+_GS = ("Goldman Sachs", "https://www.geeksforgeeks.org/goldman-sachs-interview-experience/", "GFG · Goldman Sachs Interview Experience", 2024, 1)
+
+def _get_goldman_questions():
+    c, u, s, y, v = _GS
+    return [
+        # aptitude (10)
+        (c, "aptitude", "If P(A) = 0.4 and P(B) = 0.3 and A and B are independent, find P(A ∩ B).", "Easy", "Probability", u, s, y, v),
+        (c, "aptitude", "A stock is priced at Rs 200. It rises 20% on day 1 and falls 20% on day 2. What is the final price?", "Easy", "Percentages / Finance", u, s, y, v),
+        (c, "aptitude", "Find the expected value of a fair die roll.", "Easy", "Probability / Statistics", u, s, y, v),
+        (c, "aptitude", "Portfolio returns are 10%, 15%, -5%, 20%. Find the arithmetic mean and geometric mean.", "Medium", "Statistics / Finance", u, s, y, v),
+        (c, "aptitude", "Two cards are drawn from a deck without replacement. Find the probability both are aces.", "Medium", "Probability", u, s, y, v),
+        (c, "aptitude", "A bond has face value Rs 1000, coupon rate 8%, and maturity 5 years. What is the annual coupon payment?", "Easy", "Finance / Bond Math", u, s, y, v),
+        (c, "aptitude", "If the variance of a dataset is 25, what is the standard deviation?", "Easy", "Statistics", u, s, y, v),
+        (c, "aptitude", "An investor doubles money every 7 years (Rule of 72). What approximate interest rate is this?", "Easy", "Finance / Rule of 72", u, s, y, v),
+        (c, "aptitude", "Find the compound annual growth rate (CAGR) if an investment grows from Rs 1000 to Rs 1600 in 4 years.", "Medium", "Finance / CAGR", u, s, y, v),
+        (c, "aptitude", "A normal distribution has mean 50 and std dev 10. What percentage of values lie between 40 and 60?", "Medium", "Statistics / Normal Distribution", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Given a sorted matrix, search for a target value efficiently.", "Medium", "Arrays / Binary Search", u, s, y, v),
+        (c, "coding", "Implement a stock price ticker using a min-heap.", "Medium", "Heap / Design", u, s, y, v),
+        (c, "coding", "Find the maximum profit from a stock where you can buy and sell multiple times.", "Medium", "Greedy / Arrays", u, s, y, v),
+        (c, "coding", "Given a string of stock prices, find the best single buy-sell pair.", "Easy", "Arrays / Greedy", u, s, y, v),
+        (c, "coding", "Implement a thread-safe blocking queue.", "Hard", "Concurrency / Design", u, s, y, v),
+        (c, "coding", "Find all possible ways to express a number as a sum of consecutive integers.", "Medium", "Math / Number Theory", u, s, y, v),
+        (c, "coding", "Design an in-memory order book (bids/asks) for a trading system.", "Hard", "System Design / Data Structures", u, s, y, v),
+        (c, "coding", "Compute the nth Fibonacci number in O(log n) time using matrix exponentiation.", "Hard", "Math / Divide & Conquer", u, s, y, v),
+        (c, "coding", "Given trade timestamps and prices, detect unusual price spikes.", "Medium", "Sliding Window / Stats", u, s, y, v),
+        (c, "coding", "Implement a generic event bus / pub-sub system.", "Hard", "Design Patterns / Concurrency", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is the difference between a mutex and a spinlock?", "Hard", "Concurrency / OS", u, s, y, v),
+        (c, "technical", "Explain the ACID properties with a financial transaction example.", "Medium", "DBMS / Transactions", u, s, y, v),
+        (c, "technical", "What is FIX protocol? How is it used in trading systems?", "Hard", "Finance / Networking", u, s, y, v),
+        (c, "technical", "What is low-latency programming? What techniques reduce latency in C++?", "Hard", "Systems Programming", u, s, y, v),
+        (c, "technical", "Explain Java garbage collection and its impact on latency-sensitive applications.", "Hard", "Java / Performance", u, s, y, v),
+        (c, "technical", "What is the difference between optimistic and pessimistic locking in databases?", "Medium", "DBMS / Concurrency", u, s, y, v),
+        (c, "technical", "What is a memory barrier (fence)? Why is it needed in multi-core systems?", "Hard", "Systems / Concurrency", u, s, y, v),
+        (c, "technical", "What is Kafka? How does it guarantee message delivery?", "Medium", "Messaging / Architecture", u, s, y, v),
+        (c, "technical", "What is the difference between row-oriented and column-oriented databases?", "Medium", "DBMS / Big Data", u, s, y, v),
+        (c, "technical", "How do you profile and optimize a CPU-bound Java application?", "Hard", "Performance Engineering", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself and why finance/fintech excites you.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Goldman Sachs and why the engineering division?", "Medium", "Company Fit", u, s, y, v),
+        (c, "hr", "Describe the most technically demanding project you've worked on.", "Hard", "Project Discussion", u, s, y, v),
+        (c, "hr", "How do you handle high-stress, high-stakes situations?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "Tell me about a time you caught a critical bug before it reached production.", "Hard", "Behavioral / Technical", u, s, y, v),
+        (c, "hr", "How would you explain a complex technical concept to a non-technical stakeholder?", "Medium", "Communication", u, s, y, v),
+        (c, "hr", "Describe a time you had to make a decision with incomplete data.", "Medium", "Judgment", u, s, y, v),
+        (c, "hr", "Tell me about a time you challenged the status quo in a project.", "Medium", "Innovation", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 5 years in the financial technology space?", "Medium", "Career Goals", u, s, y, v),
+        (c, "hr", "How do you ensure code quality and reliability in your projects?", "Medium", "Engineering Values", u, s, y, v),
+        (c, "hr", "Tell me about a time you collaborated across teams to solve a problem.", "Medium", "Teamwork", u, s, y, v),
+        (c, "hr", "What do you know about Goldman Sachs's recent technology initiatives?", "Medium", "Company Knowledge", u, s, y, v),
+    ]
+
+
+_DEL = ("Deloitte", "https://prepinsta.com/deloitte/", "PrepInsta · Deloitte", 2024, 1)
+
+def _get_deloitte_questions():
+    c, u, s, y, v = _DEL
+    return [
+        # aptitude (10)
+        (c, "aptitude", "What is 25% of 480?", "Easy", "Percentages", u, s, y, v),
+        (c, "aptitude", "If a car's speed is increased by 20%, how much time is saved on a 60 km trip (original speed 60 km/h)?", "Medium", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "A 12-litre mixture has milk and water in ratio 5:1. How much water is added to make ratio 1:1?", "Medium", "Mixtures & Alligation", u, s, y, v),
+        (c, "aptitude", "A number when divided by 296 gives a remainder of 75. What is the remainder when divided by 8?", "Medium", "Remainders", u, s, y, v),
+        (c, "aptitude", "Find the area of a circle inscribed in a square with side 14 cm.", "Medium", "Geometry", u, s, y, v),
+        (c, "aptitude", "What is the probability of getting exactly 2 heads in 5 coin tosses?", "Medium", "Probability / Binomial", u, s, y, v),
+        (c, "aptitude", "An article is sold at a 20% gain. If cost was Rs 1500, find the selling price.", "Easy", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "In 4 years, A will be twice as old as B was 4 years ago. Current sum of ages is 56. Find their current ages.", "Hard", "Ages", u, s, y, v),
+        (c, "aptitude", "Find the average of all multiples of 7 between 0 and 100.", "Medium", "Averages", u, s, y, v),
+        (c, "aptitude", "Decode: if BANK = EDQN, what does DOOR = ?", "Easy", "Coding / Decoding", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Write a program to find the nth Fibonacci number using dynamic programming.", "Easy", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Find the majority element in an array (appears more than n/2 times).", "Medium", "Arrays / Voting Algorithm", u, s, y, v),
+        (c, "coding", "Write a program to convert infix expression to postfix.", "Medium", "Stack / Expressions", u, s, y, v),
+        (c, "coding", "Given a matrix, rotate it 90 degrees clockwise in-place.", "Medium", "Arrays / Matrix", u, s, y, v),
+        (c, "coding", "Find the number of unique paths in an m×n grid.", "Easy", "Dynamic Programming", u, s, y, v),
+        (c, "coding", "Implement a generic sorted linked list.", "Medium", "Linked Lists", u, s, y, v),
+        (c, "coding", "Given a list of strings, group anagrams together.", "Medium", "Strings / Hashing", u, s, y, v),
+        (c, "coding", "Find the longest consecutive sequence in an array.", "Medium", "Arrays / Hashing", u, s, y, v),
+        (c, "coding", "Write a program to check if a binary tree is a valid BST.", "Medium", "Trees / BST", u, s, y, v),
+        (c, "coding", "Implement merge sort and analyze its time complexity.", "Medium", "Sorting", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is the difference between SQL and NoSQL databases? When would you use each?", "Medium", "DBMS", u, s, y, v),
+        (c, "technical", "What is Scrum? Explain sprint planning, daily standups, and retrospectives.", "Easy", "Agile / SDLC", u, s, y, v),
+        (c, "technical", "What is the difference between unit testing and integration testing?", "Easy", "Software Testing", u, s, y, v),
+        (c, "technical", "Explain the concept of a transaction in a database. What is a savepoint?", "Medium", "DBMS / Transactions", u, s, y, v),
+        (c, "technical", "What is a microservices architecture? What are its challenges?", "Medium", "Software Architecture", u, s, y, v),
+        (c, "technical", "What is Salesforce? How is it used in consulting engagements?", "Easy", "Enterprise Tools / CRM", u, s, y, v),
+        (c, "technical", "What is the difference between authentication and authorization?", "Easy", "Security", u, s, y, v),
+        (c, "technical", "What is a data warehouse? How does it differ from a data lake?", "Medium", "Data Engineering", u, s, y, v),
+        (c, "technical", "What is Power BI? How is it used for reporting?", "Easy", "Analytics / BI Tools", u, s, y, v),
+        (c, "technical", "Explain the concept of ETL (Extract, Transform, Load).", "Medium", "Data Engineering", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Deloitte?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What do you know about Deloitte's technology consulting practice?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "Tell me about a time you led a team project.", "Medium", "Leadership", u, s, y, v),
+        (c, "hr", "Describe a situation where you had to manage multiple stakeholders.", "Hard", "Stakeholder Management", u, s, y, v),
+        (c, "hr", "How do you handle a situation where client requirements keep changing?", "Medium", "Adaptability", u, s, y, v),
+        (c, "hr", "Tell me about a time you delivered a project under a tight deadline.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What is your approach to continuous learning?", "Easy", "Learning Attitude", u, s, y, v),
+        (c, "hr", "How do you build rapport with clients or stakeholders?", "Medium", "Communication / EQ", u, s, y, v),
+        (c, "hr", "Describe a time you used data to influence a business decision.", "Medium", "Data-Driven Thinking", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 5 years in consulting?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "What is your biggest weakness and how are you working on it?", "Easy", "Self Assessment", u, s, y, v),
+    ]
+
+
+_CAP = ("Capgemini", "https://prepinsta.com/capgemini/", "PrepInsta · Capgemini", 2024, 1)
+_CAP_C = ("Capgemini", "https://prepinsta.com/capgemini/capgemini-coding-questions/", "PrepInsta · Capgemini Coding", 2024, 1)
+
+def _get_capgemini_questions():
+    c, u, s, y, v = _CAP
+    cc, uc, sc, yc, vc = _CAP_C
+    return [
+        # aptitude (10)
+        (c, "aptitude", "If 6 men can complete a work in 8 days, how many days will 4 men take?", "Easy", "Time & Work", u, s, y, v),
+        (c, "aptitude", "Find the HCF of 36, 48, and 60.", "Easy", "LCM / HCF", u, s, y, v),
+        (c, "aptitude", "A train 250 m long moving at 54 km/h crosses a man standing on a platform. Find the time.", "Easy", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "What is the value of (3/4) + (5/6) - (7/12)?", "Easy", "Fractions", u, s, y, v),
+        (c, "aptitude", "Two pipes fill a tank in 15 and 20 minutes. Both open together. How long to fill 3/4 of the tank?", "Medium", "Pipes & Cisterns", u, s, y, v),
+        (c, "aptitude", "If Rs 5000 doubles in 10 years at simple interest, what is the rate?", "Easy", "Interest", u, s, y, v),
+        (c, "aptitude", "Find the sum of the series: 2 + 5 + 8 + ... up to 20 terms.", "Medium", "Arithmetic Progression", u, s, y, v),
+        (c, "aptitude", "A box has 5 red, 4 blue, and 3 green balls. 2 are drawn. Probability both are red?", "Medium", "Probability / Combinations", u, s, y, v),
+        (c, "aptitude", "If 8 is 40% of a number, what is 25% of that number?", "Easy", "Percentages", u, s, y, v),
+        (c, "aptitude", "An article sold at 30% profit. If SP is Rs 650, find CP.", "Easy", "Profit & Loss", u, s, y, v),
+        # coding (10)
+        (cc, "coding", "Write a program to find all anagrams of a given string in a text.", "Medium", "Strings / Sliding Window", uc, sc, yc, vc),
+        (cc, "coding", "Find the minimum element in a rotated sorted array.", "Medium", "Binary Search / Arrays", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to generate Pascal's Triangle up to N rows.", "Easy", "Arrays / Patterns", uc, sc, yc, vc),
+        (cc, "coding", "Find the k nearest points to the origin from a list of points.", "Medium", "Heap / Geometry", uc, sc, yc, vc),
+        (cc, "coding", "Count the number of set bits in all numbers from 1 to N.", "Medium", "Bit Manipulation", uc, sc, yc, vc),
+        (cc, "coding", "Implement a doubly linked list with insert, delete, and reverse.", "Medium", "Linked Lists", uc, sc, yc, vc),
+        (cc, "coding", "Write a program to print a diamond pattern of stars.", "Easy", "Patterns", uc, sc, yc, vc),
+        (cc, "coding", "Given a string, find the longest repeating substring.", "Hard", "Strings / Hashing", uc, sc, yc, vc),
+        (cc, "coding", "Check if a given binary tree is balanced.", "Medium", "Trees", uc, sc, yc, vc),
+        (cc, "coding", "Find the maximum sum path in a binary tree.", "Hard", "Trees / DP", uc, sc, yc, vc),
+        # technical (10)
+        (c, "technical", "What is SAP? How is it used in enterprise resource planning?", "Easy", "ERP / Enterprise", u, s, y, v),
+        (c, "technical", "What is the difference between function overloading and operator overloading?", "Easy", "OOPs / C++", u, s, y, v),
+        (c, "technical", "What is an inner join vs outer join in SQL?", "Easy", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "What is the difference between CHAR and VARCHAR in SQL?", "Easy", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "What is Agile? How is it different from the Waterfall model?", "Easy", "SDLC", u, s, y, v),
+        (c, "technical", "Explain the concept of a view in a database.", "Easy", "DBMS / SQL", u, s, y, v),
+        (c, "technical", "What is a linked list? When is it preferred over an array?", "Easy", "Data Structures", u, s, y, v),
+        (c, "technical", "What is the difference between shallow copy and deep copy?", "Medium", "Programming Concepts", u, s, y, v),
+        (c, "technical", "What is a namespace in C++? Why is it used?", "Easy", "C++ / Programming", u, s, y, v),
+        (c, "technical", "What is a thread pool? When would you use one?", "Medium", "Concurrency / Java", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Introduce yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Capgemini?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "Are you comfortable working in a service-based model and client-facing roles?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "Tell me about your strongest technical skill and a project where you used it.", "Medium", "Project Discussion", u, s, y, v),
+        (c, "hr", "Describe a time you had to adapt to a sudden change in project requirements.", "Medium", "Adaptability", u, s, y, v),
+        (c, "hr", "How do you handle working with people from different cultural backgrounds?", "Easy", "Diversity & Inclusion", u, s, y, v),
+        (c, "hr", "What is your approach when you are stuck on a problem?", "Easy", "Problem Solving", u, s, y, v),
+        (c, "hr", "Tell me about a time you showed ownership in a group task.", "Medium", "Ownership", u, s, y, v),
+        (c, "hr", "What are your long-term career goals?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "How do you ensure you meet quality standards in your work?", "Easy", "Quality Mindset", u, s, y, v),
+        (c, "hr", "Tell me about a time you received critical feedback. How did you respond?", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "What do you know about Capgemini's RISE with SAP initiative?", "Medium", "Company Knowledge", u, s, y, v),
+    ]
+
+
+_HCL = ("HCL", "https://prepinsta.com/hcl/", "PrepInsta · HCL", 2024, 1)
+
+def _get_hcl_questions():
+    c, u, s, y, v = _HCL
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A shopkeeper sells goods at 20% profit. If cost price is Rs 500, what is the selling price?", "Easy", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "The ratio of boys to girls in a class is 4:3. If there are 35 students, how many are boys?", "Easy", "Ratio & Proportion", u, s, y, v),
+        (c, "aptitude", "A 300 m train moving at 90 km/h crosses a bridge. The bridge is 200 m long. Find the crossing time.", "Easy", "Time & Distance", u, s, y, v),
+        (c, "aptitude", "Find the sum of all two-digit numbers divisible by 5.", "Medium", "Arithmetic Series", u, s, y, v),
+        (c, "aptitude", "If 3 chairs and 2 tables cost Rs 3000, and 2 chairs and 3 tables cost Rs 3500, find the cost of each.", "Medium", "Linear Equations", u, s, y, v),
+        (c, "aptitude", "A 15% discount on Rs 1200 is offered. Find the selling price.", "Easy", "Discount / Percentages", u, s, y, v),
+        (c, "aptitude", "P is 25% less than Q. Q is what percent more than P?", "Medium", "Percentages", u, s, y, v),
+        (c, "aptitude", "Find the length of the longest diagonal of a rectangle with length 12 cm and breadth 5 cm.", "Easy", "Geometry", u, s, y, v),
+        (c, "aptitude", "Pointing to a man, a woman says 'His mother is the only daughter of my mother.' How is the man related to the woman?", "Medium", "Blood Relations", u, s, y, v),
+        (c, "aptitude", "Find the next term in series: 2, 3, 5, 8, 13, 21, ?", "Easy", "Number Series", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Check if a number is Armstrong number (sum of cubes of digits equals number).", "Easy", "Basic Programming", u, s, y, v),
+        (c, "coding", "Find the power of a number using recursion.", "Easy", "Recursion / Math", u, s, y, v),
+        (c, "coding", "Write a program to count the frequency of each element in an array.", "Easy", "Arrays / Hashing", u, s, y, v),
+        (c, "coding", "Find the first duplicate element in an array.", "Easy", "Arrays / Hashing", u, s, y, v),
+        (c, "coding", "Write a program to implement stack using arrays.", "Easy", "Stack / Arrays", u, s, y, v),
+        (c, "coding", "Given a binary number, convert it to its decimal equivalent.", "Easy", "Math / Bit Manipulation", u, s, y, v),
+        (c, "coding", "Write a program to transpose a matrix.", "Easy", "Arrays / Matrix", u, s, y, v),
+        (c, "coding", "Implement a linear search and binary search on the same array.", "Easy", "Searching", u, s, y, v),
+        (c, "coding", "Find the longest word in a given sentence.", "Easy", "Strings", u, s, y, v),
+        (c, "coding", "Check if a linked list is a palindrome.", "Medium", "Linked Lists", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is the software development life cycle (SDLC)? Explain its phases.", "Easy", "SDLC", u, s, y, v),
+        (c, "technical", "What is the difference between compile-time and runtime errors?", "Easy", "Programming Concepts", u, s, y, v),
+        (c, "technical", "What is an array of pointers? Give an example.", "Medium", "C / C++", u, s, y, v),
+        (c, "technical", "What is the difference between a while loop and a do-while loop?", "Easy", "Programming Basics", u, s, y, v),
+        (c, "technical", "What is a relational database management system (RDBMS)?", "Easy", "DBMS", u, s, y, v),
+        (c, "technical", "What are access modifiers in Java? Explain public, private, protected.", "Easy", "Java / OOPs", u, s, y, v),
+        (c, "technical", "What is a constructor? How is it different from a method?", "Easy", "OOPs", u, s, y, v),
+        (c, "technical", "What is the difference between a linked list and an array in terms of memory?", "Easy", "Data Structures", u, s, y, v),
+        (c, "technical", "What is a file system? How does an OS manage files?", "Medium", "Operating Systems", u, s, y, v),
+        (c, "technical", "What is the difference between a compiler and an interpreter?", "Easy", "Programming Concepts", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why HCL Technologies?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What are your technical strengths?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Tell me about a time you contributed beyond your role in a project.", "Medium", "Ownership", u, s, y, v),
+        (c, "hr", "Are you comfortable with any domain or do you have a preference?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "Describe your academic project and the technologies you used.", "Easy", "Project Discussion", u, s, y, v),
+        (c, "hr", "How do you handle a situation where you don't know the answer?", "Easy", "Behavioral", u, s, y, v),
+        (c, "hr", "Tell me about a time you worked effectively in a team.", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "What are your short-term goals after joining?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "How do you stay organized when working on multiple tasks?", "Easy", "Time Management", u, s, y, v),
+        (c, "hr", "Tell me about a situation where you had to learn quickly.", "Medium", "Adaptability", u, s, y, v),
+        (c, "hr", "What is HCL's IDEV program and Mode 1-2-3 strategy?", "Medium", "Company Knowledge", u, s, y, v),
+    ]
+
+
+_TM = ("Tech Mahindra", "https://prepinsta.com/tech-mahindra/", "PrepInsta · Tech Mahindra", 2024, 1)
+
+def _get_techmahindra_questions():
+    c, u, s, y, v = _TM
+    return [
+        # aptitude (10)
+        (c, "aptitude", "A horse is tied to a post with a 14 m rope. Find the area the horse can graze.", "Easy", "Mensuration / Geometry", u, s, y, v),
+        (c, "aptitude", "Find the value of 1/(1×2) + 1/(2×3) + 1/(3×4) + ... + 1/(9×10).", "Medium", "Series / Algebra", u, s, y, v),
+        (c, "aptitude", "A retailer buys 200 pens at Rs 2 each and sells them at Rs 2.50 each. Find total profit%.", "Easy", "Profit & Loss", u, s, y, v),
+        (c, "aptitude", "In a certain code: 13 = F, 20 = T. What is 15?", "Easy", "Coding / Decoding", u, s, y, v),
+        (c, "aptitude", "Average of 5 numbers is 10. If one number is replaced by 20, the average becomes 12. Find the replaced number.", "Medium", "Averages", u, s, y, v),
+        (c, "aptitude", "A person walks 6 km east, 8 km north. Find the shortest distance to return to start.", "Easy", "Pythagoras / Directions", u, s, y, v),
+        (c, "aptitude", "What is the next term: 1, 2, 6, 24, 120, ?", "Easy", "Factorials / Series", u, s, y, v),
+        (c, "aptitude", "A does a job in 20 days, B in 25 days. They work together for 5 days, then B leaves. How many more days does A need?", "Medium", "Time & Work", u, s, y, v),
+        (c, "aptitude", "Simple interest for 3 years at 5% per annum on a sum is Rs 750. Find the sum.", "Easy", "Interest", u, s, y, v),
+        (c, "aptitude", "A person spends 30% on food, 25% on rent, 15% on education. What fraction of income remains?", "Easy", "Percentages", u, s, y, v),
+        # coding (10)
+        (c, "coding", "Find the number of occurrences of a target value in a sorted array.", "Easy", "Binary Search", u, s, y, v),
+        (c, "coding", "Write a program to add two numbers without using the + operator.", "Easy", "Bit Manipulation", u, s, y, v),
+        (c, "coding", "Given a string, find the number of palindromic substrings.", "Medium", "Dynamic Programming / Strings", u, s, y, v),
+        (c, "coding", "Write a program to implement quicksort.", "Medium", "Sorting / Recursion", u, s, y, v),
+        (c, "coding", "Find the minimum number of platforms required at a railway station given arrival and departure times.", "Medium", "Greedy / Sorting", u, s, y, v),
+        (c, "coding", "Implement a function that determines if a given number is a happy number.", "Easy", "Math / Hashing", u, s, y, v),
+        (c, "coding", "Find the longest path in a DAG (directed acyclic graph).", "Hard", "Graphs / DP", u, s, y, v),
+        (c, "coding", "Write a program to print the level-order traversal of a binary tree.", "Easy", "Trees / BFS", u, s, y, v),
+        (c, "coding", "Find all possible words from a phone number using a keypad mapping.", "Medium", "Backtracking / Strings", u, s, y, v),
+        (c, "coding", "Implement an in-order, pre-order, and post-order tree traversal without recursion.", "Hard", "Trees / Stack", u, s, y, v),
+        # technical (10)
+        (c, "technical", "What is 5G? How does it differ from 4G in terms of technology?", "Medium", "Telecom / Networking", u, s, y, v),
+        (c, "technical", "What is IoT? Give examples of applications in enterprise settings.", "Easy", "IoT / Emerging Tech", u, s, y, v),
+        (c, "technical", "What is the difference between structured and unstructured data?", "Easy", "Data / Big Data", u, s, y, v),
+        (c, "technical", "What is DevOps? What is the goal of a CI/CD pipeline?", "Easy", "DevOps", u, s, y, v),
+        (c, "technical", "What is the difference between synchronous and asynchronous communication?", "Easy", "Networking / Concurrency", u, s, y, v),
+        (c, "technical", "What is edge computing? How does it relate to cloud computing?", "Medium", "Cloud / Architecture", u, s, y, v),
+        (c, "technical", "What is a firewall? What are the types of firewalls?", "Easy", "Networking / Security", u, s, y, v),
+        (c, "technical", "What is the difference between black-box, white-box, and grey-box testing?", "Easy", "Software Testing", u, s, y, v),
+        (c, "technical", "What is an SLA (Service Level Agreement)? How is it used in IT services?", "Easy", "IT Services / Management", u, s, y, v),
+        (c, "technical", "What is a virtual machine? How does it differ from a container?", "Easy", "Virtualization / Cloud", u, s, y, v),
+        # hr (12)
+        (c, "hr", "Tell me about yourself.", "Easy", "Introduction", u, s, y, v),
+        (c, "hr", "Why Tech Mahindra?", "Easy", "Company Fit", u, s, y, v),
+        (c, "hr", "What do you know about Tech Mahindra's focus on telecom and 5G?", "Medium", "Company Knowledge", u, s, y, v),
+        (c, "hr", "Describe a group project and your role in it.", "Easy", "Teamwork", u, s, y, v),
+        (c, "hr", "Tell me about a situation where you had to deal with an uncooperative team member.", "Medium", "Conflict Resolution", u, s, y, v),
+        (c, "hr", "How do you handle failure or setbacks in your work?", "Easy", "Resilience", u, s, y, v),
+        (c, "hr", "What are your key technical skills and how have you applied them?", "Easy", "Self Assessment", u, s, y, v),
+        (c, "hr", "Are you willing to work in any domain or location assigned?", "Easy", "Work Preferences", u, s, y, v),
+        (c, "hr", "What motivates you to grow as a software engineer?", "Easy", "Motivation", u, s, y, v),
+        (c, "hr", "Tell me about a challenge you faced in your academic project and how you overcame it.", "Medium", "Behavioral", u, s, y, v),
+        (c, "hr", "Where do you see yourself in 2 years?", "Easy", "Career Goals", u, s, y, v),
+        (c, "hr", "What do you do outside of academics to improve your technical skills?", "Easy", "Learning Attitude", u, s, y, v),
+    ]
+
+
 def _seed_pyq_questions():
     """Seed pyq_questions with hardcoded sourced data for top companies."""
-    questions = [
-        # TCS NQT
-        ("TCS", "aptitude", "Find the next number in series: 2, 6, 12, 20, 30, ?", "Easy", "Number Series", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "aptitude", "A train travels 360km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "aptitude", "If A is the brother of B, B is the sister of C, and C is the father of D, then how is A related to D?", "Medium", "Blood Relations", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "aptitude", "All roses are flowers. Some flowers fade quickly. Therefore: (A) Some roses fade quickly (B) No roses fade quickly (C) Either A or B (D) Cannot be determined", "Medium", "Syllogism", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "aptitude", "A man can do a job in 15 days. His son can do the same job in 20 days. How many days will they take if they work together?", "Easy", "Time & Work", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "coding", "Write a program to print all prime numbers between 1 and N.", "Easy", "Basic Programming", "https://prepinsta.com/tcs/tcs-coding-questions/", "PrepInsta · TCS NQT Coding", 2024, 1),
-        ("TCS", "coding", "Reverse a given string without using built-in reverse functions.", "Easy", "Strings", "https://prepinsta.com/tcs/tcs-coding-questions/", "PrepInsta · TCS NQT Coding", 2024, 1),
-        ("TCS", "technical", "What is the difference between a class and an object in OOP?", "Easy", "OOPs", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "technical", "What is normalization in DBMS? Explain 1NF, 2NF, 3NF.", "Medium", "DBMS", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        ("TCS", "technical", "What is the difference between stack and heap memory?", "Easy", "C/C++ Basics", "https://prepinsta.com/tcs/", "PrepInsta · TCS NQT", 2024, 1),
-        # Infosys InfyTQ
-        ("Infosys", "aptitude", "A train travels 360km in 4 hours. What is its speed in m/s?", "Easy", "Time & Distance", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
-        ("Infosys", "aptitude", "Find the odd one out: 2, 4, 8, 16, 31, 64", "Easy", "Number Series", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
-        ("Infosys", "aptitude", "Six people sit in a row: A, B, C, D, E, F. A is to the left of B. C is between D and E. Where is F?", "Hard", "Seating Arrangement", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
-        ("Infosys", "coding", "Write a program to find the factorial of a number using recursion.", "Easy", "Recursion", "https://prepinsta.com/infosys/infosys-coding-questions/", "PrepInsta · Infosys Coding", 2024, 1),
-        ("Infosys", "coding", "Given an array, find the second largest element.", "Easy", "Arrays", "https://prepinsta.com/infosys/infosys-coding-questions/", "PrepInsta · Infosys Coding", 2024, 1),
-        ("Infosys", "technical", "What is polymorphism? Give examples of compile-time and runtime polymorphism.", "Medium", "OOPs", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
-        ("Infosys", "technical", "What is a foreign key? How is it different from a primary key?", "Easy", "DBMS", "https://prepinsta.com/infosys/", "PrepInsta · Infosys InfyTQ", 2024, 1),
-        # Wipro NLTH
-        ("Wipro", "aptitude", "What is 15% of 2000?", "Easy", "Percentages", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
-        ("Wipro", "aptitude", "If BOOK is coded as CPPL, how is COOK coded?", "Easy", "Coding/Decoding", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
-        ("Wipro", "coding", "Write a program to check if a string is a palindrome.", "Easy", "Strings", "https://prepinsta.com/wipro/wipro-coding-questions/", "PrepInsta · Wipro NLTH Coding", 2024, 1),
-        ("Wipro", "coding", "Print the Fibonacci sequence up to N terms.", "Easy", "Basic Programming", "https://prepinsta.com/wipro/wipro-coding-questions/", "PrepInsta · Wipro NLTH Coding", 2024, 1),
-        ("Wipro", "technical", "What is inheritance in OOP? List its types.", "Easy", "OOPs", "https://prepinsta.com/wipro/", "PrepInsta · Wipro NLTH", 2024, 1),
-        # Cognizant GenC
-        ("Cognizant", "aptitude", "A car covers 120 km in 3 hours. Another car covers 180 km in 4 hours. What is the ratio of their speeds?", "Medium", "Ratio & Proportion", "https://prepinsta.com/cognizant/", "PrepInsta · Cognizant GenC", 2024, 1),
-        ("Cognizant", "coding", "Write a program to sort an array using bubble sort.", "Easy", "Sorting", "https://prepinsta.com/cognizant/cognizant-coding-questions/", "PrepInsta · Cognizant GenC", 2024, 1),
-        ("Cognizant", "technical", "What is Agile methodology? What are sprints?", "Easy", "SDLC / Agile", "https://prepinsta.com/cognizant/", "PrepInsta · Cognizant GenC", 2024, 1),
-        # Accenture
-        ("Accenture", "aptitude", "If the sum of two numbers is 20 and their product is 96, find the numbers.", "Easy", "Algebra", "https://prepinsta.com/accenture/", "PrepInsta · Accenture", 2024, 1),
-        ("Accenture", "coding", "Write a program to print a pattern: * ** *** **** *****", "Easy", "Patterns", "https://prepinsta.com/accenture/accenture-coding-questions/", "PrepInsta · Accenture", 2024, 1),
-        ("Accenture", "coding", "Find the sum of all elements in an array.", "Easy", "Arrays", "https://prepinsta.com/accenture/accenture-coding-questions/", "PrepInsta · Accenture", 2024, 1),
-        # Amazon SDE
-        ("Amazon", "coding", "Given an array of integers, return indices of the two numbers such that they add up to a target (Two Sum).", "Easy", "Arrays / Hash Map", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
-        ("Amazon", "coding", "Design an LRU (Least Recently Used) Cache that supports get and put operations in O(1) time.", "Hard", "Design / Linked List", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
-        ("Amazon", "coding", "Merge all overlapping intervals in a given list of intervals.", "Medium", "Arrays / Intervals", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
-        ("Amazon", "coding", "Find the top K frequent elements in an array.", "Medium", "Heap / Hash Map", "https://leetcode.com/company/amazon/", "LeetCode · Amazon Interview", 2024, 1),
-        ("Amazon", "technical", "Design a URL shortening service like bit.ly. What are the key components?", "Hard", "System Design", "https://www.geeksforgeeks.org/amazon-interview-experience/", "GFG · Amazon Interview Experience", 2024, 1),
-        ("Amazon", "hr", "Tell me about a time when you had to work with a difficult team member. What did you do? (Conflict resolution - Leadership Principle: Earn Trust)", "Medium", "Leadership Principles", "https://www.amazon.jobs/en/landing_pages/leadership-principles", "Amazon Leadership Principles", 2024, 1),
-        ("Amazon", "hr", "Describe a situation where you had to deliver results under tight deadlines. (Leadership Principle: Deliver Results)", "Medium", "Leadership Principles", "https://www.amazon.jobs/en/landing_pages/leadership-principles", "Amazon Leadership Principles", 2024, 1),
-        # Microsoft SDE
-        ("Microsoft", "coding", "Given a linked list, reverse it in place.", "Easy", "Linked Lists", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
-        ("Microsoft", "coding", "Find the lowest common ancestor (LCA) of two nodes in a binary tree.", "Medium", "Trees", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
-        ("Microsoft", "coding", "Given a string, find the length of the longest substring without repeating characters.", "Medium", "Strings / Sliding Window", "https://leetcode.com/company/microsoft/", "LeetCode · Microsoft Interview", 2024, 1),
-        ("Microsoft", "technical", "What is the difference between a process and a thread? How does context switching work?", "Medium", "Operating Systems", "https://www.geeksforgeeks.org/microsoft-interview-experience/", "GFG · Microsoft Interview Experience", 2024, 1),
-        # Google SWE
-        ("Google", "coding", "Given n non-negative integers representing an elevation map, compute how much water it can trap after raining.", "Hard", "Arrays / Two Pointers", "https://leetcode.com/company/google/", "LeetCode · Google Interview", 2024, 1),
-        ("Google", "coding", "Find the kth largest element in an unsorted array without sorting.", "Medium", "Heap / QuickSelect", "https://leetcode.com/company/google/", "LeetCode · Google Interview", 2024, 1),
-        ("Google", "technical", "How would you design a distributed key-value store? What consistency guarantees would you provide?", "Hard", "System Design / Distributed Systems", "https://www.geeksforgeeks.org/google-interview-experience/", "GFG · Google Interview Experience", 2024, 1),
-        # Deloitte
-        ("Deloitte", "aptitude", "What is 25% of 480?", "Easy", "Percentages", "https://prepinsta.com/deloitte/", "PrepInsta · Deloitte", 2024, 1),
-        ("Deloitte", "technical", "What is the difference between SQL and NoSQL databases? When would you use each?", "Medium", "DBMS", "https://prepinsta.com/deloitte/", "PrepInsta · Deloitte", 2024, 1),
-        # Capgemini
-        ("Capgemini", "aptitude", "If 6 men can complete a work in 8 days, how many days will 4 men take to complete the same work?", "Easy", "Time & Work", "https://prepinsta.com/capgemini/", "PrepInsta · Capgemini", 2024, 1),
-        ("Capgemini", "coding", "Write a program to find all anagrams of a given string in a text.", "Medium", "Strings / Sliding Window", "https://prepinsta.com/capgemini/capgemini-coding-questions/", "PrepInsta · Capgemini Coding", 2024, 1),
-        # HCL
-        ("HCL", "aptitude", "A shopkeeper sells goods at 20% profit. If cost price is Rs 500, what is the selling price?", "Easy", "Profit & Loss", "https://prepinsta.com/hcl/", "PrepInsta · HCL", 2024, 1),
-        ("HCL", "coding", "Check if a number is Armstrong number (sum of cubes of digits equals number).", "Easy", "Basic Programming", "https://prepinsta.com/hcl/", "PrepInsta · HCL", 2024, 1),
-    ]
+    questions = []
+    questions.extend(_get_tcs_questions())
+    questions.extend(_get_infosys_questions())
+    questions.extend(_get_wipro_questions())
+    questions.extend(_get_cognizant_questions())
+    questions.extend(_get_accenture_questions())
+    questions.extend(_get_amazon_questions())
+    questions.extend(_get_microsoft_questions())
+    questions.extend(_get_google_questions())
+    questions.extend(_get_zoho_questions())
+    questions.extend(_get_freshworks_questions())
+    questions.extend(_get_goldman_questions())
+    questions.extend(_get_deloitte_questions())
+    questions.extend(_get_capgemini_questions())
+    questions.extend(_get_hcl_questions())
+    questions.extend(_get_techmahindra_questions())
     try:
         with engine.begin() as conn:
             for q in questions:
@@ -3385,6 +4198,41 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
                     })
     except Exception as e:
         print(f"[OffCampus] Remotive error: {e}")
+
+    # Source 4: The Muse (entry-level tech jobs)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://www.themuse.com/api/public/jobs",
+                params={"category": "Computer and IT", "level": "Entry Level", "page": 1},
+            )
+            if resp.status_code == 200:
+                muse_data = resp.json()
+                for job in (muse_data.get("results") or [])[:20]:
+                    company = job.get("company", {})
+                    company_name = company.get("name", "Unknown") if isinstance(company, dict) else "Unknown"
+                    locations = job.get("locations") or []
+                    location_str = locations[0].get("name", "Remote") if locations else "Remote"
+                    pub_date = job.get("publication_date", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(pub_date)
+                    refs = job.get("refs", {})
+                    apply_link = refs.get("landing_page", "") if isinstance(refs, dict) else ""
+                    jobs.append({
+                        "id": f"muse-{job.get('id', '')}",
+                        "title": job.get("name", ""),
+                        "company": company_name,
+                        "location": location_str,
+                        "description": (job.get("contents", "") or "")[:400],
+                        "salary": "",
+                        "apply_link": apply_link,
+                        "created": pub_date,
+                        "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val,
+                        "source": "The Muse",
+                        "match_score": 50,
+                    })
+    except Exception as e:
+        print(f"[OffCampus] The Muse error: {e}")
 
     if not jobs:
         raise HTTPException(status_code=503, detail="No job sources available. Configure ADZUNA_APP_ID and ADZUNA_APP_KEY in .env")

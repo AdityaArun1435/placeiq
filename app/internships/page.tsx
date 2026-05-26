@@ -5,6 +5,56 @@ import { useEffect, useState, useMemo } from "react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
+function stripHtml(html: string): string {
+  if (!html) return "";
+  let text = html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<\/li>/gi, " ")
+    .replace(/<[^>]+>/g, "");
+  text = text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return text.replace(/\s+/g, " ").trim();
+}
+
+const KNOWN_COMPANIES = new Set([
+  "google", "amazon", "microsoft", "meta", "apple", "uber", "airbnb", "stripe",
+  "atlassian", "salesforce", "adobe", "oracle", "intel", "qualcomm", "nvidia",
+  "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "cred", "meesho", "zepto",
+  "ola", "paytm", "groww", "zerodha", "dream11", "freshworks", "zoho", "postman",
+  "tcs", "infosys", "wipro", "hcl", "cognizant", "capgemini", "accenture", "ibm", "deloitte",
+]);
+
+function computeInternshipScore(job: { title: string; description: string; company: string; salary: string; location: string }, profile: { targetRole: string; branch: string; skills: string[] }): number {
+  let score = 0;
+  const title = (job.title || "").toLowerCase();
+  const desc = (job.description || "").toLowerCase();
+  const role = (profile.targetRole || "").toLowerCase();
+  const branch = (profile.branch || "").toLowerCase().split(" ")[0];
+
+  if (role && title.includes(role)) score += 3;
+  else if (branch && title.includes(branch)) score += 3;
+
+  const topSkills = (profile.skills || []).slice(0, 5);
+  for (const skill of topSkills) {
+    if (desc.includes(skill.toLowerCase()) || title.includes(skill.toLowerCase())) score += 1;
+  }
+
+  if (KNOWN_COMPANIES.has((job.company || "").toLowerCase().trim())) score += 2;
+
+  if (job.salary && job.salary.length > 0) score += 1;
+
+  const loc = (job.location || "").toLowerCase();
+  if (loc.includes("remote") || loc.includes("hybrid")) score += 1;
+
+  return score;
+}
+
 type Profile = {
   college: string;
   collegeTier: string;
@@ -361,6 +411,16 @@ export default function Internships() {
     college_tier?: string;
   } | null>(null);
 
+  const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set());
+
+  function toggleDesc(id: string) {
+    setExpandedDescs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
@@ -516,7 +576,7 @@ export default function Internships() {
   }
 
   const filteredInternships = useMemo(() => {
-    return internships.filter(j => {
+    const filtered = internships.filter(j => {
       if (filterRole && !j.title.toLowerCase().includes(filterRole.toLowerCase())) return false;
       if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
       if (filterStipend === "Paid" && !j.salary) return false;
@@ -524,13 +584,19 @@ export default function Internships() {
       if (filterPosted === "7" && (j.days_ago === null || j.days_ago > 7)) return false;
       if (filterPosted === "30" && (j.days_ago === null || j.days_ago > 30)) return false;
       return true;
-    }).sort((a, b) => {
-      if (a.days_ago === null && b.days_ago === null) return 0;
-      if (a.days_ago === null) return 1;
-      if (b.days_ago === null) return -1;
-      return a.days_ago - b.days_ago;
     });
-  }, [internships, filterRole, filterLocation, filterStipend, filterPosted]);
+
+    if (profile) {
+      const scored = filtered.map(j => ({
+        ...j,
+        relevanceScore: computeInternshipScore(j, { targetRole: profile.targetRole, branch: profile.branch, skills: profile.skills }),
+      }));
+      scored.sort((a, b) => b.relevanceScore - a.relevanceScore || (a.days_ago ?? 999) - (b.days_ago ?? 999));
+      return scored;
+    }
+
+    return filtered.map(j => ({ ...j, relevanceScore: 0 })).sort((a, b) => (a.days_ago ?? 999) - (b.days_ago ?? 999));
+  }, [internships, filterRole, filterLocation, filterStipend, filterPosted, profile]);
 
   if (status === "loading") return <LoadingScreen />;
 
@@ -663,61 +729,104 @@ export default function Internships() {
                     Some listings are AI-generated examples. Verify on the company&apos;s careers page.
                   </p>
                 )}
-                <div className="grid gap-4">
-                  {filteredInternships.map(job => (
-                    <div key={job.id || job.redirect_url} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                            <h3 className="font-semibold text-white truncate">{job.title}</h3>
-                            {job.source && (
-                              <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>
-                                {job.source}
+                {filteredInternships.length === 0 && !listingsLoading ? (
+                  <div className="text-center py-16 text-gray-500">
+                    No internships match your filters. Try broadening your search.
+                  </div>
+                ) : (() => {
+                  const topMatches = filteredInternships.slice(0, 10).filter(j => j.relevanceScore > 0);
+                  const rest = filteredInternships.slice(topMatches.length);
+
+                  const renderCard = (job: typeof filteredInternships[0], isRecommended = false) => {
+                    const id = job.id || job.redirect_url;
+                    const isExpanded = expandedDescs.has(id);
+                    const cleanDesc = stripHtml(job.description || "");
+                    const showToggle = cleanDesc.length > 180;
+                    return (
+                      <div key={id} className={`bg-[#111] border rounded-2xl p-5 hover:border-gray-700 transition ${isRecommended ? "border-blue-700/40 border-l-4 border-l-blue-500" : "border-gray-800"}`}>
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                              {isRecommended && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0">Recommended</span>
+                              )}
+                              <h3 className="font-semibold text-white truncate">{job.title}</h3>
+                              {job.source && (
+                                <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>
+                                  {job.source}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {hiringBadge(job.hiring_status)}
+                            {job.days_ago !== null && (
+                              <span className="text-xs text-gray-500">
+                                {job.days_ago === 0 ? "Today" : job.days_ago === 1 ? "Yesterday" : `${job.days_ago}d ago`}
                               </span>
                             )}
                           </div>
-                          <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
                         </div>
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          {hiringBadge(job.hiring_status)}
-                          {job.days_ago !== null && (
-                            <span className="text-xs text-gray-500">
-                              {job.days_ago === 0 ? "Today" : job.days_ago === 1 ? "Yesterday" : `${job.days_ago}d ago`}
-                            </span>
+
+                        <div className="flex items-center gap-4 mb-3">
+                          <span className="text-sm text-blue-400 font-medium">
+                            {job.salary || "Stipend not mentioned"}
+                          </span>
+                        </div>
+
+                        <div className="mb-3">
+                          {!cleanDesc || cleanDesc.length < 20 ? (
+                            <p className="text-xs text-gray-600 italic">No description available</p>
+                          ) : (
+                            <>
+                              <p className={`text-gray-500 text-xs leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
+                              {showToggle && (
+                                <button onClick={() => toggleDesc(id)} className="text-xs text-blue-500 hover:text-blue-400 mt-1 transition">
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
+
+                        {job.redirect_url && (
+                          <div className="flex justify-end">
+                            <a
+                              href={job.redirect_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+                            >
+                              Apply →
+                            </a>
+                          </div>
+                        )}
                       </div>
+                    );
+                  };
 
-                      <div className="flex items-center gap-4 mb-3">
-                        <span className="text-sm text-blue-400 font-medium">
-                          {job.salary || "Stipend not mentioned"}
-                        </span>
-                      </div>
-
-                      {job.description && (
-                        <p className="text-gray-500 text-xs mb-3 line-clamp-2">{job.description}</p>
-                      )}
-
-                      {job.redirect_url && (
-                        <div className="flex justify-end">
-                          <a
-                            href={job.redirect_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
-                          >
-                            Apply →
-                          </a>
+                  return (
+                    <>
+                      {topMatches.length > 0 && (
+                        <div className="mb-6">
+                          <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider mb-3">Best matches for you</p>
+                          <div className="grid gap-4">
+                            {topMatches.map(job => renderCard(job, true))}
+                          </div>
                         </div>
                       )}
-                    </div>
-                  ))}
-                  {filteredInternships.length === 0 && !listingsLoading && (
-                    <div className="text-center py-16 text-gray-500">
-                      No internships match your filters. Try broadening your search.
-                    </div>
-                  )}
-                </div>
+                      {rest.length > 0 && (
+                        <div>
+                          {topMatches.length > 0 && <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">All internships</p>}
+                          <div className="grid gap-4">
+                            {rest.map(job => renderCard(job, false))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>

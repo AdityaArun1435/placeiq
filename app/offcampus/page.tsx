@@ -36,6 +36,23 @@ const TIER1_NAMES = new Set([
 
 function isTier1(company: string) { return TIER1_NAMES.has(company.toLowerCase().trim()); }
 
+function stripHtml(html: string): string {
+  if (!html) return "";
+  let text = html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, " ")
+    .replace(/<\/li>/gi, " ")
+    .replace(/<[^>]+>/g, "");
+  text = text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function matchColor(score: number) {
   if (score >= 60) return "bg-green-500";
   if (score >= 30) return "bg-yellow-500";
@@ -54,6 +71,13 @@ function matchTextColor(score: number) {
   return "text-red-400";
 }
 
+function sourceBadgeStyle(source: string) {
+  if (source === "Remotive")   return "bg-green-500/10 text-green-400 border-green-500/20";
+  if (source === "Arbeitnow")  return "bg-orange-500/10 text-orange-400 border-orange-500/20";
+  if (source === "The Muse")   return "bg-purple-500/10 text-purple-400 border-purple-500/20";
+  return "bg-blue-500/10 text-blue-400 border-blue-500/20"; // Adzuna
+}
+
 function timeAgo(created: string): string {
   if (!created) return "";
   try {
@@ -66,6 +90,31 @@ function timeAgo(created: string): string {
     if (days < 30) return `${Math.floor(days / 7)}w ago`;
     return `${Math.floor(days / 30)}mo ago`;
   } catch { return ""; }
+}
+
+function computeRelevanceScore(job: Job, profile: Profile, minSalaryVal: number): number {
+  let score = 0;
+  const title = (job.title || "").toLowerCase();
+  const desc = (job.description || "").toLowerCase();
+  const role = (profile.targetRole || "").toLowerCase();
+
+  if (role && title.includes(role)) score += 3;
+
+  const topSkills = (profile.skills || []).slice(0, 5);
+  for (const skill of topSkills) {
+    if (desc.includes(skill.toLowerCase()) || title.includes(skill.toLowerCase())) score += 1;
+  }
+
+  if (isTier1(job.company)) score += 2;
+
+  if (minSalaryVal > 0) {
+    const match = job.salary.match(/[\d.]+/);
+    if (match && parseFloat(match[0]) >= minSalaryVal) score += 1;
+  } else if (job.salary) {
+    score += 1;
+  }
+
+  return score;
 }
 
 export default function OffCampus() {
@@ -84,6 +133,9 @@ export default function OffCampus() {
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
 
+  const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set());
+  const [showIrrelevant, setShowIrrelevant] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
@@ -99,11 +151,21 @@ export default function OffCampus() {
     } catch {}
   }, []);
 
+  function toggleDesc(id: string) {
+    setExpandedDescs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   async function search() {
     if (!role.trim()) return;
     setLoading(true);
     setError("");
     setSearched(true);
+    setExpandedDescs(new Set());
+    setShowIrrelevant(false);
     try {
       const res = await fetch(`${config.apiUrl}/api/offcampus/jobs`, {
         method: "POST",
@@ -138,12 +200,129 @@ export default function OffCampus() {
 
   if (status === "loading") return <LoadingScreen />;
 
+  // Compute relevance scores and split
+  const minSalaryVal = minSalary ? parseFloat(minSalary) : 0;
+  const scoredJobs = profile
+    ? jobs.map(j => ({ ...j, relevanceScore: computeRelevanceScore(j, profile, minSalaryVal) }))
+    : jobs.map(j => ({ ...j, relevanceScore: j.match_score > 0 ? 1 : 0 }));
+
+  scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore || (isTier1(b.company) ? 1 : 0) - (isTier1(a.company) ? 1 : 0));
+
+  const relevantJobs = scoredJobs.filter(j => j.relevanceScore > 0);
+  const irrelevantJobs = scoredJobs.filter(j => j.relevanceScore === 0);
+
+  function renderJobCard(job: typeof scoredJobs[0]) {
+    const cleanDesc = stripHtml(job.description || "");
+    const isExpanded = expandedDescs.has(job.id);
+    const showDescToggle = cleanDesc.length > 180;
+
+    return (
+      <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${isTier1(job.company) ? "border-blue-800/50" : "border-gray-800"}`}>
+        <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h3 className="font-semibold text-white">{job.title}</h3>
+              {isTier1(job.company) && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium">Tier 1</span>
+              )}
+              {job.source && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sourceBadgeStyle(job.source)}`}>{job.source}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
+              <span>{job.company}</span>
+              <span className="text-gray-700">·</span>
+              <span>{job.location}</span>
+              {job.salary && (
+                <>
+                  <span className="text-gray-700">·</span>
+                  <span className="text-green-400">{job.salary}</span>
+                </>
+              )}
+              {job.created && (
+                <>
+                  <span className="text-gray-700">·</span>
+                  <span className="text-gray-600">{timeAgo(job.created)}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="text-right shrink-0 space-y-2">
+            {job.hiring_status && (
+              <div>
+                <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                  job.hiring_status === "Actively Hiring"
+                    ? "bg-green-900/30 text-green-400 border-green-700/40"
+                    : job.hiring_status === "Recently Posted"
+                    ? "bg-yellow-900/30 text-yellow-400 border-yellow-700/40"
+                    : "bg-gray-800 text-gray-500 border-gray-700"
+                }`}>
+                  {job.hiring_status}
+                </span>
+              </div>
+            )}
+            <p className={`text-xs font-medium ${matchTextColor(job.match_score)}`}>{matchLabel(job.match_score)}</p>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${matchColor(job.match_score)}`} style={{ width: `${job.match_score}%` }} />
+              </div>
+              <span className="text-sm font-bold text-white">{job.match_score}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="mb-4">
+          {!cleanDesc || cleanDesc.length < 20 ? (
+            <p className="text-xs text-gray-600 italic">No description available</p>
+          ) : (
+            <>
+              <p className={`text-xs text-gray-500 leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
+              {showDescToggle && (
+                <button onClick={() => toggleDesc(job.id)} className="text-xs text-blue-500 hover:text-blue-400 mt-1 transition">
+                  {isExpanded ? "Show less" : "Show more"}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex gap-2 flex-wrap">
+            {(profile?.skills || []).slice(0, 5).map(skill => (
+              <span
+                key={skill}
+                className={`text-xs px-2 py-0.5 rounded-full border ${
+                  (job.description || "").toLowerCase().includes(skill.toLowerCase())
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : "bg-gray-800 text-gray-600 border-gray-700"
+                }`}
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+          {job.apply_link && (
+            <a
+              href={job.apply_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition font-medium"
+            >
+              Apply Now →
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <div className="max-w-5xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Off Campus Jobs</h2>
         <p className="text-gray-400 mb-8">
-          Live jobs from Adzuna · Arbeitnow · Remotive · Tier 1 companies sorted first · match score based on your skill profile
+          Live jobs from Adzuna · Arbeitnow · Remotive · The Muse · Sorted by relevance to your profile
           {profile?.skills?.length ? ` (${profile.skills.length} skills)` : ""}
         </p>
 
@@ -225,104 +404,36 @@ export default function OffCampus() {
         {!loading && searched && jobs.length === 0 && !error && (
           <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
             <p className="text-gray-400 text-lg font-medium mb-2">No jobs found</p>
-            <p className="text-gray-600 text-sm">Try a different role or location — Adzuna may have limited listings for this query.</p>
+            <p className="text-gray-600 text-sm">Try a different role or location.</p>
           </div>
         )}
 
         {!loading && jobs.length > 0 && (
           <>
             <p className="text-sm text-gray-500 mb-4">
-              Showing <span className="text-white">{jobs.length}</span> results · Tier 1 companies first, then by recency
+              Showing <span className="text-white">{relevantJobs.length}</span> matched results
+              {irrelevantJobs.length > 0 && <span> · {irrelevantJobs.length} low-relevance hidden</span>}
+              {" "}· sorted by relevance to your profile
             </p>
             <div className="space-y-4">
-              {jobs.map(job => (
-                <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${isTier1(job.company) ? "border-blue-800/50" : "border-gray-800"}`}>
-                  <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-white">{job.title}</h3>
-                        {isTier1(job.company) && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium">Tier 1</span>
-                        )}
-                        {job.source && job.source !== "Adzuna" && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 border border-gray-700">{job.source}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
-                        <span>{job.company}</span>
-                        <span className="text-gray-700">·</span>
-                        <span>{job.location}</span>
-                        {job.salary && (
-                          <>
-                            <span className="text-gray-700">·</span>
-                            <span className="text-green-400">{job.salary}</span>
-                          </>
-                        )}
-                        {job.created && (
-                          <>
-                            <span className="text-gray-700">·</span>
-                            <span className="text-gray-600">{timeAgo(job.created)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 space-y-2">
-                      {job.hiring_status && (
-                        <div>
-                          <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                            job.hiring_status === "Actively Hiring"
-                              ? "bg-green-900/30 text-green-400 border-green-700/40"
-                              : job.hiring_status === "Recently Posted"
-                              ? "bg-yellow-900/30 text-yellow-400 border-yellow-700/40"
-                              : "bg-gray-800 text-gray-500 border-gray-700"
-                          }`}>
-                            {job.hiring_status}
-                          </span>
-                        </div>
-                      )}
-                      <p className={`text-xs font-medium ${matchTextColor(job.match_score)}`}>{matchLabel(job.match_score)}</p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${matchColor(job.match_score)}`} style={{ width: `${job.match_score}%` }} />
-                        </div>
-                        <span className="text-sm font-bold text-white">{job.match_score}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {job.description && (
-                    <p className="text-xs text-gray-500 leading-relaxed mb-4 line-clamp-3">{job.description}</p>
-                  )}
-
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex gap-2 flex-wrap">
-                      {(profile?.skills || []).slice(0, 5).map(skill => (
-                        <span
-                          key={skill}
-                          className={`text-xs px-2 py-0.5 rounded-full border ${
-                            job.description?.toLowerCase().includes(skill.toLowerCase())
-                              ? "bg-green-500/10 text-green-400 border-green-500/20"
-                              : "bg-gray-800 text-gray-600 border-gray-700"
-                          }`}
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                    {job.apply_link && (
-                      <a
-                        href={job.apply_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition font-medium"
-                      >
-                        Apply Now →
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {relevantJobs.map(job => renderJobCard(job))}
             </div>
+
+            {irrelevantJobs.length > 0 && (
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowIrrelevant(v => !v)}
+                  className="w-full text-sm text-gray-600 hover:text-gray-400 border border-gray-800 hover:border-gray-700 py-3 rounded-xl transition"
+                >
+                  {showIrrelevant ? "Hide" : `Show all ${irrelevantJobs.length} remaining results`}
+                </button>
+                {showIrrelevant && (
+                  <div className="space-y-4 mt-4">
+                    {irrelevantJobs.map(job => renderJobCard(job))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -330,7 +441,7 @@ export default function OffCampus() {
           <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
             <p className="text-2xl mb-3">🔍</p>
             <p className="text-gray-400 mb-2">Search for off-campus jobs</p>
-            <p className="text-gray-600 text-sm">Your skill match score is calculated from the {profile?.skills?.length || 0} skills in your profile.</p>
+            <p className="text-gray-600 text-sm">Results from Adzuna, Remotive, Arbeitnow, and The Muse — sorted by relevance to your {profile?.skills?.length || 0} skills.</p>
           </div>
         )}
       </div>

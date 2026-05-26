@@ -72,6 +72,8 @@ type PlacementHistoryData = {
   data_note: string;
 };
 
+type PredictSnapshot = { cgpa: number; skills: string[] };
+
 function probColor(p: number) {
   if (p >= 70) return "text-green-400";
   if (p >= 40) return "text-yellow-400";
@@ -89,6 +91,30 @@ function daysUntilSeason(): number {
   const season = new Date(now.getFullYear(), 7, 1);
   if (now >= season) season.setFullYear(season.getFullYear() + 1);
   return Math.ceil((season.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getSeasonInfo() {
+  const month = new Date().getMonth();
+  if (month >= 7 && month <= 9) return {
+    name: "Peak Placement Season", multiplier: 1.3,
+    desc: "Aug–Oct · Most companies visit during this period",
+    textColor: "text-green-400", bgColor: "bg-green-500/10", borderColor: "border-green-500/30",
+  };
+  if (month >= 10 && month <= 11) return {
+    name: "Active Season", multiplier: 1.1,
+    desc: "Nov–Dec · Second wave of placement drives",
+    textColor: "text-blue-400", bgColor: "bg-blue-500/10", borderColor: "border-blue-500/30",
+  };
+  if (month >= 0 && month <= 2) return {
+    name: "Slow Season", multiplier: 0.8,
+    desc: "Jan–Mar · Mostly off-campus opportunities",
+    textColor: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30",
+  };
+  return {
+    name: "Off-season", multiplier: 0.6,
+    desc: "Apr–Jul · Minimal on-campus drives",
+    textColor: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/30",
+  };
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -113,6 +139,8 @@ const CATEGORY_BADGE: Record<string, string> = {
 
 const ALL_CATEGORIES = ["All", "Marquee", "Super Dream", "Dream", "Day 1/Day 2", "Core", "Internship"];
 
+const PREDICT_SNAPSHOT_KEY = "placeiq_predict_snapshot";
+
 export default function OnCampus() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -123,6 +151,15 @@ export default function OnCampus() {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const days = daysUntilSeason();
   const [activeTab, setActiveTab] = useState<"predictor" | "history">("predictor");
+  const seasonInfo = getSeasonInfo();
+
+  // Repredict modal state
+  const [showRepredictModal, setShowRepredictModal] = useState(false);
+  const [repredictCgpa, setRepredictCgpa] = useState(0);
+  const [repredictSkills, setRepredictSkills] = useState<string[]>([]);
+  const [newSkillInput, setNewSkillInput] = useState("");
+  const [toast, setToast] = useState("");
+  const [lastPredictSnapshot, setLastPredictSnapshot] = useState<PredictSnapshot | null>(null);
 
   // Placement history state
   const [historyData, setHistoryData] = useState<PlacementHistoryData | null>(null);
@@ -150,6 +187,17 @@ export default function OnCampus() {
     num_sources: number;
   };
   const [sourcesData, setSourcesData] = useState<SourcesData | null>(null);
+
+  // Whether profile has changed since last prediction
+  const hasProfileChanged = !!(result && profile && lastPredictSnapshot && (
+    profile.cgpa !== lastPredictSnapshot.cgpa ||
+    JSON.stringify([...(profile.skills || [])].sort()) !== JSON.stringify([...(lastPredictSnapshot.skills || [])].sort())
+  ));
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 5000);
+  }
 
   async function fetchIntel(company: string) {
     if (intel[company]?.status === "found" || intel[company]?.status === "loading") return;
@@ -195,6 +243,10 @@ export default function OnCampus() {
       const raw = localStorage.getItem("placeiq_profile");
       if (raw) setProfile(JSON.parse(raw));
     } catch {}
+    try {
+      const snap = localStorage.getItem(PREDICT_SNAPSHOT_KEY);
+      if (snap) setLastPredictSnapshot(JSON.parse(snap));
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -213,8 +265,10 @@ export default function OnCampus() {
     }
   }, [activeTab, profile?.college]);
 
-  async function predict() {
+  async function predict(overrides?: { cgpa?: number; skills?: string[] }) {
     if (!profile) return;
+    const cgpa = overrides?.cgpa ?? profile.cgpa;
+    const skills = overrides?.skills ?? profile.skills;
     setLoading(true);
     setError("");
     try {
@@ -226,18 +280,54 @@ export default function OnCampus() {
           college_tier: profile.collegeTier,
           branch: profile.branch,
           target_role: profile.targetRole,
-          skills: profile.skills,
-          cgpa: profile.cgpa,
+          skills,
+          cgpa,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setResult(data);
+      const snapshot: PredictSnapshot = { cgpa, skills };
+      setLastPredictSnapshot(snapshot);
+      try { localStorage.setItem(PREDICT_SNAPSHOT_KEY, JSON.stringify(snapshot)); } catch {}
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
+  }
+
+  function openRepredictModal() {
+    setRepredictCgpa(profile?.cgpa ?? 0);
+    setRepredictSkills([...(profile?.skills ?? [])]);
+    setNewSkillInput("");
+    setShowRepredictModal(true);
+  }
+
+  function submitRepredict() {
+    const isUnchanged = lastPredictSnapshot &&
+      repredictCgpa === lastPredictSnapshot.cgpa &&
+      JSON.stringify([...repredictSkills].sort()) === JSON.stringify([...(lastPredictSnapshot.skills || [])].sort());
+
+    if (isUnchanged) {
+      setShowRepredictModal(false);
+      showToast("Your profile hasn't changed — prediction is the same. Update your CGPA or skills to see a difference.");
+      return;
+    }
+    setShowRepredictModal(false);
+    predict({ cgpa: repredictCgpa, skills: repredictSkills });
+  }
+
+  function addRepredictSkill() {
+    const trimmed = newSkillInput.trim();
+    if (trimmed && !repredictSkills.includes(trimmed)) {
+      setRepredictSkills(prev => [...prev, trimmed]);
+    }
+    setNewSkillInput("");
+  }
+
+  function removeRepredictSkill(skill: string) {
+    setRepredictSkills(prev => prev.filter(s => s !== skill));
   }
 
   if (status === "loading") return <LoadingScreen />;
@@ -252,8 +342,94 @@ export default function OnCampus() {
     }
   }
 
+  const currentMonthName = new Date().toLocaleString("default", { month: "long" });
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 text-gray-200 text-sm px-5 py-3 rounded-xl shadow-2xl max-w-md text-center animate-fade-in">
+          {toast}
+        </div>
+      )}
+
+      {/* Repredict Modal */}
+      {showRepredictModal && (
+        <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center px-4">
+          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold">Update & Repredict</h3>
+              <button onClick={() => setShowRepredictModal(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div className="space-y-5">
+              {/* CGPA */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">CGPA</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  value={repredictCgpa}
+                  onChange={e => setRepredictCgpa(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+
+              {/* Skills */}
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Skills</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {repredictSkills.map(skill => (
+                    <span key={skill} className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs px-2.5 py-1 rounded-full">
+                      {skill}
+                      <button onClick={() => removeRepredictSkill(skill)} className="text-blue-500 hover:text-red-400 ml-1 leading-none">×</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newSkillInput}
+                    onChange={e => setNewSkillInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addRepredictSkill()}
+                    placeholder="Add a new skill..."
+                    className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                  />
+                  <button
+                    onClick={addRepredictSkill}
+                    className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Season month */}
+              <div className={`${seasonInfo.bgColor} border ${seasonInfo.borderColor} rounded-lg px-4 py-3`}>
+                <p className="text-xs text-gray-400 mb-0.5">Current month: <span className="text-white font-medium">{currentMonthName}</span></p>
+                <p className={`text-xs ${seasonInfo.textColor}`}>{seasonInfo.name} · {seasonInfo.desc}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowRepredictModal(false)}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2.5 rounded-lg text-sm font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRepredict}
+                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg text-sm font-medium transition"
+              >
+                Run New Prediction
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto px-8 py-10">
         <div className="flex items-start justify-between mb-8 gap-6 flex-wrap">
           <div>
@@ -297,6 +473,19 @@ export default function OnCampus() {
             {/* ── PREDICTOR TAB ── */}
             {activeTab === "predictor" && (
               <>
+                {/* Season banner */}
+                <div className={`${seasonInfo.bgColor} border ${seasonInfo.borderColor} rounded-xl px-5 py-3.5 mb-5 flex items-center justify-between flex-wrap gap-3`}>
+                  <div>
+                    <p className={`text-sm font-semibold ${seasonInfo.textColor}`}>
+                      {currentMonthName} · {seasonInfo.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{seasonInfo.desc}</p>
+                  </div>
+                  <span className={`text-xs font-medium ${seasonInfo.textColor} bg-white/5 border ${seasonInfo.borderColor} px-2.5 py-1 rounded-full shrink-0`}>
+                    ×{seasonInfo.multiplier} probability factor
+                  </span>
+                </div>
+
                 <div className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 mb-6 flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-6 text-sm flex-wrap">
                     <span><span className="text-gray-500">College: </span><span className="text-white">{profile.college}</span></span>
@@ -304,13 +493,24 @@ export default function OnCampus() {
                     <span><span className="text-gray-500">CGPA: </span><span className="text-white">{profile.cgpa}</span></span>
                     <span><span className="text-gray-500">Target: </span><span className="text-white">{profile.targetRole}</span></span>
                   </div>
-                  <button
-                    onClick={predict}
-                    disabled={loading}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition"
-                  >
-                    {loading ? "Predicting..." : result ? "Re-predict" : "Predict Companies →"}
-                  </button>
+                  {!result ? (
+                    <button
+                      onClick={() => predict()}
+                      disabled={loading}
+                      className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition"
+                    >
+                      {loading ? "Predicting..." : "Predict Companies →"}
+                    </button>
+                  ) : hasProfileChanged ? (
+                    <button
+                      onClick={openRepredictModal}
+                      className="bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-5 py-2.5 rounded-lg text-sm font-medium transition"
+                    >
+                      Profile updated — repredict now
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-600 border border-gray-800 px-4 py-2 rounded-lg">Predicted ✓</span>
+                  )}
                 </div>
 
                 {sourcesData && (sourcesData.nirf_stats?.matched || (sourcesData.sources?.length ?? 0) > 0) && (
@@ -400,150 +600,156 @@ export default function OnCampus() {
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />40–69%</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />&lt;40%</span>
                       </div>
+                      <span className={`text-xs ${seasonInfo.textColor} ml-auto`}>
+                        Probabilities adjusted for {seasonInfo.name.toLowerCase()} (×{seasonInfo.multiplier})
+                      </span>
                     </div>
 
                     <div className="space-y-4">
-                      {result.companies.map((co, idx) => (
-                        <div key={co.name} className={`bg-[#111] border rounded-2xl overflow-hidden transition-colors ${co.student_eligible ? "border-gray-800" : "border-gray-800/50 opacity-70"}`}>
-                          <button
-                            className="w-full text-left px-6 py-5"
-                            onClick={() => {
-                              const next = expandedIdx === idx ? null : idx;
-                              setExpandedIdx(next);
-                              if (next === idx) fetchIntel(co.name);
-                            }}
-                          >
-                            <div className="flex items-center justify-between gap-4 flex-wrap">
-                              <div className="flex items-center gap-4">
+                      {result.companies.map((co, idx) => {
+                        const displayProb = Math.min(100, Math.round(co.probability * seasonInfo.multiplier));
+                        return (
+                          <div key={co.name} className={`bg-[#111] border rounded-2xl overflow-hidden transition-colors ${co.student_eligible ? "border-gray-800" : "border-gray-800/50 opacity-70"}`}>
+                            <button
+                              className="w-full text-left px-6 py-5"
+                              onClick={() => {
+                                const next = expandedIdx === idx ? null : idx;
+                                setExpandedIdx(next);
+                                if (next === idx) fetchIntel(co.name);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <div className="flex items-center gap-4">
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-semibold text-white">{co.name}</h3>
+                                      {!co.student_eligible && (
+                                        <span className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">Below CGPA cutoff</span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-gray-500">{co.role_offered} · {co.package_range} · Visits: {co.visit_timing}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500 mb-1">Visit Probability</p>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full ${probBg(displayProb)}`} style={{ width: `${displayProb}%` }} />
+                                      </div>
+                                      <span className={`font-bold text-sm ${probColor(displayProb)}`}>{displayProb}%</span>
+                                    </div>
+                                  </div>
+                                  <span className="text-gray-600 text-sm">{expandedIdx === idx ? "▲" : "▼"}</span>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">{co.why_likely}</p>
+                            </button>
+
+                            {expandedIdx === idx && (
+                              <div className="border-t border-gray-800 px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="font-semibold text-white">{co.name}</h3>
-                                    {!co.student_eligible && (
-                                      <span className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">Below CGPA cutoff</span>
+                                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Hiring Rounds</p>
+                                  <ol className="space-y-1.5">
+                                    {co.hiring_rounds.map((r, i) => (
+                                      <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                                        <span className="text-blue-500 font-bold text-xs mt-0.5 shrink-0">{i + 1}.</span>
+                                        {r}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Topics Tested</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {co.topics_tested.map(t => (
+                                      <span key={t} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">{t}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Sample Interview Questions</p>
+                                  <ul className="space-y-2">
+                                    {co.sample_questions.map((q, i) => (
+                                      <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
+                                        <span className="text-gray-600 shrink-0">Q{i + 1}.</span>
+                                        {q}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div className="md:col-span-2 flex gap-3 flex-wrap">
+                                  {co.prep_resource && (
+                                    <a href={co.prep_resource} target="_blank" rel="noopener noreferrer"
+                                      className="bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 text-xs px-4 py-2 rounded-lg transition">
+                                      Prep Resource →
+                                    </a>
+                                  )}
+                                  {co.careers_link && (
+                                    <a href={co.careers_link} target="_blank" rel="noopener noreferrer"
+                                      className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-4 py-2 rounded-lg transition">
+                                      Careers Page →
+                                    </a>
+                                  )}
+                                  <span className="text-xs text-gray-600 flex items-center">CGPA Cutoff: {co.cgpa_cutoff}</span>
+                                </div>
+
+                                <div className="md:col-span-2 bg-[#0d0d0d] border border-gray-800/60 rounded-xl p-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <p className="text-xs text-gray-500 uppercase tracking-widest">Interview Intel</p>
+                                    {intel[co.name]?.data && (
+                                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                                        intel[co.name].data!.source === "ambitionbox"
+                                          ? "bg-green-900/30 text-green-400 border-green-700/40"
+                                          : "bg-gray-800 text-gray-500 border-gray-700"
+                                      }`}>
+                                        {intel[co.name].data!.source === "ambitionbox" ? "Live from AmbitionBox" : "AI Generated"}
+                                      </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-500">{co.role_offered} · {co.package_range} · Visits: {co.visit_timing}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-6">
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-500 mb-1">Visit Probability</p>
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                                      <div className={`h-full rounded-full ${probBg(co.probability)}`} style={{ width: `${co.probability}%` }} />
+                                  {intel[co.name]?.status === "loading" && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                      <span className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                      Fetching real interview data...
                                     </div>
-                                    <span className={`font-bold text-sm ${probColor(co.probability)}`}>{co.probability}%</span>
-                                  </div>
-                                </div>
-                                <span className="text-gray-600 text-sm">{expandedIdx === idx ? "▲" : "▼"}</span>
-                              </div>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">{co.why_likely}</p>
-                          </button>
-
-                          {expandedIdx === idx && (
-                            <div className="border-t border-gray-800 px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div>
-                                <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Hiring Rounds</p>
-                                <ol className="space-y-1.5">
-                                  {co.hiring_rounds.map((r, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                                      <span className="text-blue-500 font-bold text-xs mt-0.5 shrink-0">{i + 1}.</span>
-                                      {r}
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Topics Tested</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {co.topics_tested.map(t => (
-                                    <span key={t} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">{t}</span>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="md:col-span-2">
-                                <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Sample Interview Questions</p>
-                                <ul className="space-y-2">
-                                  {co.sample_questions.map((q, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
-                                      <span className="text-gray-600 shrink-0">Q{i + 1}.</span>
-                                      {q}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div className="md:col-span-2 flex gap-3 flex-wrap">
-                                {co.prep_resource && (
-                                  <a href={co.prep_resource} target="_blank" rel="noopener noreferrer"
-                                    className="bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 text-xs px-4 py-2 rounded-lg transition">
-                                    Prep Resource →
-                                  </a>
-                                )}
-                                {co.careers_link && (
-                                  <a href={co.careers_link} target="_blank" rel="noopener noreferrer"
-                                    className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-4 py-2 rounded-lg transition">
-                                    Careers Page →
-                                  </a>
-                                )}
-                                <span className="text-xs text-gray-600 flex items-center">CGPA Cutoff: {co.cgpa_cutoff}</span>
-                              </div>
-
-                              <div className="md:col-span-2 bg-[#0d0d0d] border border-gray-800/60 rounded-xl p-4">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <p className="text-xs text-gray-500 uppercase tracking-widest">Interview Intel</p>
+                                  )}
+                                  {intel[co.name]?.status === "error" && (
+                                    <p className="text-xs text-gray-600">Could not fetch intel — backend may be offline.</p>
+                                  )}
                                   {intel[co.name]?.data && (
-                                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                                      intel[co.name].data!.source === "ambitionbox"
-                                        ? "bg-green-900/30 text-green-400 border-green-700/40"
-                                        : "bg-gray-800 text-gray-500 border-gray-700"
-                                    }`}>
-                                      {intel[co.name].data!.source === "ambitionbox" ? "Live from AmbitionBox" : "AI Generated"}
-                                    </span>
+                                    <div className="flex flex-wrap gap-6 text-sm">
+                                      <div>
+                                        <p className="text-xs text-gray-500 mb-1">Interview Difficulty</p>
+                                        <span className={`font-semibold ${
+                                          intel[co.name].data!.difficulty.toLowerCase().includes("hard") ? "text-red-400" :
+                                          intel[co.name].data!.difficulty.toLowerCase().includes("moderate") ? "text-yellow-400" :
+                                          "text-green-400"
+                                        }`}>{intel[co.name].data!.difficulty}</span>
+                                      </div>
+                                      {intel[co.name].data!.avg_salary && (
+                                        <div>
+                                          <p className="text-xs text-gray-500 mb-1">Avg Salary (AmbitionBox)</p>
+                                          <span className="text-green-400 font-semibold">{intel[co.name].data!.avg_salary}</span>
+                                        </div>
+                                      )}
+                                      {intel[co.name].data!.topics?.length > 0 && (
+                                        <div>
+                                          <p className="text-xs text-gray-500 mb-1">Key Topics</p>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {intel[co.name].data!.topics.map(t => (
+                                              <span key={t} className="bg-blue-900/20 text-blue-400 border border-blue-700/30 text-xs px-2 py-0.5 rounded-full">{t}</span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                                {intel[co.name]?.status === "loading" && (
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                    Fetching real interview data...
-                                  </div>
-                                )}
-                                {intel[co.name]?.status === "error" && (
-                                  <p className="text-xs text-gray-600">Could not fetch intel — backend may be offline.</p>
-                                )}
-                                {intel[co.name]?.data && (
-                                  <div className="flex flex-wrap gap-6 text-sm">
-                                    <div>
-                                      <p className="text-xs text-gray-500 mb-1">Interview Difficulty</p>
-                                      <span className={`font-semibold ${
-                                        intel[co.name].data!.difficulty.toLowerCase().includes("hard") ? "text-red-400" :
-                                        intel[co.name].data!.difficulty.toLowerCase().includes("moderate") ? "text-yellow-400" :
-                                        "text-green-400"
-                                      }`}>{intel[co.name].data!.difficulty}</span>
-                                    </div>
-                                    {intel[co.name].data!.avg_salary && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-1">Avg Salary (AmbitionBox)</p>
-                                        <span className="text-green-400 font-semibold">{intel[co.name].data!.avg_salary}</span>
-                                      </div>
-                                    )}
-                                    {intel[co.name].data!.topics?.length > 0 && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-1">Key Topics</p>
-                                        <div className="flex flex-wrap gap-1.5">
-                                          {intel[co.name].data!.topics.map(t => (
-                                            <span key={t} className="bg-blue-900/20 text-blue-400 border border-blue-700/30 text-xs px-2 py-0.5 rounded-full">{t}</span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -573,7 +779,6 @@ export default function OnCampus() {
 
                 {!historyLoading && historyData?.found && (
                   <>
-                    {/* Year summary banner */}
                     {historyData.year_summary && (
                       <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-5">
                         <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -625,7 +830,6 @@ export default function OnCampus() {
                       </div>
                     )}
 
-                    {/* Category filter pills */}
                     <div className="flex gap-2 flex-wrap mb-5">
                       {ALL_CATEGORIES.map(cat => (
                         <button
@@ -642,7 +846,6 @@ export default function OnCampus() {
                       ))}
                     </div>
 
-                    {/* Placement drive table */}
                     <div className="bg-[#111] border border-gray-800 rounded-2xl overflow-hidden">
                       <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-gray-800 text-[11px] text-gray-500 uppercase tracking-widest">
                         <span>Company / Role</span>
