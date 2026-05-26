@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import config, { fetchWithTimeout } from '@/lib/config'
@@ -101,7 +101,40 @@ export default function Onboarding() {
     githubActive: "",
   });
 
+  const [lockedFields, setLockedFields] = useState<Record<string, boolean>>({});
+
   const set = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }));
+
+  // Pre-fill from existing profile and lock static fields
+  useEffect(() => {
+    const stored = localStorage.getItem("placeiq_profile");
+    if (!stored) return;
+    try {
+      const p = JSON.parse(stored);
+      const locked: Record<string, boolean> = {};
+      const patch: Partial<typeof form> = {};
+
+      if (p.college)    { patch.college    = String(p.college);    locked.college    = true; }
+      if (p.branch)     { patch.branch     = String(p.branch);     locked.branch     = true; }
+      if (p.year)       { patch.year       = String(p.year);       locked.year       = true; }
+      if (p.cgpa)       { patch.cgpa       = String(p.cgpa);       locked.cgpa       = true; }
+      if (p.targetRole) { patch.targetRole = String(p.targetRole); locked.targetRole = true; }
+
+      if (Array.isArray(p.skills))   patch.skills          = p.skills;
+      if (p.projectsCount)           patch.projectsCount   = p.projectsCount;
+      if (p.hasInternship)           patch.hasInternship   = p.hasInternship;
+      if (p.internshipMonths)        patch.internshipMonths = p.internshipMonths;
+      if (p.hackathons)              patch.hackathons      = p.hackathons;
+      if (p.leetcodeCount)           patch.leetcodeCount   = p.leetcodeCount;
+      if (p.openSource)              patch.openSource      = p.openSource;
+      if (p.certifications)          patch.certifications  = p.certifications;
+      if (p.githubActive)            patch.githubActive    = p.githubActive;
+
+      if (p.college) setCollegeSearch(p.college);
+      setForm(f => ({ ...f, ...patch }));
+      setLockedFields(locked);
+    } catch {}
+  }, []);
 
   const filteredColleges = COLLEGES.filter(c =>
     c.toLowerCase().includes(collegeSearch.toLowerCase())
@@ -153,6 +186,12 @@ export default function Onboarding() {
   const submit = async () => {
     setSubmitting(true);
     const payload = { ...form, email: session?.user?.email ?? "" };
+
+    const existing = (() => {
+      try { return JSON.parse(localStorage.getItem("placeiq_profile") || "{}"); }
+      catch { return {}; }
+    })();
+
     try {
       const res = await fetchWithTimeout(`${config.apiUrl}/api/user/profile`, {
         method: "POST",
@@ -161,16 +200,22 @@ export default function Onboarding() {
       }, 10000);
       if (!res || !res.ok) throw new Error("backend error");
       const data = await res.json();
-      localStorage.setItem("placeiq_profile", JSON.stringify(data));
+      localStorage.setItem("placeiq_profile", JSON.stringify({ ...existing, ...data }));
     } catch {
-      // Backend unavailable or timed out — save locally so the user can continue
+      // Backend unavailable or timed out — merge with existing so we don't lose prior data
       localStorage.setItem("placeiq_profile", JSON.stringify({
+        ...existing,
         ...payload,
         collegeTier: getCollegeTier(payload.college),
-        placementScore: 0,
-        scoreReasoning: "",
+        placementScore: existing.placementScore ?? 0,
+        scoreReasoning: existing.scoreReasoning ?? "",
       }));
     }
+
+    // Invalidate AI caches so they regenerate with new skills
+    localStorage.removeItem("placeiq_roadmap");
+    localStorage.removeItem("placeiq_skillgap");
+
     router.push("/dashboard");
   };
 
@@ -200,80 +245,124 @@ export default function Onboarding() {
             <p className="text-gray-400 mb-8">We use this to match you with on-campus opportunities.</p>
 
             <div className="space-y-4">
-              <div className="relative">
-                <label className="text-sm text-gray-400 mb-1 block">College Name</label>
-                <input
-                  className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                  placeholder="Search your college..."
-                  value={form.college || collegeSearch}
-                  onChange={e => {
-                    setCollegeSearch(e.target.value);
-                    setForm(f => ({ ...f, college: "" }));
-                    setShowCollegeList(true);
-                  }}
-                  onFocus={() => setShowCollegeList(true)}
-                />
-                {showCollegeList && collegeSearch && (
-                  <div className="absolute z-10 w-full mt-1 bg-[#1a1a1a] border border-gray-700 rounded-lg max-h-48 overflow-y-auto">
-                    {filteredColleges.length > 0 ? filteredColleges.map(c => (
-                      <button
-                        key={c}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
-                        onClick={() => {
-                          setForm(f => ({ ...f, college: c }));
-                          setCollegeSearch(c);
-                          setShowCollegeList(false);
-                        }}
-                      >
-                        {c}
-                      </button>
-                    )) : (
-                      <button
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
-                        onClick={() => {
-                          setForm(f => ({ ...f, college: collegeSearch }));
-                          setShowCollegeList(false);
-                        }}
-                      >
-                        Add "{collegeSearch}"
-                      </button>
-                    )}
+              {lockedFields.college ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm text-gray-400">College Name</label>
+                    <button type="button" onClick={() => setLockedFields(f => ({ ...f, college: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                   </div>
-                )}
-              </div>
+                  <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.college}</div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <label className="text-sm text-gray-400 mb-1 block">College Name</label>
+                  <input
+                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Search your college..."
+                    value={form.college || collegeSearch}
+                    onChange={e => {
+                      setCollegeSearch(e.target.value);
+                      setForm(f => ({ ...f, college: "" }));
+                      setShowCollegeList(true);
+                    }}
+                    onFocus={() => setShowCollegeList(true)}
+                  />
+                  {showCollegeList && collegeSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-[#1a1a1a] border border-gray-700 rounded-lg max-h-48 overflow-y-auto">
+                      {filteredColleges.length > 0 ? filteredColleges.map(c => (
+                        <button
+                          key={c}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
+                          onClick={() => {
+                            setForm(f => ({ ...f, college: c }));
+                            setCollegeSearch(c);
+                            setShowCollegeList(false);
+                          }}
+                        >
+                          {c}
+                        </button>
+                      )) : (
+                        <button
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
+                          onClick={() => {
+                            setForm(f => ({ ...f, college: collegeSearch }));
+                            setShowCollegeList(false);
+                          }}
+                        >
+                          Add "{collegeSearch}"
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <div>
-                <label className="text-sm text-gray-400 mb-1 block">Branch</label>
-                <select
-                  className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                  value={form.branch}
-                  onChange={e => setForm(f => ({ ...f, branch: e.target.value }))}
-                >
-                  <option value="">Select branch</option>
-                  {BRANCHES.map(b => <option key={b}>{b}</option>)}
-                </select>
-              </div>
+              {lockedFields.branch ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm text-gray-400">Branch</label>
+                    <button type="button" onClick={() => setLockedFields(f => ({ ...f, branch: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
+                  </div>
+                  <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.branch}</div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Branch</label>
+                  <select
+                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    value={form.branch}
+                    onChange={e => setForm(f => ({ ...f, branch: e.target.value }))}
+                  >
+                    <option value="">Select branch</option>
+                    {BRANCHES.map(b => <option key={b}>{b}</option>)}
+                  </select>
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="text-sm text-gray-400 mb-1 block">Year</label>
-                  <select
-                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                    value={form.year}
-                    onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
-                  >
-                    <option value="">Select</option>
-                    <option>1st</option><option>2nd</option><option>3rd</option><option>4th</option>
-                  </select>
+                  {lockedFields.year ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm text-gray-400">Year</label>
+                        <button type="button" onClick={() => setLockedFields(f => ({ ...f, year: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
+                      </div>
+                      <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.year}</div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-sm text-gray-400 mb-1 block">Year</label>
+                      <select
+                        className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                        value={form.year}
+                        onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+                      >
+                        <option value="">Select</option>
+                        <option>1st</option><option>2nd</option><option>3rd</option><option>4th</option>
+                      </select>
+                    </>
+                  )}
                 </div>
                 <div className="flex-1">
-                  <label className="text-sm text-gray-400 mb-1 block">CGPA (0 - 10)</label>
-                  <input
-                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                    placeholder="e.g. 8.5"
-                    value={form.cgpa}
-                    onChange={e => handleCgpa(e.target.value)}
-                  />
+                  {lockedFields.cgpa ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm text-gray-400">CGPA (0 - 10)</label>
+                        <button type="button" onClick={() => setLockedFields(f => ({ ...f, cgpa: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
+                      </div>
+                      <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.cgpa}</div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-sm text-gray-400 mb-1 block">CGPA (0 - 10)</label>
+                      <input
+                        className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                        placeholder="e.g. 8.5"
+                        value={form.cgpa}
+                        onChange={e => handleCgpa(e.target.value)}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -363,21 +452,33 @@ export default function Onboarding() {
             <h2 className="text-2xl font-bold mb-1">Target Role</h2>
             <p className="text-gray-400 mb-8">What kind of job are you aiming for?</p>
 
-            <div className="space-y-3 mb-8">
-              {ROLES.map(role => (
-                <button
-                  key={role}
-                  onClick={() => setForm(f => ({ ...f, targetRole: role }))}
-                  className={`w-full text-left px-5 py-4 rounded-xl border transition ${
-                    form.targetRole === role
-                      ? "bg-blue-600/20 border-blue-500 text-white"
-                      : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
+            {lockedFields.targetRole ? (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm text-gray-400">Current selection</p>
+                  <button type="button" onClick={() => setLockedFields(f => ({ ...f, targetRole: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
+                </div>
+                <div className="w-full px-5 py-4 rounded-xl border bg-blue-600/20 border-blue-500 text-white">
+                  {form.targetRole}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-8">
+                {ROLES.map(role => (
+                  <button
+                    key={role}
+                    onClick={() => setForm(f => ({ ...f, targetRole: role }))}
+                    className={`w-full text-left px-5 py-4 rounded-xl border transition ${
+                      form.targetRole === role
+                        ? "bg-blue-600/20 border-blue-500 text-white"
+                        : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"
+                    }`}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>

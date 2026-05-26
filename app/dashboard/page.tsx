@@ -51,6 +51,7 @@ type ScoreBreakdown = {
   college_name: string;
   cgpa_impact: number;
   skills_impact: number;
+  skill_reasoning?: string;
   internship_impact: number;
   leetcode_impact: number;
   projects_impact: number;
@@ -557,7 +558,12 @@ export default function Dashboard() {
                         <span className={bd.cgpa_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.cgpa_impact)}</span>
                       </div>
                       <div className="flex justify-between text-gray-500">
-                        <span>Skills impact</span>
+                        <span className="flex items-center gap-1">
+                          Skills impact
+                          {bd.skill_reasoning && (
+                            <span title={bd.skill_reasoning} className="cursor-help text-gray-600 hover:text-gray-400 text-[10px]">ⓘ</span>
+                          )}
+                        </span>
                         <span className={bd.skills_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.skills_impact)}</span>
                       </div>
                       <div className="flex justify-between text-gray-500">
