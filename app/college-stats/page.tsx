@@ -42,6 +42,16 @@ type PlacementRecord = {
 
 const API = "http://localhost:8000";
 
+const TIER1_COLLEGE_NAMES = new Set([
+  "iit bombay", "iit delhi", "iit madras", "iit kanpur", "iit kharagpur",
+  "iit roorkee", "iit hyderabad", "iit bhu varanasi", "bits pilani (main)",
+  "nit trichy", "nit surathkal", "nit warangal",
+]);
+
+function classifyCollegeTier(name: string): "tier1" | "tier2" {
+  return TIER1_COLLEGE_NAMES.has(name.toLowerCase().trim()) ? "tier1" : "tier2";
+}
+
 export default function CollegeStatsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -70,6 +80,19 @@ export default function CollegeStatsPage() {
     if (status !== "authenticated") return;
     fetch(`${API}/api/placement/colleges`)
       .then(r => r.ok ? r.json() : [])
+      .then((data: College[]) => {
+        // Deduplicate by lowercase name, prefer tier1 entries
+        const seen = new Map<string, College>();
+        for (const c of data) {
+          const key = c.college_name.toLowerCase().trim();
+          if (!seen.has(key) || c.data_tier === "tier1") seen.set(key, c);
+        }
+        // Reclassify based on hardcoded list
+        return Array.from(seen.values()).map(c => ({
+          ...c,
+          data_tier: classifyCollegeTier(c.college_name),
+        }));
+      })
       .then(setColleges)
       .catch(() => {})
       .finally(() => setLoadingColleges(false));
@@ -113,10 +136,17 @@ export default function CollegeStatsPage() {
     return Object.values(map).sort((x, y) => x.year.localeCompare(y.year));
   }, [statsA, statsB, compareMode]);
 
-  const tier1Colleges = colleges.filter(c => c.data_tier === "tier1");
-  const tier2Colleges = colleges.filter(c => c.data_tier === "tier2");
+  const tier1Colleges = colleges
+    .filter(c => c.data_tier === "tier1")
+    .sort((a, b) => a.college_name.localeCompare(b.college_name));
+  const tier2Colleges = colleges
+    .filter(c => c.data_tier === "tier2")
+    .sort((a, b) => a.college_name.localeCompare(b.college_name));
 
   const latestStat: CollegeStat | undefined = statsA.slice().sort((a, b) => b.year.localeCompare(a.year))[0];
+  const latestStatB: CollegeStat | undefined = compareMode
+    ? statsB.slice().sort((a, b) => b.year.localeCompare(a.year))[0]
+    : undefined;
 
   const categories = useMemo(() => {
     const cats = new Set(recordsA.map(r => r.category_tier).filter(Boolean));
@@ -157,12 +187,12 @@ export default function CollegeStatsPage() {
                 >
                   <option value="">-- Select a college --</option>
                   {tier1Colleges.length > 0 && (
-                    <optgroup label="Tier 1">
+                    <optgroup label="🏆 Tier 1 — IITs, NITs, BITS">
                       {tier1Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
                   {tier2Colleges.length > 0 && (
-                    <optgroup label="Tier 2">
+                    <optgroup label="⭐ Tier 2 — Private & State Colleges">
                       {tier2Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
@@ -190,12 +220,12 @@ export default function CollegeStatsPage() {
                 >
                   <option value="">-- Select second college --</option>
                   {tier1Colleges.length > 0 && (
-                    <optgroup label="Tier 1">
+                    <optgroup label="🏆 Tier 1 — IITs, NITs, BITS">
                       {tier1Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
                   {tier2Colleges.length > 0 && (
-                    <optgroup label="Tier 2">
+                    <optgroup label="⭐ Tier 2 — Private & State Colleges">
                       {tier2Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
@@ -216,7 +246,50 @@ export default function CollegeStatsPage() {
         {!loadingStats && selectedA && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            {latestStat && (
+            {compareMode && selectedB && latestStat && latestStatB ? (
+              <div className="flex gap-4 items-start">
+                {/* College A */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-blue-500 font-semibold mb-3 text-center truncate">{selectedA}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Highest CTC", value: latestStat.highest_ctc != null ? `${latestStat.highest_ctc} LPA` : "—", color: "text-yellow-400" },
+                      { label: "Avg CTC", value: latestStat.avg_ctc != null ? `${latestStat.avg_ctc} LPA` : "—", color: "text-blue-400" },
+                      { label: "Total Companies", value: latestStat.total_companies?.toString() ?? "—", color: "text-white" },
+                      { label: "Total Offers", value: latestStat.total_offers?.toString() ?? "—", color: "text-blue-400" },
+                    ].map(card => (
+                      <div key={card.label} className="bg-[#111] border border-blue-500/20 rounded-2xl px-4 py-3">
+                        <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                        <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* VS badge */}
+                <div className="flex items-center justify-center self-center pt-6 shrink-0">
+                  <span className="text-xs font-bold text-gray-400 bg-gray-800 border border-gray-700 rounded-full px-3 py-1.5">VS</span>
+                </div>
+
+                {/* College B */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-purple-500 font-semibold mb-3 text-center truncate">{selectedB}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Highest CTC", value: latestStatB.highest_ctc != null ? `${latestStatB.highest_ctc} LPA` : "—", color: "text-yellow-400" },
+                      { label: "Avg CTC", value: latestStatB.avg_ctc != null ? `${latestStatB.avg_ctc} LPA` : "—", color: "text-purple-400" },
+                      { label: "Total Companies", value: latestStatB.total_companies?.toString() ?? "—", color: "text-white" },
+                      { label: "Total Offers", value: latestStatB.total_offers?.toString() ?? "—", color: "text-purple-400" },
+                    ].map(card => (
+                      <div key={card.label} className="bg-[#111] border border-purple-500/20 rounded-2xl px-4 py-3">
+                        <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                        <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : latestStat ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { label: "Highest CTC", value: latestStat.highest_ctc != null ? `${latestStat.highest_ctc} LPA` : "—", color: "text-yellow-400" },
@@ -230,7 +303,7 @@ export default function CollegeStatsPage() {
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
 
             {/* Trend Charts */}
             <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">

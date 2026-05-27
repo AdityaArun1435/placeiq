@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import config from '@/lib/config'
@@ -7,7 +7,7 @@ import LoadingScreen from '@/components/LoadingScreen'
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, LabelList,
 } from "recharts";
 
 type Article = {
@@ -55,8 +55,16 @@ type PlacementMarket = {
 
 type TopRole = { role_profile: string; total_headcount: number; record_count: number };
 type TierBreakdown = { category_tier: string; company_count: number };
+type MarketRole = {
+  role_name: string;
+  demand_level: number;
+  yoy_growth_percent: number;
+  avg_salary_lpa: number;
+  top_hiring_companies: string[];
+};
 type TopRolesData = {
-  top_roles: TopRole[];
+  campus_roles: TopRole[];
+  market_roles: MarketRole[];
   tier_breakdown: TierBreakdown[];
   total_records: number;
   total_colleges: number;
@@ -67,11 +75,29 @@ const TIER_COLORS: Record<string, string> = {
   "Super Dream": "#8B5CF6",
   "Core Tech": "#3B82F6",
   "Bulk": "#6B7280",
-  "Product FinTech": "#10B981",
+  "Consulting": "#06B6D4",
+  "FinTech": "#10B981",
+  "Government / PSU": "#EF4444",
+  "Other": "#374151",
 };
 
-function tierColor(tier: string): string {
-  return TIER_COLORS[tier] ?? "#60A5FA";
+function groupTier(tier: string): string {
+  const t = tier.toLowerCase();
+  if (t.includes("tier 1") || t.includes("tier1")) return "Tier 1 Elite";
+  if (t.includes("super dream")) return "Super Dream";
+  if (
+    t.includes("core") ||
+    t.includes("product mnc") ||
+    t.includes("product fintech") ||
+    t.includes("product – indian") ||
+    t.includes("product - indian") ||
+    t.includes("differential")
+  ) return "Core Tech";
+  if (t.includes("bulk") || t.includes("day 1") || t.includes("day 2") || t.includes("level 5")) return "Bulk";
+  if (t.includes("consulting") || t.includes("deloitte") || t.includes("analytics")) return "Consulting";
+  if (t.includes("fintech") || t.includes("finance") || t.includes("quant") || t.includes("hft") || t.includes("banking")) return "FinTech";
+  if (t.includes("government") || t.includes("psu")) return "Government / PSU";
+  return "Other";
 }
 
 export default function MarketPage() {
@@ -89,6 +115,18 @@ export default function MarketPage() {
   const [error, setError] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [userCity, setUserCity] = useState("");
+
+  const groupedTiers = useMemo(() => {
+    if (!topRolesData?.tier_breakdown?.length) return [];
+    const map: Record<string, number> = {};
+    for (const entry of topRolesData.tier_breakdown) {
+      const bucket = groupTier(entry.category_tier);
+      map[bucket] = (map[bucket] ?? 0) + entry.company_count;
+    }
+    return Object.entries(map)
+      .map(([category_tier, company_count]) => ({ category_tier, company_count }))
+      .sort((a, b) => b.company_count - a.company_count);
+  }, [topRolesData]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -288,22 +326,26 @@ export default function MarketPage() {
               )}
             </div>
 
-
             {/* Top Job Roles Section */}
-            {topRolesData && (topRolesData.top_roles.length > 0 || topRolesData.tier_breakdown.length > 0) && (
+            {topRolesData && (
+              (topRolesData.campus_roles?.length > 0 ||
+               topRolesData.tier_breakdown?.length > 0 ||
+               topRolesData.market_roles?.length > 0)
+            ) && (
               <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
                 <h3 className="text-base font-semibold mb-1">Top Job Roles Trending in India</h3>
                 <p className="text-gray-500 text-xs mb-5">
                   Based on {topRolesData.total_records} campus placement records across {topRolesData.total_colleges} colleges — updated from our placement database
                 </p>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Chart A — Most In-Demand Job Roles */}
-                  {topRolesData.top_roles.length > 0 && (
+
+                <div className="space-y-10">
+                  {/* Chart A — Campus Hiring Roles */}
+                  {topRolesData.campus_roles?.length > 0 && (
                     <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Most In-Demand Job Roles</p>
-                      <ResponsiveContainer width="100%" height={500}>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Campus Hiring Roles</p>
+                      <ResponsiveContainer width="100%" height={400}>
                         <BarChart
-                          data={topRolesData.top_roles.slice(0, 15)}
+                          data={topRolesData.campus_roles.slice(0, 10)}
                           layout="vertical"
                           margin={{ left: 20, right: 30, top: 10, bottom: 10 }}
                         >
@@ -327,26 +369,72 @@ export default function MarketPage() {
                     </div>
                   )}
 
-                  {/* Chart B — Hiring by Company Category */}
-                  {topRolesData.tier_breakdown.length > 0 && (
+                  {/* Chart B — Market Demand in India 2025 */}
+                  {topRolesData.market_roles?.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Market Demand in India 2025</p>
+                      <ResponsiveContainer width="100%" height={500}>
+                        <BarChart
+                          data={[...topRolesData.market_roles].sort((a, b) => b.demand_level - a.demand_level)}
+                          layout="vertical"
+                          margin={{ left: 20, right: 130, top: 10, bottom: 10 }}
+                        >
+                          <defs>
+                            <linearGradient id="marketBarGrad" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#3B82F6" />
+                              <stop offset="100%" stopColor="#8B5CF6" />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+                          <XAxis type="number" domain={[0, 100]} tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <YAxis
+                            type="category"
+                            dataKey="role_name"
+                            tick={{ fill: "#9ca3af", fontSize: 11 }}
+                            width={220}
+                          />
+                          <Tooltip
+                            contentStyle={{ background: "#1a1a1a", border: "1px solid #374151", borderRadius: 8 }}
+                            labelStyle={{ color: "#fff" }}
+                            itemStyle={{ color: "#8b5cf6" }}
+                            formatter={(value, name) => [value, name === "demand_level" ? "Demand Level" : name]}
+                          />
+                          <Bar dataKey="demand_level" fill="url(#marketBarGrad)" radius={[0, 4, 4, 0]} name="demand_level">
+                            <LabelList
+                              dataKey="avg_salary_lpa"
+                              position="right"
+                              style={{ fill: "#6b7280", fontSize: 10 }}
+                              formatter={(v: unknown) => `avg ${v ?? ""} LPA`}
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <p className="text-xs text-gray-600 mt-2 text-center">
+                        Source: Live Indian job market analysis — updated every 48 hours
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Pie chart — Hiring by Company Category */}
+                  {groupedTiers.length > 0 && (
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Hiring by Company Category</p>
-                      <ResponsiveContainer width="100%" height={500}>
+                      <ResponsiveContainer width="100%" height={380}>
                         <PieChart>
                           <Pie
-                            data={topRolesData.tier_breakdown}
+                            data={groupedTiers}
                             dataKey="company_count"
                             nameKey="category_tier"
                             cx="50%"
-                            cy="45%"
-                            outerRadius={160}
+                            cy="50%"
+                            outerRadius={130}
+                            labelLine={false}
                             label={({ percent }) =>
-                              `${((percent ?? 0) * 100).toFixed(0)}%`
+                              (percent ?? 0) > 0.05 ? `${((percent ?? 0) * 100).toFixed(0)}%` : ""
                             }
-                            labelLine={true}
                           >
-                            {topRolesData.tier_breakdown.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={tierColor(entry.category_tier)} />
+                            {groupedTiers.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={TIER_COLORS[entry.category_tier] ?? "#374151"} />
                             ))}
                           </Pie>
                           <Tooltip
@@ -354,12 +442,26 @@ export default function MarketPage() {
                             labelStyle={{ color: "#fff" }}
                             formatter={(value, name) => [`${value} companies`, name]}
                           />
-                          <Legend
-                            wrapperStyle={{ fontSize: 12, color: "#9ca3af", paddingTop: 16 }}
-                            formatter={(value) => <span style={{ color: "#9ca3af" }}>{value}</span>}
-                          />
                         </PieChart>
                       </ResponsiveContainer>
+                      {/* Custom legend */}
+                      <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-3">
+                        {(() => {
+                          const total = groupedTiers.reduce((s, e) => s + e.company_count, 0);
+                          return groupedTiers.map(entry => (
+                            <div key={entry.category_tier} className="flex items-center gap-1.5 text-xs text-gray-400">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ background: TIER_COLORS[entry.category_tier] ?? "#374151" }}
+                              />
+                              <span>{entry.category_tier}</span>
+                              <span className="text-gray-600">
+                                {total > 0 ? ((entry.company_count / total) * 100).toFixed(0) : 0}%
+                              </span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>

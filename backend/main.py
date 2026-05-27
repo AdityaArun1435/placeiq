@@ -2771,6 +2771,65 @@ def _pdb_conn():
     return conn
 
 
+def _ensure_role_cache_table():
+    with _pdb_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS role_trends_cache (
+                id INTEGER PRIMARY KEY,
+                data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+
+def _fetch_market_roles() -> list:
+    _ensure_role_cache_table()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    with _pdb_conn() as conn:
+        row = conn.execute(
+            "SELECT data_json FROM role_trends_cache WHERE created_at > ? ORDER BY created_at DESC LIMIT 1",
+            (cutoff,),
+        ).fetchone()
+    if row:
+        try:
+            return json.loads(row["data_json"])
+        except Exception:
+            pass
+    if _groq is None:
+        return []
+    prompt = (
+        "You are a job market analyst. List the top 20 most in-demand tech job roles in India RIGHT NOW in 2025 "
+        "based on real hiring trends from Naukri, LinkedIn, and news sources. Include modern roles like AI/ML Engineer, "
+        "Data Scientist, GenAI Engineer, Prompt Engineer, Cloud Engineer, DevOps, Cybersecurity Analyst, Full Stack Developer, "
+        "Product Manager, Data Analyst, Backend Engineer, MLOps Engineer, Platform Engineer, Blockchain Developer, AR/VR Developer. "
+        "For each role return: role_name, demand_level (1-100), yoy_growth_percent, avg_salary_lpa, "
+        "top_hiring_companies (array of 3). Return only valid JSON array."
+    )
+    try:
+        completion = _groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+            temperature=0.3,
+        )
+        raw = (completion.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        roles = json.loads(raw)
+        if isinstance(roles, list) and roles:
+            now = datetime.now(timezone.utc).isoformat()
+            with _pdb_conn() as conn:
+                conn.execute("DELETE FROM role_trends_cache")
+                conn.execute(
+                    "INSERT INTO role_trends_cache (data_json, created_at) VALUES (?, ?)",
+                    (json.dumps(roles), now),
+                )
+            return roles
+    except Exception as exc:
+        print(f"[market_roles] Groq fetch failed: {exc}")
+    return []
+
+
 @app.get("/api/placement/colleges")
 def placement_colleges():
     """Unique college names and their data_tier."""
@@ -2855,7 +2914,7 @@ def placement_top_companies():
 
 @app.get("/api/placement/market/top-roles")
 def placement_top_roles():
-    """Top job roles by total headcount and category tier breakdown."""
+    """Top job roles by total headcount, market roles from Groq, and category tier breakdown."""
     with _pdb_conn() as conn:
         roles = conn.execute("""
             SELECT role_profile,
@@ -2865,7 +2924,7 @@ def placement_top_roles():
             WHERE role_profile IS NOT NULL AND role_profile != ''
             GROUP BY role_profile
             ORDER BY total_headcount DESC
-            LIMIT 20
+            LIMIT 15
         """).fetchall()
         tiers = conn.execute("""
             SELECT category_tier,
@@ -2878,8 +2937,10 @@ def placement_top_roles():
         meta = conn.execute(
             "SELECT COUNT(*) AS total_records, COUNT(DISTINCT college_name) AS total_colleges FROM placement_records"
         ).fetchone()
+    market_roles = _fetch_market_roles()
     return {
-        "top_roles": [dict(r) for r in roles],
+        "campus_roles": [dict(r) for r in roles],
+        "market_roles": market_roles,
         "tier_breakdown": [dict(t) for t in tiers],
         "total_records": meta["total_records"],
         "total_colleges": meta["total_colleges"],

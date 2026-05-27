@@ -5,7 +5,7 @@ import { useEffect, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
   Mail, Users, ClipboardList, TrendingUp, FileText, FileSearch,
-  BookOpen, BarChart2, Database,
+  BookOpen, BarChart2, Database, School, Link2,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import config from '@/lib/config'
@@ -102,21 +102,21 @@ const FEATURE_GROUPS: FeatureGroup[] = [
         name: "Skill Gap Analysis",
         Icon: Zap,
         description:
-          "Analyses job postings for your target role and shows exactly what skills are in demand. Get a prioritised list of must-learn skills with free resources — based on live job data, not AI guesses.",
+          "See exactly which skills you are missing for your target role based on real job postings. Get a priority list.",
       },
       {
         path: "/companies",
         name: "Company Matches",
         Icon: Building2,
         description:
-          "See which companies are most likely to hire you based on your skill overlap, college tier, and CGPA. Match scores are computed from data — no AI involved.",
+          "See your personalised company match list ranked by fit with reasoning for each match.",
       },
       {
         path: "/roadmap",
         name: "90-Day Roadmap",
         Icon: MapIcon,
         description:
-          "A personalised day-by-day preparation plan built around your college tier and target role. Follow it to systematically close your placement gaps in 90 days.",
+          "Get a personalised 30/60/90 day prep plan with direct clickable resource links. Chat with AI to modify it.",
       },
     ],
   },
@@ -128,21 +128,21 @@ const FEATURE_GROUPS: FeatureGroup[] = [
         name: "Off Campus Jobs",
         Icon: Globe,
         description:
-          "Browse live off-campus job listings curated from multiple job boards for Indian engineering students. Apply directly without waiting for your college's placement cell.",
+          "Search live job listings from Adzuna filtered by your skills and salary expectations. See match scores per listing.",
       },
       {
         path: "/oncampus",
         name: "On Campus Drives",
         Icon: GraduationCap,
         description:
-          "Track upcoming on-campus placement drives and predict your eligibility for each company visiting your college. Know which drives to prepare for before they're announced.",
+          "See which companies are likely to visit your college this placement season with probability scores.",
       },
       {
         path: "/internships",
         name: "Internships",
         Icon: Briefcase,
         description:
-          "Find internship opportunities from live listings, AI-matched startups, and major structured programs like Google STEP and Goldman Sachs Insight. Filter by role, location, and stipend.",
+          "Find live internships from multiple sources. Get an AI strategy tailored to your college tier and profile.",
       },
       {
         path: "/coldemail",
@@ -156,7 +156,14 @@ const FEATURE_GROUPS: FeatureGroup[] = [
         name: "Referral Radar",
         Icon: Users,
         description:
-          "Find alumni and professionals at your target companies who are open to giving referrals. A single referral can multiply your chances of clearing the screening round.",
+          "Find alumni from your college working at top companies. Submit your own to help others.",
+      },
+      {
+        path: "/linkedin",
+        name: "LinkedIn Optimiser",
+        Icon: Link2,
+        description:
+          "Optimise your LinkedIn profile for placement. Get AI suggestions on your headline, about section, and keywords.",
       },
     ],
   },
@@ -168,35 +175,35 @@ const FEATURE_GROUPS: FeatureGroup[] = [
         name: "Application Tracker",
         Icon: ClipboardList,
         description:
-          "Track every company you've applied to, the round you're in, and follow-up dates in one place. Never lose track of an application or miss a critical deadline again.",
+          "Track every company you apply to through stages: Saved, Applied, Interview, Offer, Rejected.",
       },
       {
         path: "/progress",
         name: "Progress Tracker",
         Icon: TrendingUp,
         description:
-          "Add skills you want to learn, check them off as you complete them, and build a daily streak. See exactly how far along you are in your placement preparation.",
+          "Track which skills you have learned. Mark them complete and watch your placement score improve.",
       },
       {
         path: "/pyq",
         name: "Previous Year Questions",
         Icon: FileText,
         description:
-          "Practice company-specific aptitude and coding questions from previous placement seasons. Know exactly what TCS, Infosys, Amazon, and others actually ask in their drives.",
+          "Previous year interview questions by company and round — Aptitude, Coding, Technical, HR.",
       },
       {
         path: "/resume",
         name: "Resume Analyser",
         Icon: FileSearch,
         description:
-          "Upload your resume and get AI feedback on ATS compatibility, keyword gaps, and formatting issues. Know what recruiters see before sending your resume to any company.",
+          "Upload your resume and paste a JD. Get an AI-powered gap analysis of exactly what is missing.",
       },
       {
         path: "/resources",
         name: "Resources",
         Icon: BookOpen,
         description:
-          "Curated free resources for DSA, aptitude, system design, and interview prep trusted by placed students across India. No affiliate links, no paid courses — all free.",
+          "Curated direct links to DSA sheets, YouTube channels, free courses, and aptitude prep material.",
       },
     ],
   },
@@ -208,14 +215,21 @@ const FEATURE_GROUPS: FeatureGroup[] = [
         name: "Market Intelligence",
         Icon: BarChart2,
         description:
-          "Live hiring trends scraped from India's top job news sources every 24 hours. Skill and role counts are extracted directly from article text — no AI interpretation.",
+          "See trending job roles, top hiring companies, CTC trends, and real campus placement data insights.",
+      },
+      {
+        path: "/college-stats",
+        name: "College Stats",
+        Icon: School,
+        description:
+          "Explore and compare placement data for 24 colleges. See year-wise CTC trends and company visit history.",
       },
       {
         path: "/company-directory",
         name: "Company Directory",
         Icon: Database,
         description:
-          "Browse detailed profiles of 50+ Indian tech companies with salary data, hiring patterns, and what skills they look for. Research a company thoroughly before you apply.",
+          "Browse all companies in our database with hiring details, tech stack, and prep guides.",
       },
     ],
   },
