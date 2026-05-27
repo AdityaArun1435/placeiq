@@ -7,6 +7,7 @@ import LoadingScreen from '@/components/LoadingScreen'
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 
 type Article = {
@@ -52,6 +53,27 @@ type PlacementMarket = {
   total_colleges: number;
 };
 
+type TopRole = { role_profile: string; total_headcount: number; record_count: number };
+type TierBreakdown = { category_tier: string; company_count: number };
+type TopRolesData = {
+  top_roles: TopRole[];
+  tier_breakdown: TierBreakdown[];
+  total_records: number;
+  total_colleges: number;
+};
+
+const TIER_COLORS: Record<string, string> = {
+  "Tier 1 Elite": "#F59E0B",
+  "Super Dream": "#8B5CF6",
+  "Core Tech": "#3B82F6",
+  "Bulk": "#6B7280",
+  "Product FinTech": "#10B981",
+};
+
+function tierColor(tier: string): string {
+  return TIER_COLORS[tier] ?? "#60A5FA";
+}
+
 export default function MarketPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -59,6 +81,7 @@ export default function MarketPage() {
   const [ctcTrends, setCtcTrends] = useState<CtcTrend[]>([]);
   const [placementMarket, setPlacementMarket] = useState<PlacementMarket | null>(null);
   const [placementLoading, setPlacementLoading] = useState(true);
+  const [topRolesData, setTopRolesData] = useState<TopRolesData | null>(null);
 
   const [payload, setPayload] = useState<NewsPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,9 +99,11 @@ export default function MarketPage() {
     Promise.all([
       fetch("http://localhost:8000/api/placement/market/ctc-trends").then(r => r.ok ? r.json() : []),
       fetch("http://localhost:8000/api/placement/market/top-companies").then(r => r.ok ? r.json() : null),
-    ]).then(([trends, market]) => {
+      fetch("http://localhost:8000/api/placement/market/top-roles").then(r => r.ok ? r.json() : null),
+    ]).then(([trends, market, roles]) => {
       setCtcTrends(trends);
       if (market) setPlacementMarket(market);
+      if (roles) setTopRolesData(roles);
     }).catch(() => {}).finally(() => setPlacementLoading(false));
   }, [status]);
 
@@ -240,15 +265,21 @@ export default function MarketPage() {
                 <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
                   <h3 className="text-base font-semibold mb-1">Top Companies by Hiring Volume</h3>
                   <p className="text-gray-500 text-xs mb-4">Total avg headcount across all campus visits</p>
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={500}>
                     <BarChart
                       data={placementMarket.companies.slice(0, 10)}
                       layout="vertical"
-                      margin={{ top: 5, right: 20, left: 60, bottom: 5 }}
+                      margin={{ left: 20, right: 30, top: 10, bottom: 10 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
                       <XAxis type="number" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                      <YAxis type="category" dataKey="company_name" tick={{ fill: "#9ca3af", fontSize: 10 }} width={58} />
+                      <YAxis
+                        type="category"
+                        dataKey="company_name"
+                        tick={{ fill: "#9ca3af", fontSize: 11 }}
+                        width={160}
+                        tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 18) + "…" : v}
+                      />
                       <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#a855f7" }} />
                       <Bar dataKey="total_headcount" fill="#a855f7" radius={[0, 4, 4, 0]} name="Total Headcount" />
                     </BarChart>
@@ -256,6 +287,84 @@ export default function MarketPage() {
                 </div>
               )}
             </div>
+
+
+            {/* Top Job Roles Section */}
+            {topRolesData && (topRolesData.top_roles.length > 0 || topRolesData.tier_breakdown.length > 0) && (
+              <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                <h3 className="text-base font-semibold mb-1">Top Job Roles Trending in India</h3>
+                <p className="text-gray-500 text-xs mb-5">
+                  Based on {topRolesData.total_records} campus placement records across {topRolesData.total_colleges} colleges — updated from our placement database
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Chart A — Most In-Demand Job Roles */}
+                  {topRolesData.top_roles.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Most In-Demand Job Roles</p>
+                      <ResponsiveContainer width="100%" height={500}>
+                        <BarChart
+                          data={topRolesData.top_roles.slice(0, 15)}
+                          layout="vertical"
+                          margin={{ left: 20, right: 30, top: 10, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+                          <XAxis type="number" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <YAxis
+                            type="category"
+                            dataKey="role_profile"
+                            tick={{ fill: "#9ca3af", fontSize: 11 }}
+                            width={200}
+                            tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 22) + "…" : v}
+                          />
+                          <Tooltip
+                            contentStyle={{ background: "#1a1a1a", border: "1px solid #374151", borderRadius: 8 }}
+                            labelStyle={{ color: "#fff" }}
+                            itemStyle={{ color: "#3b82f6" }}
+                          />
+                          <Bar dataKey="total_headcount" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Total Headcount" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Chart B — Hiring by Company Category */}
+                  {topRolesData.tier_breakdown.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Hiring by Company Category</p>
+                      <ResponsiveContainer width="100%" height={500}>
+                        <PieChart>
+                          <Pie
+                            data={topRolesData.tier_breakdown}
+                            dataKey="company_count"
+                            nameKey="category_tier"
+                            cx="50%"
+                            cy="45%"
+                            outerRadius={160}
+                            label={({ category_tier, percent }) =>
+                              `${(percent * 100).toFixed(0)}%`
+                            }
+                            labelLine={true}
+                          >
+                            {topRolesData.tier_breakdown.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={tierColor(entry.category_tier)} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ background: "#1a1a1a", border: "1px solid #374151", borderRadius: 8 }}
+                            labelStyle={{ color: "#fff" }}
+                            formatter={(value: number, name: string) => [`${value} companies`, name]}
+                          />
+                          <Legend
+                            wrapperStyle={{ fontSize: 12, color: "#9ca3af", paddingTop: 16 }}
+                            formatter={(value) => <span style={{ color: "#9ca3af" }}>{value}</span>}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

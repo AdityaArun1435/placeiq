@@ -2853,6 +2853,39 @@ def placement_top_companies():
     }
 
 
+@app.get("/api/placement/market/top-roles")
+def placement_top_roles():
+    """Top job roles by total headcount and category tier breakdown."""
+    with _pdb_conn() as conn:
+        roles = conn.execute("""
+            SELECT role_profile,
+                   ROUND(SUM(COALESCE(avg_headcount, 0)), 1) AS total_headcount,
+                   COUNT(*) AS record_count
+            FROM placement_records
+            WHERE role_profile IS NOT NULL AND role_profile != ''
+            GROUP BY role_profile
+            ORDER BY total_headcount DESC
+            LIMIT 20
+        """).fetchall()
+        tiers = conn.execute("""
+            SELECT category_tier,
+                   COUNT(DISTINCT company_name) AS company_count
+            FROM placement_records
+            WHERE category_tier IS NOT NULL AND category_tier != ''
+            GROUP BY category_tier
+            ORDER BY company_count DESC
+        """).fetchall()
+        meta = conn.execute(
+            "SELECT COUNT(*) AS total_records, COUNT(DISTINCT college_name) AS total_colleges FROM placement_records"
+        ).fetchone()
+    return {
+        "top_roles": [dict(r) for r in roles],
+        "tier_breakdown": [dict(t) for t in tiers],
+        "total_records": meta["total_records"],
+        "total_colleges": meta["total_colleges"],
+    }
+
+
 @app.get("/api/placement/score-factors/{college_name}")
 def placement_score_factors(college_name: str):
     """Returns key factors used to calibrate placement score for a given college."""

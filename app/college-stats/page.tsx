@@ -292,7 +292,15 @@ export default function CollegeStatsPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[700px]">
+                <table className="w-full text-sm min-w-[700px] table-fixed">
+                  <colgroup>
+                    <col style={{ width: "25%" }} />
+                    <col style={{ width: "20%" }} />
+                    <col style={{ width: "20%" }} />
+                    <col style={{ width: "15%" }} />
+                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "10%" }} />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-gray-800 text-[11px] text-gray-500 uppercase tracking-widest">
                       <th className="text-left py-2 pr-4">Company</th>
@@ -313,18 +321,18 @@ export default function CollegeStatsPage() {
                           onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                           className="border-b border-gray-800/50 hover:bg-white/[0.02] cursor-pointer transition"
                         >
-                          <td className="py-3 pr-4 font-medium text-white">{r.company_name || "—"}</td>
-                          <td className="py-3 pr-4 text-gray-400 max-w-[180px] truncate">{r.role_profile || "—"}</td>
-                          <td className="py-3 pr-4">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                          <td className="py-3 pr-4 font-medium text-white overflow-hidden truncate" title={r.company_name || ""}>{r.company_name || "—"}</td>
+                          <td className="py-3 pr-4 text-gray-400 overflow-hidden truncate" title={r.role_profile || ""}>{r.role_profile || "—"}</td>
+                          <td className="py-3 pr-4 overflow-hidden">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 inline-block truncate max-w-full" title={r.category_tier || ""}>
                               {r.category_tier || "—"}
                             </span>
                           </td>
-                          <td className="py-3 pr-4 text-green-400 font-medium">
+                          <td className="py-3 pr-4 text-green-400 font-medium overflow-hidden truncate">
                             {r.ctc_min != null && r.ctc_max != null ? `${r.ctc_min}–${r.ctc_max} LPA` : r.ctc_min != null ? `${r.ctc_min}+ LPA` : "—"}
                           </td>
                           <td className="py-3 pr-4 text-gray-300">{r.avg_headcount ?? "—"}</td>
-                          <td className="py-3 text-gray-400">{r.visit_month || "—"}</td>
+                          <td className="py-3 text-gray-400 overflow-hidden truncate" title={r.visit_month || ""}>{r.visit_month || "—"}</td>
                         </tr>
                         {expandedRow === i && (
                           <tr key={`exp-${r.id}`} className="border-b border-gray-800">
