@@ -2759,6 +2759,160 @@ def get_placement_sources_for_college(college: str = ""):
     }
 
 
+# ── Placement DB endpoints (from ingest_placement_data.py) ──────────────────
+
+_PDB = Path(__file__).parent / "placeiq.db"
+
+
+def _pdb_conn():
+    import sqlite3 as _sq
+    conn = _sq.connect(_PDB)
+    conn.row_factory = _sq.Row
+    return conn
+
+
+@app.get("/api/placement/colleges")
+def placement_colleges():
+    """Unique college names and their data_tier."""
+    with _pdb_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT college_name, data_tier FROM placement_records ORDER BY college_name"
+        ).fetchall()
+    return [{"college_name": r["college_name"], "data_tier": r["data_tier"]} for r in rows]
+
+
+@app.get("/api/placement/stats/{college_name}")
+def placement_stats(college_name: str):
+    """All college_stats rows for the given college."""
+    from urllib.parse import unquote
+    college_name = unquote(college_name)
+    with _pdb_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM college_stats WHERE college_name = ? ORDER BY year",
+            (college_name,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/placement/companies/{college_name}")
+def placement_companies(college_name: str, year: str = ""):
+    """All placement_records for the given college, optionally filtered by year."""
+    from urllib.parse import unquote
+    college_name = unquote(college_name)
+    with _pdb_conn() as conn:
+        if year:
+            rows = conn.execute(
+                "SELECT * FROM placement_records WHERE college_name = ? AND year = ? ORDER BY company_name",
+                (college_name, year),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM placement_records WHERE college_name = ? ORDER BY year, company_name",
+                (college_name,),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/placement/market/ctc-trends")
+def placement_ctc_trends():
+    """Average CTC per year across all records (excludes avg_2022_2024 synthetic year)."""
+    with _pdb_conn() as conn:
+        rows = conn.execute("""
+            SELECT year,
+                   ROUND(AVG((COALESCE(ctc_min,0) + COALESCE(ctc_max,0)) / 2.0), 2) AS avg_ctc,
+                   COUNT(*) AS record_count
+            FROM placement_records
+            WHERE year != 'avg_2022_2024' AND ctc_min IS NOT NULL AND ctc_max IS NOT NULL
+            GROUP BY year
+            ORDER BY year
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/placement/market/top-companies")
+def placement_top_companies():
+    """Top 20 companies by total avg_headcount across all records."""
+    with _pdb_conn() as conn:
+        rows = conn.execute("""
+            SELECT company_name,
+                   ROUND(SUM(COALESCE(avg_headcount, 0)), 1) AS total_headcount,
+                   COUNT(DISTINCT college_name) AS colleges_visited
+            FROM placement_records
+            WHERE company_name IS NOT NULL
+            GROUP BY company_name
+            ORDER BY total_headcount DESC
+            LIMIT 20
+        """).fetchall()
+        meta = conn.execute(
+            "SELECT COUNT(*) AS total_records, COUNT(DISTINCT college_name) AS total_colleges FROM placement_records"
+        ).fetchone()
+    return {
+        "companies": [dict(r) for r in rows],
+        "total_records": meta["total_records"],
+        "total_colleges": meta["total_colleges"],
+    }
+
+
+@app.get("/api/placement/score-factors/{college_name}")
+def placement_score_factors(college_name: str):
+    """Returns key factors used to calibrate placement score for a given college."""
+    from urllib.parse import unquote
+    college_name = unquote(college_name)
+    with _pdb_conn() as conn:
+        # Latest stats
+        stats_rows = conn.execute(
+            "SELECT * FROM college_stats WHERE college_name = ? ORDER BY year DESC",
+            (college_name,),
+        ).fetchall()
+        if not stats_rows:
+            return {"found": False, "college_name": college_name}
+
+        latest = dict(stats_rows[0])
+
+        # Year-wise trend
+        year_trend = [
+            {"year": r["year"], "total_offers": r["total_offers"], "avg_ctc": r["avg_ctc"]}
+            for r in stats_rows
+        ]
+
+        # Top hiring companies by headcount
+        top_cos = conn.execute("""
+            SELECT company_name, ROUND(SUM(COALESCE(avg_headcount,0)),1) AS total_headcount
+            FROM placement_records
+            WHERE college_name = ?
+            GROUP BY company_name
+            ORDER BY total_headcount DESC
+            LIMIT 10
+        """, (college_name,)).fetchall()
+
+        # Category/tier distribution
+        tier_dist = conn.execute("""
+            SELECT category_tier, COUNT(*) AS cnt
+            FROM placement_records
+            WHERE college_name = ?
+            GROUP BY category_tier
+            ORDER BY cnt DESC
+        """, (college_name,)).fetchall()
+
+    return {
+        "found": True,
+        "college_name": college_name,
+        "data_tier": latest.get("data_tier"),
+        "avg_ctc": latest.get("avg_ctc"),
+        "highest_ctc": latest.get("highest_ctc"),
+        "lowest_ctc": latest.get("lowest_ctc"),
+        "total_offers": latest.get("total_offers"),
+        "total_companies": latest.get("total_companies"),
+        "latest_year": latest.get("year"),
+        "year_trend": year_trend,
+        "top_companies": [dict(r) for r in top_cos],
+        "tier_distribution": [dict(r) for r in tier_dist],
+    }
+
+
+# ── End Placement DB endpoints ───────────────────────────────────────────────
+
+
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         text = " ".join(page.extract_text() or "" for page in pdf.pages).strip()
@@ -3787,6 +3941,42 @@ async def oncampus_predict(payload: OnCampusIn):
     all_stats = get_all_college_stats(payload.college)
     nirf_stats = all_stats.get("nirf_data")
 
+    # Fetch real placement DB data for this college
+    _real_db_context = ""
+    try:
+        import sqlite3 as _sq3
+        _pdb_path = Path(__file__).parent / "placeiq.db"
+        with _sq3.connect(_pdb_path) as _c:
+            _c.row_factory = _sq3.Row
+            _sf = _c.execute(
+                "SELECT * FROM college_stats WHERE college_name = ? ORDER BY year DESC LIMIT 1",
+                (payload.college,),
+            ).fetchone()
+            _top = _c.execute("""
+                SELECT company_name, ROUND(SUM(COALESCE(avg_headcount,0)),1) AS h
+                FROM placement_records WHERE college_name = ?
+                GROUP BY company_name ORDER BY h DESC LIMIT 5
+            """, (payload.college,)).fetchall()
+            _trend = _c.execute("""
+                SELECT year, total_offers FROM college_stats
+                WHERE college_name = ? ORDER BY year
+            """, (payload.college,)).fetchall()
+        if _sf:
+            _top_names = ", ".join(r["company_name"] for r in _top) if _top else "N/A"
+            _trend_str = " → ".join(f"{r['year']}:{r['total_offers']}" for r in _trend) if _trend else "N/A"
+            _real_db_context = (
+                f"\nREAL CAMPUS PLACEMENT DATABASE for {payload.college}:\n"
+                f"- Average CTC: {_sf['avg_ctc']} LPA\n"
+                f"- Highest CTC: {_sf['highest_ctc']} LPA\n"
+                f"- Total offers (latest year): {_sf['total_offers']}\n"
+                f"- Top hiring companies by headcount: {_top_names}\n"
+                f"- Year-wise offer trend: {_trend_str}\n"
+                "Use this real data to calibrate your score. A student with 7 CGPA at SRM should score "
+                "20-30% not 60%. Be brutally honest. Return only JSON no markdown.\n"
+            )
+    except Exception as _db_err:
+        print(f"[DEBUG] score-factors DB lookup failed: {_db_err}")
+
     # Build multi-source context and determine company lists
     nirf_context = ""
     placement_rate = all_stats.get("combined_placement_rate")
@@ -3856,6 +4046,7 @@ async def oncampus_predict(payload: OnCampusIn):
         f"- Skills: {skills_str}\n"
         f"- CGPA: {payload.cgpa}/10\n"
         f"{nirf_context}"
+        f"{_real_db_context}"
         f"{scraped_context}"
         "Return a JSON object with this exact structure:\n"
         "{\n"

@@ -4,6 +4,10 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 type Article = {
   title: string;
@@ -40,9 +44,21 @@ type NewsPayload = {
   scrape_success: boolean;
 };
 
+type CtcTrend = { year: string; avg_ctc: number; record_count: number };
+type TopCompany = { company_name: string; total_headcount: number; colleges_visited: number };
+type PlacementMarket = {
+  companies: TopCompany[];
+  total_records: number;
+  total_colleges: number;
+};
+
 export default function MarketPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  const [ctcTrends, setCtcTrends] = useState<CtcTrend[]>([]);
+  const [placementMarket, setPlacementMarket] = useState<PlacementMarket | null>(null);
+  const [placementLoading, setPlacementLoading] = useState(true);
 
   const [payload, setPayload] = useState<NewsPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +69,17 @@ export default function MarketPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    Promise.all([
+      fetch("http://localhost:8000/api/placement/market/ctc-trends").then(r => r.ok ? r.json() : []),
+      fetch("http://localhost:8000/api/placement/market/top-companies").then(r => r.ok ? r.json() : null),
+    ]).then(([trends, market]) => {
+      setCtcTrends(trends);
+      if (market) setPlacementMarket(market);
+    }).catch(() => {}).finally(() => setPlacementLoading(false));
   }, [status]);
 
   useEffect(() => {
@@ -178,6 +205,64 @@ export default function MarketPage() {
             >
               Try again
             </button>
+          </div>
+        )}
+
+        {/* ── Real Campus Placement Data Section ── */}
+        {!placementLoading && (ctcTrends.length > 0 || placementMarket) && (
+          <div className="space-y-6 mb-10">
+            {placementMarket && (
+              <p className="text-xs text-gray-600">
+                Based on real campus placement data — {placementMarket.total_records} records across {placementMarket.total_colleges} colleges
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* CTC Trend Line Chart */}
+              {ctcTrends.length > 0 && (
+                <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                  <h3 className="text-base font-semibold mb-1">Average CTC Trend (2022–2024)</h3>
+                  <p className="text-gray-500 text-xs mb-4">Avg campus placement package across all colleges in our DB</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={ctcTrends} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                      <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                      <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#60a5fa" }} />
+                      <Line type="monotone" dataKey="avg_ctc" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} name="Avg CTC (LPA)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Top Companies Bar Chart */}
+              {placementMarket && placementMarket.companies.length > 0 && (
+                <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                  <h3 className="text-base font-semibold mb-1">Top Companies by Hiring Volume</h3>
+                  <p className="text-gray-500 text-xs mb-4">Total avg headcount across all campus visits</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart
+                      data={placementMarket.companies.slice(0, 10)}
+                      layout="vertical"
+                      margin={{ top: 5, right: 20, left: 60, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                      <YAxis type="category" dataKey="company_name" tick={{ fill: "#9ca3af", fontSize: 10 }} width={58} />
+                      <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#a855f7" }} />
+                      <Bar dataKey="total_headcount" fill="#a855f7" radius={[0, 4, 4, 0]} name="Total Headcount" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {placementLoading && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+            <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 animate-pulse h-64" />
+            <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 animate-pulse h-64" />
           </div>
         )}
 

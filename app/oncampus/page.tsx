@@ -1,9 +1,13 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 
 type Profile = {
   college: string;
@@ -72,7 +76,37 @@ type PlacementHistoryData = {
   data_note: string;
 };
 
-type PredictSnapshot = { cgpa: number; skills: string[] };
+type PredictSnapshot = { cgpa: number; skills: string[] }
+
+type CollegeStat = {
+  id: number;
+  college_name: string;
+  year: string;
+  total_companies: number;
+  highest_ctc: number | null;
+  lowest_ctc: number | null;
+  avg_ctc: number | null;
+  median_ctc: number | null;
+  total_offers: number | null;
+  data_tier: string;
+};
+
+type PlacementRecord = {
+  id: number;
+  college_name: string;
+  company_name: string;
+  role_profile: string;
+  category_tier: string;
+  ctc_min: number | null;
+  ctc_max: number | null;
+  avg_headcount: number | null;
+  year: string;
+  hiring_rounds: string;
+  key_topics: string;
+  visit_month: string;
+  source: string;
+  data_tier: string;
+};;
 
 function probColor(p: number) {
   if (p >= 70) return "text-green-400";
@@ -150,7 +184,7 @@ export default function OnCampus() {
   const [error, setError] = useState("");
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const days = daysUntilSeason();
-  const [activeTab, setActiveTab] = useState<"predictor" | "history">("predictor");
+  const [activeTab, setActiveTab] = useState<"predictor" | "history" | "placement-data">("predictor");
   const seasonInfo = getSeasonInfo();
 
   // Repredict modal state
@@ -187,6 +221,15 @@ export default function OnCampus() {
     num_sources: number;
   };
   const [sourcesData, setSourcesData] = useState<SourcesData | null>(null);
+
+  // Placement DB state
+  const [dbStats, setDbStats] = useState<CollegeStat[]>([]);
+  const [dbRecords, setDbRecords] = useState<PlacementRecord[]>([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [dbLoaded, setDbLoaded] = useState(false);
+  const [dbCompanySearch, setDbCompanySearch] = useState("");
+  const [dbCategoryFilter, setDbCategoryFilter] = useState("All");
+  const [dbExpandedRow, setDbExpandedRow] = useState<number | null>(null);
 
   // Whether profile has changed since last prediction
   const hasProfileChanged = !!(result && profile && lastPredictSnapshot && (
@@ -265,6 +308,38 @@ export default function OnCampus() {
     }
   }, [activeTab, profile?.college]);
 
+  useEffect(() => {
+    if (activeTab === "placement-data" && profile?.college && !dbLoaded) {
+      fetchDbData();
+    }
+  }, [activeTab, profile?.college]);
+
+  async function fetchDbData() {
+    if (!profile?.college) return;
+    setDbLoading(true);
+    const encoded = encodeURIComponent(profile.college);
+    try {
+      const [statsRes, recordsRes] = await Promise.all([
+        fetch(`http://localhost:8000/api/placement/stats/${encoded}`),
+        fetch(`http://localhost:8000/api/placement/companies/${encoded}?year=2024`),
+      ]);
+      if (statsRes.ok) setDbStats(await statsRes.json());
+      if (recordsRes.ok) {
+        const data = await recordsRes.json();
+        // If no 2024 data, fetch all
+        if (!data.length) {
+          const all = await fetch(`http://localhost:8000/api/placement/companies/${encoded}`);
+          if (all.ok) setDbRecords(await all.json());
+        } else {
+          setDbRecords(data);
+        }
+      }
+      setDbLoaded(true);
+    } catch { /* silent */ } finally {
+      setDbLoading(false);
+    }
+  }
+
   async function predict(overrides?: { cgpa?: number; skills?: string[] }) {
     if (!profile) return;
     const cgpa = overrides?.cgpa ?? profile.cgpa;
@@ -331,6 +406,43 @@ export default function OnCampus() {
   }
 
   if (status === "loading") return <LoadingScreen />;
+
+  // CTC bucket helper
+  function ctcBucket(min: number | null, max: number | null): string {
+    const avg = (min != null && max != null) ? (min + max) / 2 : (min ?? max ?? 0);
+    if (avg < 3)  return "< 3 LPA";
+    if (avg < 6)  return "3–6 LPA";
+    if (avg < 10) return "6–10 LPA";
+    if (avg < 20) return "10–20 LPA";
+    if (avg < 40) return "20–40 LPA";
+    return "40+ LPA";
+  }
+  const BUCKET_ORDER = ["< 3 LPA", "3–6 LPA", "6–10 LPA", "10–20 LPA", "20–40 LPA", "40+ LPA"];
+
+  // Filtered DB records
+  const dbCategories = useMemo(() => {
+    const cats = new Set(dbRecords.map(r => r.category_tier).filter(Boolean));
+    return ["All", ...Array.from(cats).sort()];
+  }, [dbRecords]);
+
+  const filteredDbRecords = useMemo(() => {
+    return dbRecords.filter(r => {
+      const matchSearch = !dbCompanySearch || r.company_name?.toLowerCase().includes(dbCompanySearch.toLowerCase());
+      const matchCat = dbCategoryFilter === "All" || r.category_tier === dbCategoryFilter;
+      return matchSearch && matchCat;
+    });
+  }, [dbRecords, dbCompanySearch, dbCategoryFilter]);
+
+  const ctcBuckets = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of dbRecords) {
+      if (r.ctc_min != null || r.ctc_max != null) {
+        const b = ctcBucket(r.ctc_min, r.ctc_max);
+        counts[b] = (counts[b] ?? 0) + 1;
+      }
+    }
+    return BUCKET_ORDER.filter(b => counts[b]).map(b => ({ bucket: b, count: counts[b] }));
+  }, [dbRecords]);
 
   // Filtered companies for history tab
   const filteredHistoryCompanies: PlacementDriveCompany[] = [];
@@ -445,7 +557,7 @@ export default function OnCampus() {
 
         {/* Tab selector */}
         <div className="flex gap-2 mb-6 border-b border-gray-800">
-          {(["predictor", "history"] as const).map(tab => (
+          {(["predictor", "history", "placement-data"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -455,7 +567,7 @@ export default function OnCampus() {
                   : "border-transparent text-gray-500 hover:text-gray-300"
               }`}
             >
-              {tab === "predictor" ? "Company Predictor" : "Placement History"}
+              {tab === "predictor" ? "Company Predictor" : tab === "history" ? "Placement History" : "Placement Data"}
             </button>
           ))}
         </div>
@@ -754,6 +866,175 @@ export default function OnCampus() {
                   </>
                 )}
               </>
+            )}
+
+            {/* ── PLACEMENT DATA TAB ── */}
+            {activeTab === "placement-data" && (
+              <div className="space-y-8">
+                {dbLoading && (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-6 animate-pulse h-48" />
+                    ))}
+                  </div>
+                )}
+
+                {!dbLoading && !dbLoaded && (
+                  <div className="bg-[#111] border border-gray-800 rounded-2xl p-10 text-center">
+                    <p className="text-gray-400">No placement database records found for {profile?.college}.</p>
+                    <p className="text-gray-600 text-sm mt-2">This college may not be in our database yet.</p>
+                  </div>
+                )}
+
+                {!dbLoading && dbLoaded && (
+                  <>
+                    {/* Section A — Placement History Graphs */}
+                    <section className="bg-[#111] border border-gray-800 rounded-2xl p-6">
+                      <h3 className="text-lg font-semibold mb-1">Your College&apos;s Placement History</h3>
+                      <p className="text-gray-500 text-sm mb-5">Year-wise average CTC and total offers from our placement database</p>
+
+                      {dbStats.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No historical stats found for this college.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Avg CTC (LPA)</p>
+                            <ResponsiveContainer width="100%" height={200}>
+                              <LineChart data={dbStats} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                                <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                                <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                                <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#60a5fa" }} />
+                                <Line type="monotone" dataKey="avg_ctc" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} name="Avg CTC" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Total Offers</p>
+                            <ResponsiveContainer width="100%" height={200}>
+                              <BarChart data={dbStats} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                                <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                                <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                                <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#a855f7" }} />
+                                <Bar dataKey="total_offers" fill="#a855f7" radius={[4, 4, 0, 0]} name="Total Offers" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Section B — Company Visit Table */}
+                    <section className="bg-[#111] border border-gray-800 rounded-2xl p-6">
+                      <h3 className="text-lg font-semibold mb-1">Company Visits</h3>
+                      <p className="text-gray-500 text-sm mb-4">
+                        {dbRecords.length} records from our placement database
+                      </p>
+
+                      <div className="flex gap-3 flex-wrap mb-4">
+                        <input
+                          value={dbCompanySearch}
+                          onChange={e => setDbCompanySearch(e.target.value)}
+                          placeholder="Search company..."
+                          className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition w-56"
+                        />
+                        <div className="flex gap-2 flex-wrap">
+                          {dbCategories.map(cat => (
+                            <button
+                              key={cat}
+                              onClick={() => setDbCategoryFilter(cat)}
+                              className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                                dbCategoryFilter === cat
+                                  ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
+                                  : "border-gray-700 text-gray-500 hover:text-gray-300"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm min-w-[700px]">
+                          <thead>
+                            <tr className="border-b border-gray-800 text-[11px] text-gray-500 uppercase tracking-widest">
+                              <th className="text-left py-2 pr-4">Company</th>
+                              <th className="text-left py-2 pr-4">Role</th>
+                              <th className="text-left py-2 pr-4">Category</th>
+                              <th className="text-left py-2 pr-4">CTC Range</th>
+                              <th className="text-left py-2 pr-4">Headcount</th>
+                              <th className="text-left py-2">Visit Month</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredDbRecords.length === 0 ? (
+                              <tr><td colSpan={6} className="py-8 text-center text-gray-600">No records match your filter</td></tr>
+                            ) : filteredDbRecords.map((r, i) => (
+                              <>
+                                <tr
+                                  key={r.id}
+                                  onClick={() => setDbExpandedRow(dbExpandedRow === i ? null : i)}
+                                  className="border-b border-gray-800/50 hover:bg-white/[0.02] cursor-pointer transition"
+                                >
+                                  <td className="py-3 pr-4 font-medium text-white">{r.company_name || "—"}</td>
+                                  <td className="py-3 pr-4 text-gray-400 max-w-[180px] truncate">{r.role_profile || "—"}</td>
+                                  <td className="py-3 pr-4">
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                                      {r.category_tier || "—"}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 pr-4 text-green-400 font-medium">
+                                    {r.ctc_min != null && r.ctc_max != null ? `${r.ctc_min}–${r.ctc_max} LPA` : r.ctc_min != null ? `${r.ctc_min}+ LPA` : "—"}
+                                  </td>
+                                  <td className="py-3 pr-4 text-gray-300">{r.avg_headcount ?? "—"}</td>
+                                  <td className="py-3 text-gray-400">{r.visit_month || "—"}</td>
+                                </tr>
+                                {dbExpandedRow === i && (
+                                  <tr key={`exp-${r.id}`} className="border-b border-gray-800">
+                                    <td colSpan={6} className="py-3 px-2 bg-gray-900/40">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Hiring Rounds</p>
+                                          <p className="text-gray-300">{r.hiring_rounds || "—"}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Key Topics Tested</p>
+                                          <p className="text-gray-300">{r.key_topics || "—"}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    {/* Section C — CTC Distribution */}
+                    <section className="bg-[#111] border border-gray-800 rounded-2xl p-6">
+                      <h3 className="text-lg font-semibold mb-1">Package Distribution at Your College</h3>
+                      <p className="text-gray-500 text-sm mb-5">Number of company visits per CTC range</p>
+                      {ctcBuckets.length === 0 ? (
+                        <p className="text-gray-500 text-sm">Not enough CTC data to show distribution.</p>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={ctcBuckets} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                            <XAxis dataKey="bucket" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                            <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} allowDecimals={false} />
+                            <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#3b82f6" }} />
+                            <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Companies" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </section>
+                  </>
+                )}
+              </div>
             )}
 
             {/* ── HISTORY TAB ── */}

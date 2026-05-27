@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { label: "Progress",         path: "/progress" },
   { label: "Resources",        path: "/resources" },
   { label: "Company Directory", path: "/company-directory" },
+  { label: "College Stats",     path: "/college-stats" },
 ];
 
 export default function Navbar() {
