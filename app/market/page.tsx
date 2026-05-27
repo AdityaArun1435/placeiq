@@ -340,7 +340,7 @@ export default function MarketPage() {
                             cx="50%"
                             cy="45%"
                             outerRadius={160}
-                            label={({ category_tier, percent }) =>
+                            label={({ percent }) =>
                               `${(percent * 100).toFixed(0)}%`
                             }
                             labelLine={true}
