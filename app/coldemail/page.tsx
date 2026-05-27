@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Mail } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -92,76 +93,76 @@ export default function ColdEmail() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-4xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Cold Email Generator</h2>
-        <p className="text-gray-400 mb-8">Generate a personalised cold email to reach recruiters at any company</p>
+        <p className="text-muted mb-8">Generate a personalised cold email to reach recruiters at any company</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Left — inputs */}
           <div className="space-y-6">
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-              <h3 className="font-semibold mb-4 text-sm text-gray-300 uppercase tracking-wider">Target</h3>
+            <div className="bg-surface border border-theme rounded-2xl p-6">
+              <h3 className="font-semibold mb-4 text-sm text-muted uppercase tracking-wider">Target</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Company Name *</label>
+                  <label className="text-xs text-muted mb-1.5 block">Company Name *</label>
                   <input
                     value={company}
                     onChange={e => setCompany(e.target.value)}
                     placeholder="e.g. Razorpay, Zepto, Microsoft"
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Role / Position *</label>
+                  <label className="text-xs text-muted mb-1.5 block">Role / Position *</label>
                   <input
                     value={role}
                     onChange={e => setRole(e.target.value)}
                     placeholder="e.g. SDE-1, Data Analyst, Product Manager"
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
               </div>
             </div>
 
             {/* Profile preview */}
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-              <h3 className="font-semibold mb-4 text-sm text-gray-300 uppercase tracking-wider">Using Your Profile</h3>
+            <div className="bg-surface border border-theme rounded-2xl p-6">
+              <h3 className="font-semibold mb-4 text-sm text-muted uppercase tracking-wider">Using Your Profile</h3>
               {profile ? (
                 <div className="space-y-3 text-sm">
                   <div className="flex items-start justify-between">
-                    <span className="text-gray-500">Name</span>
-                    <span className="text-gray-300">{session?.user?.name || "—"}</span>
+                    <span className="text-faint">Name</span>
+                    <span className="text-muted">{session?.user?.name || "—"}</span>
                   </div>
                   <div className="flex items-start justify-between">
-                    <span className="text-gray-500">College</span>
-                    <span className="text-gray-300 text-right max-w-[60%] truncate">{profile.college}</span>
+                    <span className="text-faint">College</span>
+                    <span className="text-muted text-right max-w-[60%] truncate">{profile.college}</span>
                   </div>
                   <div className="flex items-start justify-between">
-                    <span className="text-gray-500">Projects</span>
-                    <span className="text-gray-300">{profile.projectsCount}</span>
+                    <span className="text-faint">Projects</span>
+                    <span className="text-muted">{profile.projectsCount}</span>
                   </div>
                   <div className="flex items-start justify-between">
-                    <span className="text-gray-500">Internship</span>
-                    <span className="text-gray-300">
+                    <span className="text-faint">Internship</span>
+                    <span className="text-muted">
                       {profile.hasInternship === "yes" ? `Yes (${profile.internshipMonths} mo)` : "No"}
                     </span>
                   </div>
                   <div>
-                    <p className="text-gray-500 mb-2">Top Skills</p>
+                    <p className="text-faint mb-2">Top Skills</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(Array.isArray(profile.skills) ? profile.skills : []).slice(0, 6).map(s => (
                         <span key={s} className="bg-blue-600/10 border border-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded-full">{s}</span>
                       ))}
                       {(profile?.skills?.length ?? 0) > 6 && (
-                        <span className="text-gray-600 text-xs px-2 py-0.5">+{(profile.skills?.length ?? 0) - 6} more</span>
+                        <span className="text-faint text-xs px-2 py-0.5">+{(profile.skills?.length ?? 0) - 6} more</span>
                       )}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <p className="text-gray-500 text-sm mb-3">No profile found — the email will be generic.</p>
+                  <p className="text-faint text-sm mb-3">No profile found — the email will be generic.</p>
                   <button onClick={() => router.push("/onboarding")} className="text-blue-400 hover:text-blue-300 text-sm transition">
                     Complete profile for better emails →
                   </button>
@@ -172,7 +173,7 @@ export default function ColdEmail() {
             <button
               onClick={generate}
               disabled={loading || !company.trim() || !role.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-3 rounded-xl font-medium transition text-sm"
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-main py-3 rounded-xl font-medium transition text-sm"
             >
               {loading ? "Generating..." : "Generate Cold Email →"}
             </button>
@@ -184,8 +185,8 @@ export default function ColdEmail() {
 
           {/* Right — generated email */}
           <div>
-            <div className="bg-[#111] border border-gray-800 rounded-2xl overflow-hidden h-full flex flex-col">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+            <div className="bg-surface border border-theme rounded-2xl overflow-hidden h-full flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-theme">
                 <h3 className="font-semibold text-sm">Generated Email</h3>
                 {email && (
                   <button
@@ -193,7 +194,7 @@ export default function ColdEmail() {
                     className={`text-xs px-3 py-1.5 rounded-lg transition font-medium ${
                       copied
                         ? "bg-green-600/20 text-green-400 border border-green-500/30"
-                        : "bg-gray-800 hover:bg-gray-700 text-gray-300"
+                        : "bg-gray-800 hover:bg-gray-700 text-muted"
                     }`}
                   >
                     {copied ? "Copied!" : "Copy"}
@@ -205,7 +206,7 @@ export default function ColdEmail() {
                 <div className="flex-1 flex items-center justify-center p-8">
                   <div className="text-center">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">Crafting your email...</p>
+                    <p className="text-faint text-sm">Crafting your email...</p>
                   </div>
                 </div>
               ) : email ? (
@@ -214,17 +215,17 @@ export default function ColdEmail() {
                     ref={textareaRef}
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    className="w-full h-full min-h-96 bg-transparent px-5 py-4 text-sm text-gray-300 leading-relaxed focus:outline-none resize-none font-mono"
+                    className="w-full h-full min-h-96 bg-transparent px-5 py-4 text-sm text-muted leading-relaxed focus:outline-none resize-none font-mono"
                     spellCheck={false}
                   />
-                  <p className="absolute bottom-3 right-4 text-xs text-gray-700">editable</p>
+                  <p className="absolute bottom-3 right-4 text-xs text-faint">editable</p>
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center p-8">
                   <div className="text-center">
-                    <p className="text-4xl mb-4">✉</p>
-                    <p className="text-gray-500 text-sm">Your personalised email will appear here</p>
-                    <p className="text-gray-700 text-xs mt-2">Enter a company and role, then click Generate</p>
+                    <Mail size={36} className="mx-auto mb-4 text-faint" />
+                    <p className="text-faint text-sm">Your personalised email will appear here</p>
+                    <p className="text-faint text-xs mt-2">Enter a company and role, then click Generate</p>
                   </div>
                 </div>
               )}
@@ -233,12 +234,12 @@ export default function ColdEmail() {
         </div>
 
         {/* Tips */}
-        <div className="mt-8 bg-[#111] border border-gray-800 rounded-2xl p-6">
-          <h3 className="font-semibold text-sm mb-4 text-gray-300">Tips for effective cold emails</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-500">
-            <div><span className="text-gray-300 font-medium block mb-1">Find the right person</span>Search LinkedIn for the hiring manager or engineering lead at {company || "your target company"} — not just HR.</div>
-            <div><span className="text-gray-300 font-medium block mb-1">Personalise the subject</span>Use their name and a specific project or blog post from the company to stand out from generic applications.</div>
-            <div><span className="text-gray-300 font-medium block mb-1">Follow up once</span>Wait 5-7 days with no response, then send one polite follow-up. More than that hurts your chances.</div>
+        <div className="mt-8 bg-surface border border-theme rounded-2xl p-6">
+          <h3 className="font-semibold text-sm mb-4 text-muted">Tips for effective cold emails</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-faint">
+            <div><span className="text-muted font-medium block mb-1">Find the right person</span>Search LinkedIn for the hiring manager or engineering lead at {company || "your target company"} — not just HR.</div>
+            <div><span className="text-muted font-medium block mb-1">Personalise the subject</span>Use their name and a specific project or blog post from the company to stand out from generic applications.</div>
+            <div><span className="text-muted font-medium block mb-1">Follow up once</span>Wait 5-7 days with no response, then send one polite follow-up. More than that hurts your chances.</div>
           </div>
         </div>
       </div>

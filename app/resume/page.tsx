@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -42,7 +42,7 @@ function ScoreCircle({ score }: { score: number }) {
       </svg>
       <div className="absolute text-center">
         <p className="text-4xl font-bold" style={{ color }}>{score}</p>
-        <p className="text-xs text-gray-500 mt-0.5">/ 100</p>
+        <p className="text-xs text-faint mt-0.5">/ 100</p>
       </div>
     </div>
   );
@@ -182,14 +182,14 @@ export default function ResumeAnalyser() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-4xl mx-auto px-8 py-10">
 
         {/* Upload form — always visible above results */}
         {!result && (
           <>
             <h2 className="text-3xl font-bold mb-2">Resume Analyser</h2>
-            <p className="text-gray-400 mb-10">Upload your resume and get brutally honest AI feedback tailored to your target role.</p>
+            <p className="text-muted mb-10">Upload your resume and get brutally honest AI feedback tailored to your target role.</p>
 
             {/* Drop zone */}
             <div
@@ -202,7 +202,7 @@ export default function ResumeAnalyser() {
                   ? "border-blue-500 bg-blue-600/5"
                   : file
                   ? "border-green-500/50 bg-green-600/5"
-                  : "border-gray-700 hover:border-gray-500 bg-[#111]"
+                  : "border-theme hover:border-gray-500 bg-surface"
               }`}
             >
               <input
@@ -215,21 +215,21 @@ export default function ResumeAnalyser() {
               {file ? (
                 <>
                   <p className="text-green-400 text-lg font-medium mb-1">{file.name}</p>
-                  <p className="text-gray-500 text-sm">{(file.size / 1024).toFixed(0)} KB — click to replace</p>
+                  <p className="text-faint text-sm">{(file.size / 1024).toFixed(0)} KB — click to replace</p>
                 </>
               ) : (
                 <>
-                  <p className="text-gray-300 text-lg mb-2">Drop your resume here</p>
-                  <p className="text-gray-500 text-sm">or click to browse — PDF only</p>
+                  <p className="text-muted text-lg mb-2">Drop your resume here</p>
+                  <p className="text-faint text-sm">or click to browse — PDF only</p>
                 </>
               )}
             </div>
 
             {/* Target role */}
             <div className="mb-6">
-              <label className="text-sm text-gray-400 mb-2 block">Target Role</label>
+              <label className="text-sm text-muted mb-2 block">Target Role</label>
               <input
-                className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500"
                 placeholder="e.g. Software Engineer"
                 value={targetRole}
                 onChange={e => setTargetRole(e.target.value)}
@@ -241,7 +241,7 @@ export default function ResumeAnalyser() {
             <button
               onClick={submit}
               disabled={!file || !targetRole.trim() || loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
             >
               {loading ? "Analysing your resume with AI..." : "Analyse Resume"}
             </button>
@@ -258,7 +258,7 @@ export default function ResumeAnalyser() {
                   <div
                     key={i}
                     className={`flex items-center gap-3 text-sm transition-opacity duration-500 ${
-                      i === statusIdx ? "text-white opacity-100" : "text-gray-500 opacity-50"
+                      i === statusIdx ? "text-main opacity-100" : "text-faint opacity-50"
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -279,13 +279,13 @@ export default function ResumeAnalyser() {
             <div className="flex items-start justify-between mb-8 gap-4">
               <div>
                 <h2 className="text-3xl font-bold mb-3">Resume Analysis</h2>
-                <p className="text-gray-300 text-base font-medium leading-relaxed border-l-4 border-blue-500 pl-4 italic">
+                <p className="text-muted text-base font-medium leading-relaxed border-l-4 border-blue-500 pl-4 italic">
                   "{result.one_line_verdict}"
                 </p>
               </div>
               <button
                 onClick={() => { setResult(null); setFile(null); setError(""); }}
-                className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white px-4 py-2 rounded-lg text-sm transition"
+                className="shrink-0 border border-theme text-muted hover:border-gray-500 hover:text-main px-4 py-2 rounded-lg text-sm transition"
               >
                 Analyse another
               </button>
@@ -293,9 +293,9 @@ export default function ResumeAnalyser() {
 
             {/* Score circle */}
             <div className="flex justify-center mb-8">
-              <div className="bg-[#111] border border-gray-800 rounded-2xl p-8 text-center">
+              <div className="bg-surface border border-theme rounded-2xl p-8 text-center">
                 <ScoreCircle score={result.resume_score} />
-                <p className="text-gray-400 text-sm mt-3">Resume Score</p>
+                <p className="text-muted text-sm mt-3">Resume Score</p>
               </div>
             </div>
 
@@ -305,7 +305,7 @@ export default function ResumeAnalyser() {
                 <h3 className="font-semibold text-green-400 mb-4">Strengths</h3>
                 <ul className="space-y-2">
                   {result.strengths.map((s, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted">
                       <span className="text-green-500 mt-0.5 shrink-0">+</span>
                       {s}
                     </li>
@@ -317,7 +317,7 @@ export default function ResumeAnalyser() {
                 <h3 className="font-semibold text-red-400 mb-4">Gaps</h3>
                 <ul className="space-y-2">
                   {result.gaps.map((g, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted">
                       <span className="text-red-500 mt-0.5 shrink-0">-</span>
                       {g}
                     </li>
@@ -346,7 +346,7 @@ export default function ResumeAnalyser() {
                 <h3 className="font-semibold text-orange-400 mb-4">ATS Issues</h3>
                 <ul className="space-y-2">
                   {result.ats_issues.map((issue, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted">
                       <span className="text-orange-500 mt-0.5 shrink-0">!</span>
                       {issue}
                     </li>

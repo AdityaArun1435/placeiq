@@ -1,0 +1,282 @@
+/* PlaceIQ Design System Tokens */
+
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-elevated: #161616;
+  --bg-hover: #1a1a1a;
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text-primary: #f0f0f0;
+  --text-secondary: #888888;
+  --text-tertiary: #555555;
+  --accent-blue: #3b82f6;
+  --accent-blue-muted: rgba(59, 130, 246, 0.12);
+  --accent-green: #22c55e;
+  --accent-green-muted: rgba(34, 197, 94, 0.1);
+  --accent-amber: #f59e0b;
+  --accent-purple: #8b5cf6;
+
+  /* Animation tokens */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif, "Instrument Serif"), "Newsreader", serif;
+  --font-mono: var(--font-geist-mono), "SF Mono", "JetBrains Mono", monospace;
+}
+
+/* Light theme */
+html.light {
+  --bg-primary: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f5f5f5;
+  --bg-hover: #f0f0f0;
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --text-primary: #111111;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --accent-blue: #2563eb;
+  --accent-blue-muted: rgba(37, 99, 235, 0.08);
+  --accent-green: #16a34a;
+  --accent-green-muted: rgba(22, 163, 74, 0.08);
+  --accent-amber: #d97706;
+  --accent-purple: #7c3aed;
+}
+
+/* Focus ring utility */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Nav active underline animation */
+@keyframes slideInUnderline {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.nav-underline {
+  position: absolute;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--accent-blue);
+  transform-origin: left;
+  animation: slideInUnderline var(--duration-fast) var(--ease-out) forwards;
+}
+
+/* Icon enter animation (theme toggle) */
+@keyframes iconEnter {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.icon-enter {
+  animation: iconEnter var(--duration-fast) var(--ease-out) forwards;
+}
+
+/* Hero entry animations */
+@keyframes heroFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-animate {
+  animation: heroFadeUp 500ms var(--ease-out) both;
+}
+
+.hero-animate-delay-1 {
+  animation-delay: 80ms;
+}
+
+.hero-animate-delay-2 {
+  animation-delay: 160ms;
+}
+
+.hero-animate-delay-3 {
+  animation-delay: 240ms;
+}
+
+/* Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  .hero-animate,
+  .nav-underline,
+  .icon-enter {
+    animation: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hover states only on precise pointer devices */
+@media (hover: hover) and (pointer: fine) {
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-elevated);
+  }
+
+  .link-hover:hover {
+    color: var(--text-primary);
+  }
+}
+
+/* Theme-adaptive utility classes — replace hardcoded dark Tailwind values */
+.bg-primary-bg { background: var(--bg-primary); }
+.bg-surface { background: var(--bg-surface); }
+.bg-elevated { background: var(--bg-elevated); }
+.text-main { color: var(--text-primary); }
+.text-muted { color: var(--text-secondary); }
+.text-faint { color: var(--text-tertiary); }
+.border-theme { border-color: var(--border-default); }
+.hover\:border-theme:hover { border-color: var(--border-strong); }
+
+/* Buttons/badges on colored backgrounds must always use white text */
+.bg-blue-600.text-main, .bg-blue-500.text-main,
+.bg-green-600.text-main, .bg-green-500.text-main,
+.bg-red-600.text-main, .bg-red-500.text-main,
+.bg-orange-500.text-main, .bg-purple-600.text-main {
+  color: #ffffff;
+}
+
+/* Scrollbar hide utility (already in globals but kept here for completeness) */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Theme-adaptive component helpers ────────────────────────────────────── */
+
+/* Industry / category badge (company directory) */
+.industry-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Company action buttons (LinkedIn, Careers) */
+.btn-company-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: opacity var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+  white-space: nowrap;
+}
+.btn-company-action.linkedin {
+  background: var(--accent-blue-muted);
+  border: 1px solid transparent;
+  color: var(--accent-blue);
+}
+.btn-company-action.linkedin:hover { opacity: 0.85; }
+.btn-company-action.careers-verified {
+  background: var(--accent-green-muted);
+  border: 1px solid transparent;
+  color: var(--accent-green);
+}
+.btn-company-action.careers-verified:hover { opacity: 0.85; }
+.btn-company-action.careers-unverified {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: default;
+}
+.btn-company-action.careers-unverified:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Tag pills (company match page) */
+.tag-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tag-pill.blue {
+  background: var(--accent-blue-muted);
+  color: var(--accent-blue);
+  border: 1px solid transparent;
+}
+.tag-pill.green {
+  background: var(--accent-green-muted);
+  color: var(--accent-green);
+  border: 1px solid transparent;
+}
+.tag-pill.muted {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+/* Apply / CTA button */
+.btn-apply {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: var(--accent-blue);
+  color: #ffffff !important;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity var(--duration-fast);
+}
+.btn-apply:hover { opacity: 0.9; }
+
+/* Infinite marquee animation */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 30s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}

@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
+import { Check, Star } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -354,7 +355,7 @@ function hiringBadge(status: string | null) {
     "May Be Closed": "bg-red-500/15 text-red-400 border-red-500/30",
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${styles[status] ?? "bg-gray-700/50 text-gray-400 border-gray-600"}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${styles[status] ?? "bg-gray-700/50 text-muted border-gray-600"}`}>
       {status}
     </span>
   );
@@ -368,7 +369,7 @@ function difficultyBadge(difficulty: string) {
   };
   const key = difficulty.replace(" to get", "");
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${styles[key] ?? "bg-gray-700/50 text-gray-400 border-gray-600"}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${styles[key] ?? "bg-gray-700/50 text-muted border-gray-600"}`}>
       {difficulty}
     </span>
   );
@@ -611,23 +612,23 @@ export default function Internships() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-1">Internships</h2>
-        <p className="text-gray-400 mb-8">
+        <p className="text-muted mb-8">
           Live listings · AI strategy · Major programs — all in one place
         </p>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8 border-b border-gray-800 pb-0">
+        <div className="flex gap-2 mb-8 border-b border-theme pb-0">
           {(["listings", "startups", "strategy", "programs"] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium capitalize transition border-b-2 -mb-px ${
                 tab === t
-                  ? "border-blue-500 text-white"
-                  : "border-transparent text-gray-400 hover:text-white"
+                  ? "border-blue-500 text-main"
+                  : "border-transparent text-muted hover:text-main"
               }`}
             >
               {t === "listings" ? "Live Listings" : t === "startups" ? "Startups" : t === "strategy" ? "AI Strategy" : "Programs"}
@@ -640,19 +641,19 @@ export default function Internships() {
           <div>
             {/* College tier insight banner */}
             {profile && (
-              <div className="bg-[#111] border border-gray-800 rounded-2xl px-5 py-3.5 mb-5 flex items-center justify-between flex-wrap gap-3">
+              <div className="bg-surface border border-theme rounded-2xl px-5 py-3.5 mb-5 flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <p className="text-sm text-gray-300">
+                  <p className="text-sm text-muted">
                     Showing listings prioritised for{" "}
                     <span className="text-blue-400 font-medium">{profile.collegeTier}</span>{" "}
                     colleges{profile.college ? ` · ${profile.college}` : ""}
                   </p>
                   {collegeSources && collegeSources.combined_placement_rate != null ? (
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-[11px] text-faint mt-0.5">
                       College placement rate: {collegeSources.combined_placement_rate}% across {collegeSources.sources_count} source{collegeSources.sources_count !== 1 ? "s" : ""} · 2024 · Companies known to hire from your tier are ranked higher
                     </p>
                   ) : (
-                    <p className="text-[11px] text-gray-500 mt-0.5">Companies known to hire from your tier are ranked higher</p>
+                    <p className="text-[11px] text-faint mt-0.5">Companies known to hire from your tier are ranked higher</p>
                   )}
                 </div>
                 {collegeSources && collegeSources.combined_placement_rate != null && (
@@ -663,32 +664,32 @@ export default function Internships() {
               </div>
             )}
             {/* Filter bar */}
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+            <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Role</label>
+                  <label className="text-xs text-muted mb-1.5 block">Role</label>
                   <input
                     value={filterRole}
                     onChange={e => setFilterRole(e.target.value)}
                     placeholder="e.g. Software, Data"
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Location</label>
+                  <label className="text-xs text-muted mb-1.5 block">Location</label>
                   <input
                     value={filterLocation}
                     onChange={e => setFilterLocation(e.target.value)}
                     placeholder="e.g. Bangalore, Remote"
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Stipend</label>
+                  <label className="text-xs text-muted mb-1.5 block">Stipend</label>
                   <select
                     value={filterStipend}
                     onChange={e => setFilterStipend(e.target.value as "Any" | "Paid" | "Unpaid")}
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                   >
                     <option value="Any">Any</option>
                     <option value="Paid">Paid only</option>
@@ -696,11 +697,11 @@ export default function Internships() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Posted</label>
+                  <label className="text-xs text-muted mb-1.5 block">Posted</label>
                   <select
                     value={filterPosted}
                     onChange={e => setFilterPosted(e.target.value as "Any" | "7" | "30")}
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                   >
                     <option value="Any">Any time</option>
                     <option value="7">Last 7 days</option>
@@ -715,14 +716,14 @@ export default function Internships() {
                 >
                   <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${filterVerifiedOnly ? "translate-x-4" : "translate-x-0.5"}`} />
                 </div>
-                <span className="text-sm text-gray-400">Verified companies only</span>
+                <span className="text-sm text-muted">Verified companies only</span>
               </label>
             </div>
 
             {listingsLoading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-400 text-sm">Fetching live internship listings from Adzuna, Remotive, and Arbeitnow...</p>
+                <p className="text-muted text-sm">Fetching live internship listings from Adzuna, Remotive, and Arbeitnow...</p>
               </div>
             )}
 
@@ -735,7 +736,7 @@ export default function Internships() {
             {!listingsLoading && !listingsError && (
               <>
                 <div className="flex flex-wrap items-center gap-3 mb-1">
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-muted text-sm">
                     {filteredInternships.length} internship{filteredInternships.length !== 1 ? "s" : ""} found
                     {internships.length !== filteredInternships.length ? ` (filtered from ${internships.length})` : ""}
                     {(sourceCounts.Remotive ?? 0) > 0 && ` — ${sourceCounts.Remotive} from Remotive`}
@@ -744,17 +745,17 @@ export default function Internships() {
                   </p>
                   {filteredInternships.filter(j => j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())).length > 0 && (
                     <span className="text-[11px] text-green-400">
-                      ✓ {filteredInternships.filter(j => j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())).length} from verified companies
+                      <Check size={11} className="inline mr-0.5" />{filteredInternships.filter(j => j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())).length} from verified companies
                     </span>
                   )}
                 </div>
                 {(sourceCounts["AI Generated"] ?? 0) > 0 && (
-                  <p className="text-gray-500 text-xs mb-4">
+                  <p className="text-faint text-xs mb-4">
                     Some listings are AI-generated examples. Verify on the company&apos;s careers page.
                   </p>
                 )}
                 {filteredInternships.length === 0 && !listingsLoading ? (
-                  <div className="text-center py-16 text-gray-500">
+                  <div className="text-center py-16 text-faint">
                     No internships match your filters. Try broadening your search.
                   </div>
                 ) : (() => {
@@ -774,16 +775,16 @@ export default function Internships() {
                     const verified = isKnown(job);
                     const paid = isPaid(job);
                     return (
-                      <div key={id} className={`bg-[#111] border rounded-2xl p-5 hover:border-gray-700 transition ${isRecommended ? "border-blue-700/40 border-l-4 border-l-blue-500" : verified ? "border-green-800/30" : "border-gray-800"}`}>
+                      <div key={id} className={`bg-surface border rounded-2xl p-5 hover:border-theme transition ${isRecommended ? "border-blue-700/40 border-l-4 border-l-blue-500" : verified ? "border-green-800/30" : "border-theme"}`}>
                         <div className="flex items-start justify-between gap-4 mb-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-0.5">
                               {isRecommended && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0">⭐ Top Pick</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0 flex items-center gap-0.5"><Star size={9} className="inline fill-current" /> Top Pick</span>
                               )}
-                              <h3 className="font-semibold text-white truncate">{job.title}</h3>
+                              <h3 className="font-semibold text-main truncate">{job.title}</h3>
                               {verified && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium shrink-0">✓ Verified</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium shrink-0 flex items-center gap-0.5"><Check size={9} className="inline" /> Verified</span>
                               )}
                               {paid && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium shrink-0">Paid</span>
@@ -794,12 +795,12 @@ export default function Internships() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
+                            <p className="text-muted text-sm mt-0.5">{job.company} · {job.location}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">
                             {hiringBadge(job.hiring_status)}
                             {job.days_ago !== null && (
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-faint">
                                 {job.days_ago === 0 ? "Today" : job.days_ago === 1 ? "Yesterday" : `${job.days_ago}d ago`}
                               </span>
                             )}
@@ -814,10 +815,10 @@ export default function Internships() {
 
                         <div className="mb-3">
                           {!cleanDesc || cleanDesc.length < 20 ? (
-                            <p className="text-xs text-gray-600 italic">No description available</p>
+                            <p className="text-xs text-faint italic">No description available</p>
                           ) : (
                             <>
-                              <p className={`text-gray-500 text-xs leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
+                              <p className={`text-faint text-xs leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
                               {showToggle && (
                                 <button onClick={() => toggleDesc(id)} className="text-xs text-blue-500 hover:text-blue-400 mt-1 transition">
                                   {isExpanded ? "Show less" : "Show more"}
@@ -855,7 +856,7 @@ export default function Internships() {
                       )}
                       {rest.length > 0 && (
                         <div>
-                          {topMatches.length > 0 && <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">All internships</p>}
+                          {topMatches.length > 0 && <p className="text-xs text-faint uppercase tracking-wider mb-3">All internships</p>}
                           <div className="grid gap-4">
                             {rest.map(job => renderCard(job, false))}
                           </div>
@@ -886,7 +887,7 @@ export default function Internships() {
                   className={`px-4 py-2 text-sm rounded-lg transition font-medium border ${
                     startupsTab === st
                       ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                      : "text-gray-400 hover:text-white border-gray-800"
+                      : "text-muted hover:text-main border-theme"
                   }`}
                 >
                   {st === "ai_matched" ? "AI Matched" : "Browse All"}
@@ -900,7 +901,7 @@ export default function Internships() {
                 {aiStartupsLoading && (
                   <div className="flex flex-col items-center justify-center py-20 gap-3">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <p className="text-gray-400 text-sm">Finding startups most likely to hire you...</p>
+                    <p className="text-muted text-sm">Finding startups most likely to hire you...</p>
                   </div>
                 )}
                 {aiStartupsError && (
@@ -913,16 +914,16 @@ export default function Internships() {
                   <div>
                     <div className="grid md:grid-cols-2 gap-4 mb-6">
                       {aiStartups.startups?.map((startup, i) => (
-                        <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+                        <div key={i} className="bg-surface border border-theme rounded-2xl p-5 hover:border-theme transition">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-white">{startup.name}</h4>
-                              <p className="text-gray-500 text-xs mt-0.5">{startup.city}</p>
+                              <h4 className="font-semibold text-main">{startup.name}</h4>
+                              <p className="text-faint text-xs mt-0.5">{startup.city}</p>
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ml-3 ${
                               startup.hiring_likelihood === "High" ? "bg-green-500/15 text-green-400 border-green-500/30" :
                               startup.hiring_likelihood === "Medium" ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" :
-                              "bg-gray-700/50 text-gray-400 border-gray-600"
+                              "bg-gray-700/50 text-muted border-gray-600"
                             }`}>
                               {startup.hiring_likelihood} chance
                             </span>
@@ -931,14 +932,14 @@ export default function Internships() {
                             <span className="text-xs px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">{startup.industry}</span>
                             <span className="text-xs px-2 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">{startup.stage}</span>
                           </div>
-                          <p className="text-sm text-emerald-400 mb-2">✦ {startup.why_good_fit}</p>
-                          <p className="text-xs text-gray-500 border-t border-gray-800 pt-2 mt-2">
+                          <p className="text-sm text-emerald-400 mb-2">{startup.why_good_fit}</p>
+                          <p className="text-xs text-faint border-t border-theme pt-2 mt-2">
                             <span className="text-blue-400 font-medium">How to apply: </span>{startup.how_to_apply}
                           </p>
                           <div className="flex gap-2 mt-3">
                             {startup.linkedin_url && (
                               <a href={validateUrl(startup.linkedin_url, startup.name)} target="_blank" rel="noopener noreferrer"
-                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition">
+                                className="text-xs px-3 py-1.5 rounded-lg border border-theme text-muted hover:text-main hover:border-gray-500 transition">
                                 LinkedIn →
                               </a>
                             )}
@@ -953,12 +954,12 @@ export default function Internships() {
                     {aiStartups.pro_tip && (
                       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5 mb-4">
                         <p className="text-xs text-yellow-500 font-semibold uppercase tracking-wider mb-1">Pro Tip</p>
-                        <p className="text-gray-300 text-sm">{aiStartups.pro_tip}</p>
+                        <p className="text-muted text-sm">{aiStartups.pro_tip}</p>
                       </div>
                     )}
                     <button
                       onClick={() => { localStorage.removeItem("placeiq_startups"); setAiStartups(null); fetchAiStartups(); }}
-                      className="text-xs text-gray-600 hover:text-gray-400 transition"
+                      className="text-xs text-faint hover:text-muted transition"
                     >
                       Regenerate
                     </button>
@@ -966,7 +967,7 @@ export default function Internships() {
                 )}
                 {!aiStartupsLoading && !aiStartups && !aiStartupsError && (
                   <div className="text-center py-20">
-                    <p className="text-gray-500 mb-4">Complete your profile to get AI-matched startup recommendations.</p>
+                    <p className="text-faint mb-4">Complete your profile to get AI-matched startup recommendations.</p>
                     <button onClick={() => router.push("/onboarding")} className="text-sm text-blue-400 hover:text-blue-300 transition">
                       Set up profile →
                     </button>
@@ -978,36 +979,36 @@ export default function Internships() {
             {/* Browse All */}
             {startupsTab === "browse" && (
               <div>
-                <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+                <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Search</label>
+                      <label className="text-xs text-muted mb-1.5 block">Search</label>
                       <input
                         value={browseSearch}
                         onChange={e => setBrowseSearch(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
                         placeholder="Company or title..."
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Industry / Role</label>
+                      <label className="text-xs text-muted mb-1.5 block">Industry / Role</label>
                       <input
                         value={browseIndustry}
                         onChange={e => setBrowseIndustry(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
                         placeholder="e.g. Software, ML, Design"
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">City</label>
+                      <label className="text-xs text-muted mb-1.5 block">City</label>
                       <input
                         value={browseCity}
                         onChange={e => setBrowseCity(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && fetchBrowseStartups(1)}
                         placeholder="e.g. Bangalore, Remote"
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                   </div>
@@ -1022,7 +1023,7 @@ export default function Internships() {
                 {browseLoading && browsePage === 1 && (
                   <div className="flex flex-col items-center justify-center py-20 gap-3">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <p className="text-gray-400 text-sm">Fetching startup listings...</p>
+                    <p className="text-muted text-sm">Fetching startup listings...</p>
                   </div>
                 )}
                 {browseError && (
@@ -1030,24 +1031,24 @@ export default function Internships() {
                 )}
                 {!browseLoading && browseListings.length > 0 && (
                   <>
-                    <p className="text-gray-500 text-sm mb-4">{browseTotal} listings found</p>
+                    <p className="text-faint text-sm mb-4">{browseTotal} listings found</p>
                     <div className="grid gap-4">
                       {browseListings.map((job, idx) => (
-                        <div key={job.id || String(idx)} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+                        <div key={job.id || String(idx)} className="bg-surface border border-theme rounded-2xl p-5 hover:border-theme transition">
                           <div className="flex items-start justify-between gap-4 mb-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                                <h3 className="font-semibold text-white">{job.title}</h3>
+                                <h3 className="font-semibold text-main">{job.title}</h3>
                                 {job.source && (
                                   <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>{job.source}</span>
                                 )}
                               </div>
-                              <p className="text-gray-400 text-sm mt-0.5">{job.company} · {job.location}</p>
+                              <p className="text-muted text-sm mt-0.5">{job.company} · {job.location}</p>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
                               {hiringBadge(job.hiring_status)}
                               {job.days_ago !== null && (
-                                <span className="text-xs text-gray-500">{job.days_ago === 0 ? "Today" : `${job.days_ago}d ago`}</span>
+                                <span className="text-xs text-faint">{job.days_ago === 0 ? "Today" : `${job.days_ago}d ago`}</span>
                               )}
                             </div>
                           </div>
@@ -1077,7 +1078,7 @@ export default function Internships() {
                   </>
                 )}
                 {!browseLoading && !browseError && browseListings.length === 0 && (
-                  <div className="text-center py-20 text-gray-500">
+                  <div className="text-center py-20 text-faint">
                     <p>Use the filters above and click Search to browse startup listings.</p>
                   </div>
                 )}
@@ -1092,7 +1093,7 @@ export default function Internships() {
             {strategyLoading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-400 text-sm">Building your internship strategy...</p>
+                <p className="text-muted text-sm">Building your internship strategy...</p>
               </div>
             )}
 
@@ -1115,7 +1116,7 @@ export default function Internships() {
                   <h3 className="text-lg font-semibold mb-4">Best Platforms for You</h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     {strategy.best_platforms?.map((p, i) => (
-                      <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                      <div key={i} className="bg-surface border border-theme rounded-2xl p-5">
                         <div className="flex items-start justify-between mb-2">
                           <h4 className="font-semibold text-blue-400">{p.platform}</h4>
                           {p.url && (
@@ -1123,15 +1124,15 @@ export default function Internships() {
                               href={p.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-gray-500 hover:text-gray-300 transition"
+                              className="text-xs text-faint hover:text-muted transition"
                             >
                               Visit →
                             </a>
                           )}
                         </div>
-                        <p className="text-gray-300 text-sm mb-2">{p.why}</p>
-                        <p className="text-gray-500 text-xs border-t border-gray-800 pt-2 mt-2">
-                          <span className="text-gray-400 font-medium">Tip: </span>{p.how_to_use}
+                        <p className="text-muted text-sm mb-2">{p.why}</p>
+                        <p className="text-faint text-xs border-t border-theme pt-2 mt-2">
+                          <span className="text-muted font-medium">Tip: </span>{p.how_to_use}
                         </p>
                       </div>
                     ))}
@@ -1143,15 +1144,15 @@ export default function Internships() {
                   <h3 className="text-lg font-semibold mb-4">Recommended Internship Types</h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     {strategy.recommended_internship_types?.map((t, i) => (
-                      <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                      <div key={i} className="bg-surface border border-theme rounded-2xl p-5">
                         <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-white">{t.type}</h4>
+                          <h4 className="font-semibold text-main">{t.type}</h4>
                           {difficultyBadge(t.difficulty)}
                         </div>
-                        <p className="text-gray-400 text-xs mb-2">
-                          <span className="text-gray-300">Timeline: </span>{t.timeline}
+                        <p className="text-muted text-xs mb-2">
+                          <span className="text-muted">Timeline: </span>{t.timeline}
                         </p>
-                        <p className="text-gray-400 text-sm">{t.why_good_for_them}</p>
+                        <p className="text-muted text-sm">{t.why_good_for_them}</p>
                       </div>
                     ))}
                   </div>
@@ -1160,14 +1161,14 @@ export default function Internships() {
                 {/* Action Plan */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">60-Day Action Plan</h3>
-                  <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
+                  <div className="bg-surface border border-theme rounded-2xl p-5">
                     <ol className="space-y-3">
                       {strategy.action_plan?.map((step, i) => (
                         <li key={i} className="flex gap-3 text-sm">
                           <span className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
                             {i + 1}
                           </span>
-                          <span className="text-gray-300">{step}</span>
+                          <span className="text-muted">{step}</span>
                         </li>
                       ))}
                     </ol>
@@ -1177,7 +1178,7 @@ export default function Internships() {
                 {/* Verdict */}
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5">
                   <h3 className="text-sm font-semibold text-yellow-400 mb-2">Honest Verdict</h3>
-                  <p className="text-gray-300 text-sm leading-relaxed">{strategy.verdict}</p>
+                  <p className="text-muted text-sm leading-relaxed">{strategy.verdict}</p>
                 </div>
 
                 <button
@@ -1186,7 +1187,7 @@ export default function Internships() {
                     setStrategy(null);
                     fetchStrategy();
                   }}
-                  className="text-xs text-gray-600 hover:text-gray-400 transition"
+                  className="text-xs text-faint hover:text-muted transition"
                 >
                   Regenerate strategy
                 </button>
@@ -1195,7 +1196,7 @@ export default function Internships() {
 
             {!strategyLoading && !strategy && !strategyError && (
               <div className="text-center py-20">
-                <p className="text-gray-500 mb-4">Complete your profile to get a personalized internship strategy.</p>
+                <p className="text-faint mb-4">Complete your profile to get a personalized internship strategy.</p>
                 <button
                   onClick={() => router.push("/onboarding")}
                   className="text-sm text-blue-400 hover:text-blue-300 transition"
@@ -1210,30 +1211,30 @@ export default function Internships() {
         {/* ── Programs Tab ──────────────────────────────────────────────────── */}
         {tab === "programs" && (
           <div>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className="text-muted text-sm mb-6">
               Major virtual internship programs and structured initiatives for Indian engineering students.
             </p>
             {["Big Tech", "Finance", "Indian Tech", "Hardware", "Government / Research"].map(category => {
               const programs = STATIC_PROGRAMS.filter(p => p.category === category);
               return (
                 <div key={category} className="mb-8">
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">{category}</h3>
+                  <h3 className="text-sm font-semibold text-faint uppercase tracking-wider mb-4">{category}</h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     {programs.map(prog => (
-                      <div key={prog.name} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition">
+                      <div key={prog.name} className="bg-surface border border-theme rounded-2xl p-5 hover:border-theme transition">
                         <div className="flex items-start justify-between mb-3">
                           <div>
-                            <h4 className="font-semibold text-white">{prog.name}</h4>
-                            <p className="text-gray-500 text-xs mt-0.5">{prog.company}</p>
+                            <h4 className="font-semibold text-main">{prog.name}</h4>
+                            <p className="text-faint text-xs mt-0.5">{prog.company}</p>
                           </div>
                           {difficultyBadge(prog.difficulty)}
                         </div>
                         <div className="space-y-1.5 mb-4">
-                          <p className="text-xs text-gray-400">
-                            <span className="text-gray-500">Eligibility: </span>{prog.eligibility}
+                          <p className="text-xs text-muted">
+                            <span className="text-faint">Eligibility: </span>{prog.eligibility}
                           </p>
-                          <p className="text-xs text-gray-400">
-                            <span className="text-gray-500">Deadline: </span>{prog.deadline}
+                          <p className="text-xs text-muted">
+                            <span className="text-faint">Deadline: </span>{prog.deadline}
                           </p>
                           <p className="text-xs text-blue-400 font-medium">
                             {prog.stipend}

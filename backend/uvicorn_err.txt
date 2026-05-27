@@ -3,3 +3,20 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 Run time of job "refresh_market_cache (trigger: cron[hour='0', minute='0'], next run at: 2026-05-25 00:00:00 IST)" was missed by 3:10:56.547919
+Run time of job "refresh_market_cache (trigger: cron[hour='0', minute='0'], next run at: 2026-05-27 00:00:00 IST)" was missed by 3:02:20.359440
+Run time of job "refresh_market_cache (trigger: cron[hour='0', minute='0'], next run at: 2026-05-28 00:00:00 IST)" was missed by 0:00:53.948748
+Job "refresh_market_cache (trigger: cron[hour='0', minute='0'], next run at: 2026-05-29 00:00:00 IST)" raised an exception
+Traceback (most recent call last):
+  File "C:\Users\HP\placeiq\backend\venv\Lib\site-packages\apscheduler\executors\base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\placeiq\backend\main.py", line 547, in refresh_market_cache
+  File "C:\Users\HP\placeiq\backend\venv\Lib\site-packages\groq\resources\chat\completions.py", line 461, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "C:\Users\HP\placeiq\backend\venv\Lib\site-packages\groq\_base_client.py", line 1284, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\placeiq\backend\venv\Lib\site-packages\groq\_base_client.py", line 1071, in request
+    raise self._make_status_error_from_response(err.response) from None
+groq.AuthenticationError: Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}

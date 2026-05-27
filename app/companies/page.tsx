@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -41,15 +41,15 @@ type StoredProfile = {
 };
 
 const TYPE_STYLES: Record<string, string> = {
-  Service: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  Product: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  Startup: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  Service: "tag-pill blue",
+  Product: "tag-pill blue",
+  Startup: "tag-pill blue",
 };
 
 const HIRING_STYLES: Record<string, string> = {
-  "On Campus": "bg-green-500/15 text-green-400 border-green-500/30",
-  "Off Campus": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  Both: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  "On Campus": "tag-pill green",
+  "Off Campus": "tag-pill green",
+  Both: "tag-pill blue",
 };
 
 function parseLPA(range: string): number {
@@ -64,7 +64,7 @@ function parseCGPACutoff(cutoff: string): number {
 }
 
 const SELECT_CLS =
-  "bg-[#111] border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 cursor-pointer";
+  "bg-surface border border-theme text-main text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 cursor-pointer";
 
 function scoreColor(score: number) {
   return score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444";
@@ -74,10 +74,10 @@ function MatchBar({ score }: { score: number }) {
   const color = scoreColor(score);
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+      <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: 'var(--border-default)' }}>
         <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${score}%`, backgroundColor: color }}
+          className="rounded-full transition-all duration-700"
+          style={{ height: 4, width: `${score}%`, backgroundColor: color }}
         />
       </div>
       <span className="text-xs font-bold w-7 text-right" style={{ color }}>
@@ -90,32 +90,22 @@ function MatchBar({ score }: { score: number }) {
 function CompanyCard({ company }: { company: Company }) {
   const isValidUrl = company.apply_link?.startsWith("http");
   return (
-    <div className="bg-[#111] border border-gray-800 hover:border-gray-700 rounded-2xl p-5 flex flex-col gap-3 transition">
+    <div className="bg-surface border border-theme hover:border-theme rounded-2xl p-5 flex flex-col gap-3 transition">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="font-semibold text-white text-base leading-tight truncate">
+          <h3 className="font-semibold text-main text-base leading-tight truncate">
             {company.name}
           </h3>
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                TYPE_STYLES[company.type] ?? "bg-gray-700/50 text-gray-400 border-gray-600"
-              }`}
-            >
+            <span className={TYPE_STYLES[company.type] ?? "tag-pill muted"}>
               {company.type}
             </span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                HIRING_STYLES[company.hiring_mode] ?? "bg-gray-700/50 text-gray-400 border-gray-600"
-              }`}
-            >
+            <span className={HIRING_STYLES[company.hiring_mode] ?? "tag-pill blue"}>
               {company.hiring_mode}
             </span>
             {!company.likely_to_visit && (
-              <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-700/30 text-gray-500 border-gray-700">
-                Off-campus only
-              </span>
+              <span className="tag-pill muted">Off-campus only</span>
             )}
           </div>
         </div>
@@ -124,9 +114,9 @@ function CompanyCard({ company }: { company: Company }) {
       {/* Match score label + bar + tooltip */}
       <div>
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="text-gray-600 text-xs">Match Score</span>
+          <span className="text-faint text-xs">Match Score</span>
           <span
-            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-700 text-gray-600 text-[9px] cursor-help leading-none"
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-theme text-faint text-[9px] cursor-help leading-none"
             title="Computed from your skill overlap with this company's requirements, your college tier, and CGPA. 70+ = strong match, 50-70 = possible with effort, below 50 = stretch goal."
           >
             ?
@@ -136,29 +126,29 @@ function CompanyCard({ company }: { company: Company }) {
       </div>
 
       {/* Details grid */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <div>
-          <p className="text-gray-600 text-xs mb-0.5">Package</p>
-          <p className="text-gray-200 font-medium text-xs">{company.package_range}</p>
+          <p className="text-faint text-[11px] uppercase tracking-wide mb-0.5">Package</p>
+          <p className="text-main font-medium text-[13px]">{company.package_range}</p>
         </div>
         <div>
-          <p className="text-gray-600 text-xs mb-0.5">CGPA Cutoff</p>
-          <p className="text-gray-200 font-medium text-xs">{company.cgpa_cutoff}</p>
+          <p className="text-faint text-[11px] uppercase tracking-wide mb-0.5">CGPA Cutoff</p>
+          <p className="text-main font-medium text-[13px]">{company.cgpa_cutoff}</p>
         </div>
         <div>
-          <p className="text-gray-600 text-xs mb-0.5">Role</p>
-          <p className="text-gray-200 font-medium text-xs truncate">{company.role_offered}</p>
+          <p className="text-faint text-[11px] uppercase tracking-wide mb-0.5">Role</p>
+          <p className="text-main font-medium text-[13px] truncate">{company.role_offered}</p>
         </div>
         <div>
-          <p className="text-gray-600 text-xs mb-0.5">Campus Reach</p>
-          <p className="text-gray-200 font-medium text-xs">{company.visits_college_tier}</p>
+          <p className="text-faint text-[11px] uppercase tracking-wide mb-0.5">Campus Reach</p>
+          <p className="text-main font-medium text-[13px]">{company.visits_college_tier}</p>
         </div>
       </div>
 
       {/* Why match / gap */}
       <div className="space-y-1.5">
-        <p className="text-green-400 text-xs leading-relaxed">+ {company.why_match}</p>
-        <p className="text-red-400 text-xs leading-relaxed">- {company.biggest_gap}</p>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--accent-green)' }}>+ {company.why_match}</p>
+        <p className="text-xs leading-relaxed" style={{ color: '#ef4444' }}>- {company.biggest_gap}</p>
       </div>
 
       {/* Apply */}
@@ -167,14 +157,14 @@ function CompanyCard({ company }: { company: Company }) {
           href={company.apply_link}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-auto block text-center bg-blue-600/15 hover:bg-blue-600/30 border border-blue-500/25 text-blue-300 text-sm py-2 rounded-xl transition"
+          className="btn-apply mt-auto"
         >
-          Apply &rarr;
+          Apply →
         </a>
       ) : (
         <button
           disabled
-          className="mt-auto block w-full text-center bg-gray-800/50 border border-gray-700 text-gray-600 text-sm py-2 rounded-xl cursor-not-allowed"
+          className="mt-auto block w-full text-center bg-elevated border border-theme text-faint text-sm py-2.5 rounded-xl cursor-not-allowed"
         >
           Apply
         </button>
@@ -353,13 +343,13 @@ export default function Companies() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-3xl font-bold">Company Match List</h2>
-            <p className="text-gray-400 mt-2">
+            <p className="text-muted mt-2">
               Matched by skills and college tier against 15 companies in the Indian job market.
               {profile?.target_role && (
                 <span className="text-blue-400"> Role: {profile.target_role}</span>
@@ -369,7 +359,7 @@ export default function Companies() {
           {result && !loading && (
             <button
               onClick={reAnalyse}
-              className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white px-4 py-2 rounded-lg text-sm transition"
+              className="shrink-0 border border-theme text-muted hover:border-gray-500 hover:text-main px-4 py-2 rounded-lg text-sm transition"
             >
               Refresh Matches
             </button>
@@ -379,13 +369,13 @@ export default function Companies() {
         {/* No profile */}
         {profileChecked && !profile && !loading && (
           <div className="mt-10 bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
-            <p className="text-gray-300 mb-2">
+            <p className="text-muted mb-2">
               Complete your profile to get personalised company matches.
             </p>
-            <p className="text-gray-500 text-sm mb-6">Redirecting to onboarding in a moment…</p>
+            <p className="text-faint text-sm mb-6">Redirecting to onboarding in a moment…</p>
             <button
               onClick={() => router.push("/onboarding")}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition"
+              className="bg-blue-600 hover:bg-blue-500 text-main px-6 py-3 rounded-lg font-medium transition"
             >
               Complete Profile
             </button>
@@ -396,7 +386,7 @@ export default function Companies() {
         {loading && (
           <div className="mt-24 flex flex-col items-center">
             <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-6" />
-            <p className="text-gray-400 text-sm">Finding your best company matches...</p>
+            <p className="text-muted text-sm">Finding your best company matches...</p>
           </div>
         )}
 
@@ -406,7 +396,7 @@ export default function Companies() {
             <p className="text-red-400 text-sm">{error}</p>
             <button
               onClick={reAnalyse}
-              className="mt-3 text-xs text-red-300 hover:text-white underline transition"
+              className="mt-3 text-xs text-red-300 hover:text-main underline transition"
             >
               Try again
             </button>
@@ -422,7 +412,7 @@ export default function Companies() {
                 <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">
                   Strategy
                 </p>
-                <p className="text-gray-300 text-sm leading-relaxed">{result.summary}</p>
+                <p className="text-muted text-sm leading-relaxed">{result.summary}</p>
               </div>
             )}
 
@@ -491,7 +481,7 @@ export default function Companies() {
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-2 rounded-lg transition"
+                  className="text-sm text-muted hover:text-main border border-theme hover:border-gray-500 px-3 py-2 rounded-lg transition"
                 >
                   Clear filters
                 </button>
@@ -499,7 +489,7 @@ export default function Companies() {
             </div>
 
             {/* Results count */}
-            <p className="text-gray-600 text-sm mb-5">
+            <p className="text-faint text-sm mb-5">
               Showing {displayed.length} of {result.companies.length} companies
             </p>
 
@@ -511,7 +501,7 @@ export default function Companies() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-16 text-gray-600">
+              <div className="text-center py-16 text-faint">
                 No companies match the selected filters.{" "}
                 <button
                   onClick={clearFilters}
@@ -521,7 +511,7 @@ export default function Companies() {
                 </button>
               </div>
             )}
-            <p className="text-xs text-gray-700 text-center mt-6 pb-2">
+            <p className="text-xs text-faint text-center mt-6 pb-2">
               Match scores computed from skill overlap, college tier, and CGPA · No AI involved
             </p>
           </div>

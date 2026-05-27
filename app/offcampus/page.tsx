@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Check, Search } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -214,13 +215,13 @@ export default function OffCampus() {
     const showDescToggle = cleanDesc.length > 180;
 
     return (
-      <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${job.known ? "border-blue-800/50" : "border-gray-800"}`}>
+      <div key={job.id} className={`bg-surface border rounded-2xl p-6 hover:border-theme transition ${job.known ? "border-blue-800/50" : "border-theme"}`}>
         <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="font-semibold text-white">{job.title}</h3>
+              <h3 className="font-semibold text-main">{job.title}</h3>
               {job.known && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium">✓ Verified</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium flex items-center gap-0.5"><Check size={9} className="inline" /> Verified</span>
               )}
               {job.international && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 font-medium">International</span>
@@ -229,20 +230,20 @@ export default function OffCampus() {
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sourceBadgeStyle(job.source)}`}>{job.source}</span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
+            <div className="flex items-center gap-3 text-sm text-muted flex-wrap">
               <span>{job.company}</span>
-              <span className="text-gray-700">·</span>
+              <span className="text-faint">·</span>
               <span>{job.location}</span>
               {job.salary && (
                 <>
-                  <span className="text-gray-700">·</span>
+                  <span className="text-faint">·</span>
                   <span className="text-green-400">{job.salary}</span>
                 </>
               )}
               {job.created && (
                 <>
-                  <span className="text-gray-700">·</span>
-                  <span className="text-gray-600">{timeAgo(job.created)}</span>
+                  <span className="text-faint">·</span>
+                  <span className="text-faint">{timeAgo(job.created)}</span>
                 </>
               )}
             </div>
@@ -255,7 +256,7 @@ export default function OffCampus() {
                     ? "bg-green-900/30 text-green-400 border-green-700/40"
                     : job.hiring_status === "Recently Posted"
                     ? "bg-yellow-900/30 text-yellow-400 border-yellow-700/40"
-                    : "bg-gray-800 text-gray-500 border-gray-700"
+                    : "bg-gray-800 text-faint border-theme"
                 }`}>
                   {job.hiring_status}
                 </span>
@@ -266,17 +267,17 @@ export default function OffCampus() {
               <div className="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full transition-all ${matchColor(job.match_score)}`} style={{ width: `${job.match_score}%` }} />
               </div>
-              <span className="text-sm font-bold text-white">{job.match_score}%</span>
+              <span className="text-sm font-bold text-main">{job.match_score}%</span>
             </div>
           </div>
         </div>
 
         <div className="mb-4">
           {!cleanDesc || cleanDesc.length < 20 ? (
-            <p className="text-xs text-gray-600 italic">No description available</p>
+            <p className="text-xs text-faint italic">No description available</p>
           ) : (
             <>
-              <p className={`text-xs text-gray-500 leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
+              <p className={`text-xs text-faint leading-relaxed ${!isExpanded ? "line-clamp-3" : ""}`}>{cleanDesc}</p>
               {showDescToggle && (
                 <button onClick={() => toggleDesc(job.id)} className="text-xs text-blue-500 hover:text-blue-400 mt-1 transition">
                   {isExpanded ? "Show less" : "Show more"}
@@ -294,7 +295,7 @@ export default function OffCampus() {
                 className={`text-xs px-2 py-0.5 rounded-full border ${
                   (job.description || "").toLowerCase().includes(skill.toLowerCase())
                     ? "bg-green-500/10 text-green-400 border-green-500/20"
-                    : "bg-gray-800 text-gray-600 border-gray-700"
+                    : "bg-gray-800 text-faint border-theme"
                 }`}
               >
                 {skill}
@@ -306,7 +307,7 @@ export default function OffCampus() {
               href={job.apply_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition font-medium"
+              className="bg-blue-600 hover:bg-blue-500 text-main text-xs px-4 py-2 rounded-lg transition font-medium"
             >
               Apply Now →
             </a>
@@ -319,47 +320,47 @@ export default function OffCampus() {
   const sourceNames = Object.keys(bySource);
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-5xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Off Campus Jobs</h2>
-        <p className="text-gray-400 mb-8">
+        <p className="text-muted mb-8">
           Live jobs from Adzuna · Remotive · Arbeitnow · The Muse · Jobicy — sorted by company quality & relevance
           {profile?.skills?.length ? ` (${profile.skills.length} skills)` : ""}
         </p>
 
         {/* Search form */}
-        <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 mb-8">
+        <div className="bg-surface border border-theme rounded-2xl p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Job Title / Role</label>
+              <label className="text-xs text-muted mb-1.5 block">Job Title / Role</label>
               <input
                 value={role}
                 onChange={e => setRole(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && search()}
                 placeholder="e.g. Software Engineer, Data Scientist"
-                className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Location</label>
+              <label className="text-xs text-muted mb-1.5 block">Location</label>
               <input
                 value={location}
                 onChange={e => setLocation(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && search()}
                 placeholder="e.g. Bangalore, Mumbai, Hyderabad"
                 disabled={remoteOnly}
-                className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition disabled:opacity-40"
+                className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition disabled:opacity-40"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Min Salary (LPA)</label>
+              <label className="text-xs text-muted mb-1.5 block">Min Salary (LPA)</label>
               <input
                 type="number"
                 value={minSalary}
                 onChange={e => setMinSalary(e.target.value)}
                 placeholder="e.g. 5"
                 min="0"
-                className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
               />
             </div>
           </div>
@@ -372,7 +373,7 @@ export default function OffCampus() {
                 >
                   <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remoteOnly ? "translate-x-4" : "translate-x-0.5"}`} />
                 </div>
-                <span className="text-sm text-gray-400">Remote only</span>
+                <span className="text-sm text-muted">Remote only</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <div
@@ -381,13 +382,13 @@ export default function OffCampus() {
                 >
                   <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${verifiedOnly ? "translate-x-4" : "translate-x-0.5"}`} />
                 </div>
-                <span className="text-sm text-gray-400">Verified companies only</span>
+                <span className="text-sm text-muted">Verified companies only</span>
               </label>
             </div>
             <button
               onClick={search}
               disabled={loading || !role.trim()}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-8 py-2.5 rounded-lg text-sm font-medium transition"
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-main px-8 py-2.5 rounded-lg text-sm font-medium transition"
             >
               {loading ? "Searching..." : "Search Jobs →"}
             </button>
@@ -401,7 +402,7 @@ export default function OffCampus() {
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-6 animate-pulse">
+              <div key={i} className="bg-surface border border-theme rounded-2xl p-6 animate-pulse">
                 <div className="flex justify-between mb-3">
                   <div className="h-5 w-48 bg-gray-800 rounded" />
                   <div className="h-5 w-20 bg-gray-800 rounded" />
@@ -414,9 +415,9 @@ export default function OffCampus() {
         )}
 
         {!loading && searched && jobs.length === 0 && !error && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-            <p className="text-gray-400 text-lg font-medium mb-2">No jobs found</p>
-            <p className="text-gray-600 text-sm">Try a different role or location.</p>
+          <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+            <p className="text-muted text-lg font-medium mb-2">No jobs found</p>
+            <p className="text-faint text-sm">Try a different role or location.</p>
           </div>
         )}
 
@@ -424,8 +425,8 @@ export default function OffCampus() {
           <>
             {/* Stats bar */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <p className="text-sm text-gray-400">
-                <span className="text-white font-semibold">{filtered.length}</span> jobs found
+              <p className="text-sm text-muted">
+                <span className="text-main font-semibold">{filtered.length}</span> jobs found
                 {verifiedCount > 0 && (
                   <> · <span className="text-green-400 font-medium">{verifiedCount} from verified companies</span></>
                 )}
@@ -449,7 +450,7 @@ export default function OffCampus() {
               <div className="mt-6">
                 <button
                   onClick={() => setShowUnverified(v => !v)}
-                  className="w-full text-sm text-gray-600 hover:text-gray-400 border border-gray-800 hover:border-gray-700 py-3 rounded-xl transition"
+                  className="w-full text-sm text-faint hover:text-muted border border-theme hover:border-theme py-3 rounded-xl transition"
                 >
                   {showUnverified ? "Hide" : `${lowScore.length} more listings (unverified / low-score) — click to expand`}
                 </button>
@@ -464,10 +465,10 @@ export default function OffCampus() {
         )}
 
         {!searched && !loading && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-            <p className="text-2xl mb-3">🔍</p>
-            <p className="text-gray-400 mb-2">Search for off-campus jobs</p>
-            <p className="text-gray-600 text-sm">Results from Adzuna, Remotive, Arbeitnow, The Muse & Jobicy — sorted by company quality and relevance to your profile.</p>
+          <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+            <Search size={32} className="mx-auto mb-3 text-faint" />
+            <p className="text-muted mb-2">Search for off-campus jobs</p>
+            <p className="text-faint text-sm">Results from Adzuna, Remotive, Arbeitnow, The Muse & Jobicy — sorted by company quality and relevance to your profile.</p>
           </div>
         )}
       </div>

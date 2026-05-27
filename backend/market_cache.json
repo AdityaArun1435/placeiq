@@ -1,87 +1,389 @@
 {
-  "timestamp": "2026-05-22T18:30:26.121509+00:00",
+  "timestamp": "2026-05-27T18:30:20.548698+00:00",
   "data": {
     "trending_skills": [
       {
-        "skill": "Python",
-        "demand_score": 95,
+        "skill": "C",
+        "demand_score": 100,
         "trend": "rising",
-        "avg_salary_lpa": 12,
-        "job_count": 4200,
-        "why_trending": "Python is in high demand due to its widespread adoption in the Indian tech industry, particularly in data science and machine learning applications.",
+        "avg_salary_lpa": 15,
+        "job_count": 350,
+        "why_trending": "High mention frequency across 350 Indian job postings",
         "top_companies": [
           "TCS",
           "Infosys",
-          "Zoho"
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Go",
+        "demand_score": 72,
+        "trend": "rising",
+        "avg_salary_lpa": 13,
+        "job_count": 70,
+        "why_trending": "High mention frequency across 70 Indian job postings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Android",
+        "demand_score": 66,
+        "trend": "stable",
+        "avg_salary_lpa": 13,
+        "job_count": 49,
+        "why_trending": "High mention frequency across 49 Indian job postings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
         ]
       },
       {
         "skill": "Java",
-        "demand_score": 90,
+        "demand_score": 64,
         "trend": "stable",
-        "avg_salary_lpa": 11,
-        "job_count": 3000,
-        "why_trending": "Java remains a popular choice for Indian companies due to its platform independence and vast ecosystem of libraries and frameworks.",
+        "avg_salary_lpa": 13,
+        "job_count": 44,
+        "why_trending": "Backbone of enterprise software at TCS, Infosys, and most service companies; Spring Boot dominates backend hiring",
         "top_companies": [
+          "TCS",
+          "Infosys",
           "Wipro",
-          "HCL",
-          "Tech Mahindra"
+          "Accenture",
+          "Cognizant",
+          "HCL"
         ]
       },
       {
-        "skill": "JavaScript",
-        "demand_score": 85,
-        "trend": "rising",
-        "avg_salary_lpa": 10,
-        "job_count": 2500,
-        "why_trending": "JavaScript is gaining traction in the Indian job market due to the increasing demand for front-end developers and full-stack engineers.",
+        "skill": "Git",
+        "demand_score": 62,
+        "trend": "stable",
+        "avg_salary_lpa": 13,
+        "job_count": 39,
+        "why_trending": "Non-negotiable for any software role; expected day one",
         "top_companies": [
-          "Flipkart",
-          "Paytm",
-          "Ola"
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Machine Learning",
+        "demand_score": 61,
+        "trend": "stable",
+        "avg_salary_lpa": 13,
+        "job_count": 35,
+        "why_trending": "AI/ML roles are growing 40% YoY in India; freshers with project experience stand out",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Amazon",
+          "Flipkart"
+        ]
+      },
+      {
+        "skill": "Python",
+        "demand_score": 54,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 24,
+        "why_trending": "Used across data science, backend, automation, and AI \u2014 the most versatile language for Indian fresher job listings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Zoho",
+          "Freshworks",
+          "PhonePe",
+          "Swiggy"
+        ]
+      },
+      {
+        "skill": "AWS",
+        "demand_score": 52,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 21,
+        "why_trending": "Cloud skills command a 20-30% salary premium; AWS leads over GCP and Azure in Indian listings",
+        "top_companies": [
+          "Amazon",
+          "Wipro",
+          "TCS",
+          "Accenture"
+        ]
+      },
+      {
+        "skill": "SQL",
+        "demand_score": 51,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 20,
+        "why_trending": "Mandatory for data roles and expected in most backend interviews \u2014 can't be skipped",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro",
+          "Cognizant",
+          "Goldman Sachs"
+        ]
+      },
+      {
+        "skill": "React",
+        "demand_score": 50,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 18,
+        "why_trending": "Most demanded frontend framework across Indian product companies and startups in 2025",
+        "top_companies": [
+          "Freshworks",
+          "Razorpay",
+          "Groww",
+          "Zepto"
+        ]
+      },
+      {
+        "skill": "Kotlin",
+        "demand_score": 50,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 18,
+        "why_trending": "High mention frequency across 18 Indian job postings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Azure",
+        "demand_score": 46,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 14,
+        "why_trending": "High mention frequency across 14 Indian job postings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Microservices",
+        "demand_score": 45,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 13,
+        "why_trending": "High mention frequency across 13 Indian job postings",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Node.js",
+        "demand_score": 43,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 12,
+        "why_trending": "Full-stack JavaScript development standard; startups and mid-size product companies rely on it",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
+        ]
+      },
+      {
+        "skill": "Kubernetes",
+        "demand_score": 42,
+        "trend": "stable",
+        "avg_salary_lpa": 12,
+        "job_count": 11,
+        "why_trending": "Orchestration skill expected for senior DevOps; freshers learning it get a strong edge",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro"
         ]
       }
     ],
     "role_demand": [
       {
         "role": "Software Engineer",
-        "openings": 29259,
-        "avg_lpa": 14,
-        "yoy_change": "+18%",
+        "openings": 27311,
+        "avg_lpa": 12,
+        "yoy_change": "+12%",
         "top_companies": [
           "TCS",
+          "Infosys",
           "Wipro",
-          "Infosys"
+          "Amazon",
+          "Microsoft"
+        ],
+        "key_skills": [
+          "DSA",
+          "Python",
+          "Java",
+          "SQL"
+        ],
+        "reality_check": "Over 200,000 freshers compete for ~40,000 quality SDE roles annually \u2014 DSA fluency is the real filter"
+      },
+      {
+        "role": "Product Manager",
+        "openings": 25743,
+        "avg_lpa": 16,
+        "yoy_change": "+18%",
+        "top_companies": [
+          "EdgeVerve",
+          "Arista Networks",
+          "Enterprise Minds, Inc",
+          "Geysers International"
+        ],
+        "key_skills": [
+          "SQL",
+          "Data Analysis",
+          "Agile",
+          "Figma"
+        ],
+        "reality_check": "Competition is high \u2014 skills and projects are your differentiator"
+      },
+      {
+        "role": "Full Stack Developer",
+        "openings": 6724,
+        "avg_lpa": 11,
+        "yoy_change": "+10%",
+        "top_companies": [
+          "Freshworks",
+          "Zoho",
+          "Chargebee",
+          "Zepto"
+        ],
+        "key_skills": [
+          "JavaScript",
+          "React",
+          "Node.js",
+          "SQL"
+        ],
+        "reality_check": "Startups prefer full stack but quality bar is high \u2014 both frontend and backend must be polished"
+      },
+      {
+        "role": "Backend Developer",
+        "openings": 6596,
+        "avg_lpa": 12,
+        "yoy_change": "+15%",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Wipro",
+          "PhonePe",
+          "Swiggy"
         ],
         "key_skills": [
           "Python",
           "Java",
-          "DSA"
+          "SQL",
+          "REST API"
         ],
-        "reality_check": "The competition for software engineer roles is extremely high, with thousands of freshers vying for a limited number of positions."
+        "reality_check": "Strong DSA and system design required \u2014 service company backend roles are less competitive but also lower paying"
+      },
+      {
+        "role": "Devops Engineer",
+        "openings": 4359,
+        "avg_lpa": 11,
+        "yoy_change": "+20%",
+        "top_companies": [
+          "Wipro",
+          "HCL",
+          "IBM",
+          "Accenture",
+          "Amazon"
+        ],
+        "key_skills": [
+          "Docker",
+          "Kubernetes",
+          "Linux",
+          "AWS"
+        ],
+        "reality_check": "DevOps fresher roles are rare; most companies want 1-2 years experience, making internships critical"
+      },
+      {
+        "role": "Android Developer",
+        "openings": 2655,
+        "avg_lpa": 10,
+        "yoy_change": "+5%",
+        "top_companies": [
+          "EdgeVerve",
+          "Arista Networks",
+          "Enterprise Minds, Inc",
+          "Geysers International"
+        ],
+        "key_skills": [
+          "Kotlin",
+          "Java",
+          "Android",
+          "REST API"
+        ],
+        "reality_check": "Competition is high \u2014 skills and projects are your differentiator"
+      },
+      {
+        "role": "Machine Learning Engineer",
+        "openings": 1394,
+        "avg_lpa": 15,
+        "yoy_change": "+35%",
+        "top_companies": [
+          "TCS",
+          "Infosys",
+          "Amazon",
+          "Flipkart",
+          "PhonePe"
+        ],
+        "key_skills": [
+          "Python",
+          "PyTorch",
+          "TensorFlow",
+          "Machine Learning"
+        ],
+        "reality_check": "True ML engineering roles are highly competitive; differentiation comes from deployed projects and Kaggle rankings"
       },
       {
         "role": "Data Scientist",
-        "openings": 11909,
-        "avg_lpa": 18,
+        "openings": 0,
+        "avg_lpa": 14,
         "yoy_change": "+25%",
         "top_companies": [
-          "Google",
-          "Microsoft",
-          "Amazon"
+          "TCS",
+          "Infosys",
+          "PhonePe",
+          "Amazon",
+          "Flipkart"
         ],
         "key_skills": [
           "Python",
           "Machine Learning",
+          "SQL",
           "Statistics"
         ],
-        "reality_check": "Data scientist roles are highly competitive, requiring a strong foundation in mathematics, statistics, and programming skills."
+        "reality_check": "Most 'data scientist' openings actually want data analysts; genuine ML roles require project evidence"
       }
     ],
     "top_hiring_companies": [
-      "TCS",
-      "Infosys",
-      "Wipro"
+      "Telna",
+      "Scitara Corporation",
+      "Zluri",
+      "Arcana",
+      "LTM",
+      "Freedom Consulting Inc.",
+      "Ascendion",
+      "Mulya Technologies",
+      "Codefeast",
+      "ENGIE India",
+      "Evernorth Health Services",
+      "ConnectWise",
+      "Jaguar Land Rover India",
+      "GoodScore",
+      "Ema"
     ],
     "salary_by_city": [
       {
@@ -90,25 +392,54 @@
         "cost_of_living": "High",
         "best_for_roles": [
           "Software Engineer",
-          "Data Scientist"
+          "Data Scientist",
+          "DevOps Engineer"
         ]
       },
       {
         "city": "Hyderabad",
-        "avg_lpa": 15,
-        "cost_of_living": "Medium",
+        "avg_lpa": 14,
+        "cost_of_living": "Moderate",
         "best_for_roles": [
           "Software Engineer",
-          "Product Manager"
+          "Full Stack Developer"
         ]
       },
       {
         "city": "Pune",
         "avg_lpa": 12,
-        "cost_of_living": "Low",
+        "cost_of_living": "Moderate",
         "best_for_roles": [
           "Software Engineer",
-          "QA Engineer"
+          "Data Analyst"
+        ]
+      },
+      {
+        "city": "Chennai",
+        "avg_lpa": 11,
+        "cost_of_living": "Moderate",
+        "best_for_roles": [
+          "Software Engineer",
+          "Backend Developer"
+        ]
+      },
+      {
+        "city": "Mumbai",
+        "avg_lpa": 13,
+        "cost_of_living": "Very High",
+        "best_for_roles": [
+          "Data Scientist",
+          "Product Manager",
+          "FinTech Engineer"
+        ]
+      },
+      {
+        "city": "Delhi-NCR",
+        "avg_lpa": 12,
+        "cost_of_living": "High",
+        "best_for_roles": [
+          "Software Engineer",
+          "Data Analyst"
         ]
       }
     ],
@@ -116,144 +447,144 @@
       {
         "sector": "FinTech",
         "status": "Booming",
-        "reason": "The Indian FinTech sector is experiencing rapid growth due to increasing demand for digital payment solutions and online banking services."
+        "reason": "UPI ecosystem growth is driving massive engineering hiring at PhonePe, Razorpay, Groww, and Zepto"
       },
       {
-        "sector": "HealthTech",
+        "sector": "AI/ML",
+        "status": "Booming",
+        "reason": "Every major company is building AI teams \u2014 freshers with ML project experience command 30-50% salary premiums"
+      },
+      {
+        "sector": "Cloud & DevOps",
+        "status": "Booming",
+        "reason": "Cloud migration projects across all industries are creating more DevOps roles than available engineers"
+      },
+      {
+        "sector": "SaaS Products",
         "status": "Stable",
-        "reason": "The Indian HealthTech sector is witnessing steady growth due to the government's initiatives to promote digital health services and telemedicine."
+        "reason": "Indian SaaS companies (Freshworks, Zoho, Chargebee) continue steady hiring despite global slowdowns"
       },
       {
-        "sector": "E-commerce",
-        "status": "Slow",
-        "reason": "The Indian e-commerce sector is facing intense competition and regulatory challenges, leading to a slowdown in growth."
+        "sector": "IT Services",
+        "status": "Stable",
+        "reason": "TCS, Infosys, Wipro maintain large fresher intakes but wage growth is slow compared to product companies"
       },
       {
         "sector": "EdTech",
-        "status": "Booming",
-        "reason": "The Indian EdTech sector is experiencing rapid growth due to the increasing demand for online education and skill development platforms."
-      },
-      {
-        "sector": "CyberSecurity",
-        "status": "Booming",
-        "reason": "The Indian CyberSecurity sector is witnessing rapid growth due to the increasing threat of cyber attacks and data breaches."
-      },
-      {
-        "sector": "Renewable Energy",
-        "status": "Stable",
-        "reason": "The Indian Renewable Energy sector is experiencing steady growth due to the government's initiatives to promote sustainable energy sources and reduce carbon emissions."
+        "status": "Slow",
+        "reason": "Post-2022 correction; most EdTech companies are in cost-cutting mode with limited fresher hiring"
       }
     ],
     "skills_to_avoid": [
       {
         "skill": "COBOL",
-        "reason": "COBOL is an outdated programming language with limited job prospects and no relevance in modern software development."
+        "reason": "Legacy banking language with 0 fresher demand \u2014 time spent here has near-zero ROI for Indian freshers"
       },
       {
-        "skill": "Flash",
-        "reason": "Flash is a deprecated technology with no future prospects, and its skills are no longer in demand in the industry."
+        "skill": "PHP",
+        "reason": "WordPress and legacy PHP roles are declining sharply; modern Indian companies prefer Python/Node.js stacks"
       },
       {
-        "skill": "VBScript",
-        "reason": "VBScript is an outdated scripting language with limited job prospects and no relevance in modern software development."
+        "skill": "XML/SOAP",
+        "reason": "REST and GraphQL have fully replaced SOAP in Indian product companies \u2014 XML is only relevant in legacy banking roles"
       }
     ],
-    "market_summary": "The Indian job market is experiencing rapid growth in the tech sector, with high demand for skills like Python, Java, and JavaScript. However, the competition is intense, and freshers need to have a strong foundation in programming skills and be adaptable to new technologies. The market is also witnessing a shift towards emerging sectors like FinTech, HealthTech, and EdTech.",
-    "data_freshness": "Live data from Adzuna \u2014 fetched today"
+    "market_summary": "Adzuna data shows 350 active job postings across 9 role categories in India. Software engineering and data science have the highest demand, with top skills being C, Go, Android. Product and startup roles pay 2-3x more than service companies but require significantly stronger DSA and project evidence.",
+    "data_freshness": "Live data from Adzuna \u2014 350 jobs scraped today"
   },
   "meta": {
-    "total_jobs": 450,
+    "total_jobs": 350,
     "role_counts": {
-      "software engineer": 29259,
-      "data scientist": 11909,
-      "frontend developer": 3791,
-      "backend developer": 6982,
-      "devops engineer": 4612,
-      "machine learning engineer": 1517,
-      "full stack developer": 7125,
-      "android developer": 2739,
-      "product manager": 27483
+      "software engineer": 27311,
+      "data scientist": 0,
+      "frontend developer": 0,
+      "backend developer": 6596,
+      "devops engineer": 4359,
+      "machine learning engineer": 1394,
+      "full stack developer": 6724,
+      "android developer": 2655,
+      "product manager": 25743
     },
     "top_skills": [
       {
         "skill": "C",
-        "count": 450
+        "count": 350
       },
       {
         "skill": "Go",
-        "count": 87
-      },
-      {
-        "skill": "Java",
-        "count": 60
-      },
-      {
-        "skill": "Git",
-        "count": 51
+        "count": 70
       },
       {
         "skill": "Android",
-        "count": 50
-      },
-      {
-        "skill": "Machine Learning",
         "count": 49
       },
       {
-        "skill": "React",
-        "count": 42
+        "skill": "Java",
+        "count": 44
+      },
+      {
+        "skill": "Git",
+        "count": 39
+      },
+      {
+        "skill": "Machine Learning",
+        "count": 35
       },
       {
         "skill": "Python",
-        "count": 34
-      },
-      {
-        "skill": "SQL",
-        "count": 29
+        "count": 24
       },
       {
         "skill": "AWS",
-        "count": 22
-      },
-      {
-        "skill": "Microservices",
         "count": 21
       },
       {
-        "skill": "Azure",
+        "skill": "SQL",
         "count": 20
       },
       {
-        "skill": "Kotlin",
-        "count": 19
-      },
-      {
-        "skill": "JavaScript",
+        "skill": "React",
         "count": 18
       },
       {
-        "skill": "iOS",
-        "count": 17
+        "skill": "Kotlin",
+        "count": 18
+      },
+      {
+        "skill": "Azure",
+        "count": 14
+      },
+      {
+        "skill": "Microservices",
+        "count": 13
+      },
+      {
+        "skill": "Node.js",
+        "count": 12
       },
       {
         "skill": "Kubernetes",
-        "count": 16
-      },
-      {
-        "skill": "TypeScript",
-        "count": 12
+        "count": 11
       },
       {
         "skill": "Rust",
-        "count": 12
-      },
-      {
-        "skill": "Spring Boot",
-        "count": 12
+        "count": 11
       },
       {
         "skill": "Docker",
-        "count": 11
+        "count": 9
+      },
+      {
+        "skill": "Spring Boot",
+        "count": 9
+      },
+      {
+        "skill": "PostgreSQL",
+        "count": 7
+      },
+      {
+        "skill": "Jenkins",
+        "count": 7
       }
     ]
   }

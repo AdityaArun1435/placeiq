@@ -1,16 +1,17 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import LoadingScreen from '@/components/LoadingScreen'
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Zap, Play, GraduationCap, BookOpen, Building2, Settings2, FileText, Mic, type LucideIcon } from "lucide-react";
 
 type Resource = { label: string; url: string; desc: string };
-type Section = { title: string; icon: string; resources: Resource[] };
+type Section = { title: string; icon: LucideIcon; resources: Resource[] };
 
 const SECTIONS: Section[] = [
   {
     title: "DSA & Competitive Programming",
-    icon: "⚡",
+    icon: Zap,
     resources: [
       { label: "Striver's A2Z DSA Sheet", url: "https://takeuforward.org/strivers-a2z-dsa-course/", desc: "450+ problems, structured by topic — the gold standard for Indian placement prep" },
       { label: "NeetCode 150", url: "https://neetcode.io/", desc: "Curated 150 LeetCode problems with video explanations — ideal for product company prep" },
@@ -21,7 +22,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "YouTube Channels",
-    icon: "▶",
+    icon: Play,
     resources: [
       { label: "Striver (TakeUForward)", url: "https://www.youtube.com/@takeUforward", desc: "Best DSA + system design channel for Indian placements — follows A2Z sheet exactly" },
       { label: "Kunal Kushwaha", url: "https://www.youtube.com/@KunalKushwawa", desc: "Java DSA + open source bootcamp — excellent for beginners building a strong foundation" },
@@ -33,7 +34,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Free Courses",
-    icon: "🎓",
+    icon: GraduationCap,
     resources: [
       { label: "CS50 by Harvard", url: "https://cs50.harvard.edu/x/", desc: "The best free CS course on earth — covers C, Python, SQL, web dev from scratch" },
       { label: "NPTEL Programming Courses", url: "https://nptel.ac.in/course.html", desc: "IIT-taught courses with certification — respected by Indian companies for Data Science, AI" },
@@ -45,7 +46,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Aptitude Preparation",
-    icon: "🧮",
+    icon: BookOpen,
     resources: [
       { label: "IndiaBix", url: "https://www.indiabix.com/", desc: "Largest Indian aptitude question bank — quant, logical reasoning, verbal, company-specific" },
       { label: "PrepInsta (Company-wise)", url: "https://prepinsta.com/", desc: "Company-specific test prep for TCS NQT, Infosys InfyTQ, Wipro, Accenture with PYQs" },
@@ -55,7 +56,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Company Interview Prep",
-    icon: "🏢",
+    icon: Building2,
     resources: [
       { label: "GFG Company Interview Experiences", url: "https://www.geeksforgeeks.org/company-preparation/", desc: "Real interview experiences from TCS, Infosys, Amazon, Google employees — must read before interviews" },
       { label: "Glassdoor Interview Reviews", url: "https://www.glassdoor.co.in/Interview/index.htm", desc: "Anonymous interview reviews with actual questions asked at each company in India" },
@@ -66,7 +67,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "System Design",
-    icon: "⚙",
+    icon: Settings2,
     resources: [
       { label: "System Design Primer (GitHub)", url: "https://github.com/donnemartin/system-design-primer", desc: "The definitive free system design guide — essential for Razorpay, Swiggy, Flipkart interviews" },
       { label: "High Scalability", url: "http://highscalability.com/", desc: "Real architecture case studies from Twitter, Uber, Amazon — great for senior role prep" },
@@ -75,7 +76,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Resume & LinkedIn",
-    icon: "📄",
+    icon: FileText,
     resources: [
       { label: "Resume Worded", url: "https://resumeworded.com/", desc: "Free AI resume scorer that checks ATS keywords — use before applying to any company" },
       { label: "Overleaf Resume Templates", url: "https://www.overleaf.com/gallery/tagged/cv", desc: "Professional LaTeX resume templates used by IIT/NIT students — looks significantly better than Word" },
@@ -85,7 +86,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Mock Interviews",
-    icon: "🎤",
+    icon: Mic,
     resources: [
       { label: "Pramp", url: "https://www.pramp.com/", desc: "Free peer-to-peer mock interviews — practice coding interviews with real people from your peer level" },
       { label: "Interviewing.io", url: "https://interviewing.io/", desc: "Anonymous mock interviews with engineers from FAANG — paid but the best feedback available" },
@@ -105,17 +106,17 @@ export default function Resources() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Placement Resources</h2>
-        <p className="text-gray-400 mb-10">Curated free resources trusted by placed students across India</p>
+        <p className="text-muted mb-10">Curated free resources trusted by placed students across India</p>
 
         <div className="space-y-10">
           {SECTIONS.map(section => (
             <div key={section.title}>
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-xl">{section.icon}</span>
-                <h3 className="text-lg font-semibold text-white">{section.title}</h3>
+                <section.icon size={20} className="text-main" />
+                <h3 className="text-lg font-semibold text-main">{section.title}</h3>
                 <div className="flex-1 h-px bg-gray-800" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -125,13 +126,13 @@ export default function Resources() {
                     href={r.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-[#111] border border-gray-800 rounded-xl p-4 hover:border-gray-700 hover:bg-[#151515] transition group block"
+                    className="bg-surface border border-theme rounded-xl p-4 hover:border-theme hover:bg-[#151515] transition group block"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="font-medium text-sm text-white group-hover:text-blue-400 transition leading-snug">{r.label}</p>
-                      <span className="text-gray-600 group-hover:text-gray-400 text-sm shrink-0 transition">↗</span>
+                      <p className="font-medium text-sm text-main group-hover:text-blue-400 transition leading-snug">{r.label}</p>
+                      <span className="text-faint group-hover:text-muted text-sm shrink-0 transition">↗</span>
                     </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">{r.desc}</p>
+                    <p className="text-xs text-faint leading-relaxed">{r.desc}</p>
                   </a>
                 ))}
               </div>
@@ -140,7 +141,7 @@ export default function Resources() {
         </div>
 
         <div className="mt-12 bg-blue-600/5 border border-blue-500/20 rounded-2xl p-6 text-center">
-          <p className="text-gray-400 text-sm">All resources are free. No affiliate links. Last verified 2026.</p>
+          <p className="text-muted text-sm">All resources are free. No affiliate links. Last verified 2026.</p>
         </div>
       </div>
     </main>

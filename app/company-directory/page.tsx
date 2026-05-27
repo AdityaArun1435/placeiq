@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { Star } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -39,10 +40,9 @@ function ambitionboxSlug(name: string): string {
 }
 
 function RatingDisplay({ rating, companyName }: { rating: number | null; companyName: string }) {
-  if (!rating || rating < 1 || rating > 5) return <span className="text-gray-600 text-xs">No rating yet</span>;
+  if (!rating || rating < 1 || rating > 5) return <span className="text-faint text-xs">No rating yet</span>;
 
   const full = Math.floor(rating);
-  const stars = "★".repeat(full) + "☆".repeat(5 - full);
   const color = rating >= 4.0 ? "text-green-400" : rating >= 3.0 ? "text-yellow-400" : "text-red-400";
   const slug = ambitionboxSlug(companyName);
   const url = `https://www.ambitionbox.com/overview/${slug}-overview`;
@@ -56,35 +56,26 @@ function RatingDisplay({ rating, companyName }: { rating: number | null; company
         className={`text-xs font-medium flex items-center gap-1 ${color} hover:underline`}
         onClick={e => e.stopPropagation()}
       >
-        <span>{stars}</span>
+        <span className="flex gap-0.5">{Array.from({length:5},(_,i)=><Star key={i} size={10} className={i<full?`${color} fill-current`:"text-faint"} />)}</span>
         <span>{rating.toFixed(1)}</span>
-        <span className="text-gray-600 mx-0.5">·</span>
-        <span className="text-gray-400">Employee Rating</span>
+        <span className="text-faint mx-0.5">·</span>
+        <span className="text-muted">Employee Rating</span>
       </a>
-      <div className="absolute bottom-full left-0 mb-2 z-20 w-64 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-xs shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-        <p className="font-semibold text-white mb-1">Employee Rating (Ambitionbox)</p>
-        <p className="text-gray-400 leading-relaxed">Based on employee reviews on Ambitionbox — rates work culture, salary, and work-life balance</p>
+      <div className="absolute bottom-full left-0 mb-2 z-20 w-64 bg-gray-900 border border-theme rounded-xl px-3 py-2.5 text-xs shadow-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+        <p className="font-semibold text-main mb-1">Employee Rating (Ambitionbox)</p>
+        <p className="text-muted leading-relaxed">Based on employee reviews on Ambitionbox — rates work culture, salary, and work-life balance</p>
       </div>
     </div>
   );
 }
 
 function IndustryBadge({ industry }: { industry: string }) {
-  const color =
-    industry.includes("FinTech") ? "bg-green-900/40 text-green-400 border-green-700/40" :
-    industry.includes("SaaS") || industry.includes("Product") ? "bg-purple-900/40 text-purple-400 border-purple-700/40" :
-    industry.includes("E-Commerce") || industry.includes("Retail") ? "bg-orange-900/40 text-orange-400 border-orange-700/40" :
-    industry.includes("Food") ? "bg-red-900/40 text-red-400 border-red-700/40" :
-    industry.includes("Cloud") || industry.includes("Software") || industry.includes("Tech") ? "bg-blue-900/40 text-blue-400 border-blue-700/40" :
-    "bg-gray-800 text-gray-400 border-gray-700";
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${color}`}>{industry}</span>
-  );
+  return <span className="industry-badge">{industry}</span>;
 }
 
 function SkeletonCard() {
   return (
-    <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 animate-pulse">
+    <div className="bg-surface border border-theme rounded-2xl p-5 animate-pulse">
       <div className="flex items-start justify-between mb-3">
         <div className="h-5 w-36 bg-gray-800 rounded" />
         <div className="h-4 w-20 bg-gray-800 rounded" />
@@ -170,12 +161,12 @@ export default function CompanyDirectoryPage() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-7xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">Company Directory</h2>
-          <p className="text-gray-400 text-sm">
+          <p className="text-muted text-sm">
             {totalCount > 0 ? (
               <>{totalCount} Indian tech companies — sourced from Adzuna live data and curated profiles</>
             ) : "Loading company data..."}
@@ -189,50 +180,50 @@ export default function CompanyDirectoryPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-8">
+        <div className="bg-surface border border-theme rounded-2xl p-5 mb-8">
           <form onSubmit={handleSearch} className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-48">
-              <label className="text-xs text-gray-400 mb-1.5 block">Search companies</label>
+              <label className="text-xs text-muted mb-1.5 block">Search companies</label>
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="e.g. Razorpay, FinTech..."
-                className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Industry</label>
+              <label className="text-xs text-muted mb-1.5 block">Industry</label>
               <select
                 value={industry}
                 onChange={e => setIndustry(e.target.value)}
-                className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                className="bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
               >
                 {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">City</label>
+              <label className="text-xs text-muted mb-1.5 block">City</label>
               <select
                 value={city}
                 onChange={e => setCity(e.target.value)}
-                className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                className="bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
               >
                 {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Rating</label>
+              <label className="text-xs text-muted mb-1.5 block">Rating</label>
               <select
                 value={rating}
                 onChange={e => setRating(Number(e.target.value))}
-                className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                className="bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
               >
                 {RATINGS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+              className="bg-blue-600 hover:bg-blue-500 text-main px-5 py-2.5 rounded-lg text-sm font-medium transition"
             >
               Search
             </button>
@@ -257,10 +248,10 @@ export default function CompanyDirectoryPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {companies.map(co => (
-                <div key={co.name} className="bg-[#111] border border-gray-800 rounded-2xl p-5 hover:border-gray-700 transition flex flex-col">
+                <div key={co.name} className="bg-surface border border-theme rounded-2xl p-5 hover:border-theme transition flex flex-col">
                   {/* Top: name + industry */}
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-semibold text-white leading-snug">{co.name}</h3>
+                    <h3 className="font-semibold text-main leading-snug">{co.name}</h3>
                     <IndustryBadge industry={co.industry} />
                   </div>
 
@@ -268,15 +259,15 @@ export default function CompanyDirectoryPage() {
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <RatingDisplay rating={co.rating} companyName={co.name} />
                     {co.headquarters !== "India" && (
-                      <span className="text-gray-600 text-xs">{co.headquarters}</span>
+                      <span className="text-faint text-xs">{co.headquarters}</span>
                     )}
                     {co.size !== "N/A" && (
-                      <span className="text-gray-700 text-xs">{co.size} employees</span>
+                      <span className="text-faint text-xs">{co.size} employees</span>
                     )}
                   </div>
 
                   {/* Description */}
-                  <p className="text-xs text-gray-500 leading-relaxed mb-4 flex-1 line-clamp-3">
+                  <p className="text-xs text-faint leading-relaxed mb-4 flex-1 line-clamp-3">
                     {co.description || "Indian tech company actively hiring engineers."}
                   </p>
 
@@ -286,7 +277,7 @@ export default function CompanyDirectoryPage() {
                       href={`https://www.linkedin.com/company/${co.linkedin}/`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-900/30 border border-blue-700/40 text-blue-400 hover:bg-blue-900/50 rounded-lg transition"
+                      className="btn-company-action linkedin"
                     >
                       LinkedIn →
                     </a>
@@ -295,12 +286,12 @@ export default function CompanyDirectoryPage() {
                         href={co.careers_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-900/30 border border-green-700/40 text-green-400 hover:bg-green-900/50 rounded-lg transition"
+                        className="btn-company-action careers-verified"
                       >
-                        Careers ✅
+                        Careers
                       </a>
                     ) : (
-                      <span className="text-xs px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-600 rounded-lg">
+                      <span className="btn-company-action careers-unverified">
                         Careers (unverified)
                       </span>
                     )}
@@ -315,7 +306,7 @@ export default function CompanyDirectoryPage() {
                 <button
                   onClick={() => fetchPage(page + 1, true)}
                   disabled={loadingMore}
-                  className="border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white px-8 py-3 rounded-xl text-sm transition disabled:opacity-40"
+                  className="border border-theme hover:border-gray-500 text-muted hover:text-main px-8 py-3 rounded-xl text-sm transition disabled:opacity-40"
                 >
                   {loadingMore ? "Loading..." : `Load More (${totalCount - companies.length} remaining)`}
                 </button>
@@ -325,8 +316,8 @@ export default function CompanyDirectoryPage() {
         )}
 
         {!loading && companies.length === 0 && !error && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-            <p className="text-gray-400 mb-2">No companies match your filters</p>
+          <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+            <p className="text-muted mb-2">No companies match your filters</p>
             <button
               onClick={() => { setSearch(""); setIndustry("All"); setCity("All"); setRating(0); }}
               className="text-blue-400 hover:text-blue-300 text-sm transition"

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -223,12 +223,12 @@ export default function Onboarding() {
   const optBtn = (selected: boolean) =>
     `w-full text-left px-4 py-3 rounded-xl border transition text-sm font-medium ${
       selected
-        ? "bg-blue-600/20 border-blue-500 text-white"
-        : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"
+        ? "bg-blue-600/20 border-blue-500 text-main"
+        : "bg-surface border-theme text-muted hover:border-gray-500"
     }`;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center px-6 py-10">
+    <main className="min-h-screen bg-primary-bg text-main flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-lg">
 
         {/* Progress — 5 steps */}
@@ -242,22 +242,22 @@ export default function Onboarding() {
         {step === 1 && (
           <div>
             <h2 className="text-2xl font-bold mb-1">Your College Info</h2>
-            <p className="text-gray-400 mb-8">We use this to match you with on-campus opportunities.</p>
+            <p className="text-muted mb-8">We use this to match you with on-campus opportunities.</p>
 
             <div className="space-y-4">
               {lockedFields.college ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm text-gray-400">College Name</label>
+                    <label className="text-sm text-muted">College Name</label>
                     <button type="button" onClick={() => setLockedFields(f => ({ ...f, college: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                   </div>
-                  <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.college}</div>
+                  <div className="w-full bg-elevated border border-theme rounded-lg px-4 py-3 text-muted text-sm">{form.college}</div>
                 </div>
               ) : (
                 <div className="relative">
-                  <label className="text-sm text-gray-400 mb-1 block">College Name</label>
+                  <label className="text-sm text-muted mb-1 block">College Name</label>
                   <input
-                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500"
                     placeholder="Search your college..."
                     value={form.college || collegeSearch}
                     onChange={e => {
@@ -268,11 +268,11 @@ export default function Onboarding() {
                     onFocus={() => setShowCollegeList(true)}
                   />
                   {showCollegeList && collegeSearch && (
-                    <div className="absolute z-10 w-full mt-1 bg-[#1a1a1a] border border-gray-700 rounded-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 w-full mt-1 bg-elevated border border-theme rounded-lg max-h-48 overflow-y-auto">
                       {filteredColleges.length > 0 ? filteredColleges.map(c => (
                         <button
                           key={c}
-                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-muted"
                           onClick={() => {
                             setForm(f => ({ ...f, college: c }));
                             setCollegeSearch(c);
@@ -283,7 +283,7 @@ export default function Onboarding() {
                         </button>
                       )) : (
                         <button
-                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-muted"
                           onClick={() => {
                             setForm(f => ({ ...f, college: collegeSearch }));
                             setShowCollegeList(false);
@@ -300,16 +300,16 @@ export default function Onboarding() {
               {lockedFields.branch ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm text-gray-400">Branch</label>
+                    <label className="text-sm text-muted">Branch</label>
                     <button type="button" onClick={() => setLockedFields(f => ({ ...f, branch: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                   </div>
-                  <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.branch}</div>
+                  <div className="w-full bg-elevated border border-theme rounded-lg px-4 py-3 text-muted text-sm">{form.branch}</div>
                 </div>
               ) : (
                 <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Branch</label>
+                  <label className="text-sm text-muted mb-1 block">Branch</label>
                   <select
-                    className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500"
                     value={form.branch}
                     onChange={e => setForm(f => ({ ...f, branch: e.target.value }))}
                   >
@@ -324,16 +324,16 @@ export default function Onboarding() {
                   {lockedFields.year ? (
                     <>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm text-gray-400">Year</label>
+                        <label className="text-sm text-muted">Year</label>
                         <button type="button" onClick={() => setLockedFields(f => ({ ...f, year: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                       </div>
-                      <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.year}</div>
+                      <div className="w-full bg-elevated border border-theme rounded-lg px-4 py-3 text-muted text-sm">{form.year}</div>
                     </>
                   ) : (
                     <>
-                      <label className="text-sm text-gray-400 mb-1 block">Year</label>
+                      <label className="text-sm text-muted mb-1 block">Year</label>
                       <select
-                        className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                        className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500"
                         value={form.year}
                         onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
                       >
@@ -347,16 +347,16 @@ export default function Onboarding() {
                   {lockedFields.cgpa ? (
                     <>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm text-gray-400">CGPA (0 - 10)</label>
+                        <label className="text-sm text-muted">CGPA (0 - 10)</label>
                         <button type="button" onClick={() => setLockedFields(f => ({ ...f, cgpa: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                       </div>
-                      <div className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg px-4 py-3 text-gray-200 text-sm">{form.cgpa}</div>
+                      <div className="w-full bg-elevated border border-theme rounded-lg px-4 py-3 text-muted text-sm">{form.cgpa}</div>
                     </>
                   ) : (
                     <>
-                      <label className="text-sm text-gray-400 mb-1 block">CGPA (0 - 10)</label>
+                      <label className="text-sm text-muted mb-1 block">CGPA (0 - 10)</label>
                       <input
-                        className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                        className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500"
                         placeholder="e.g. 8.5"
                         value={form.cgpa}
                         onChange={e => handleCgpa(e.target.value)}
@@ -370,7 +370,7 @@ export default function Onboarding() {
             <button
               onClick={next}
               disabled={!form.college || !form.branch || !form.year || !form.cgpa}
-              className="mt-8 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+              className="mt-8 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
             >
               Next
             </button>
@@ -381,12 +381,12 @@ export default function Onboarding() {
         {step === 2 && (
           <div>
             <h2 className="text-2xl font-bold mb-1">Your Skills</h2>
-            <p className="text-gray-400 mb-4">Select all that apply. Be honest - this affects your score.</p>
+            <p className="text-muted mb-4">Select all that apply. Be honest - this affects your score.</p>
 
             {(form?.skills?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {form.skills.map(skill => (
-                  <span key={skill} className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                  <span key={skill} className="bg-blue-600 text-main text-xs px-3 py-1 rounded-full flex items-center gap-1">
                     {skill}
                     <button onClick={() => toggleSkill(skill)} className="ml-1 hover:text-red-300">x</button>
                   </span>
@@ -395,7 +395,7 @@ export default function Onboarding() {
             )}
 
             <input
-              className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 mb-3"
+              className="w-full bg-surface border border-theme rounded-lg px-4 py-3 text-main focus:outline-none focus:border-blue-500 mb-3"
               placeholder="Search skills..."
               value={skillSearch}
               onChange={e => setSkillSearch(e.target.value)}
@@ -408,8 +408,8 @@ export default function Onboarding() {
                   onClick={() => toggleSkill(skill)}
                   className={`px-3 py-1.5 rounded-full text-sm border transition ${
                     form.skills.includes(skill)
-                      ? "bg-blue-600 border-blue-500 text-white"
-                      : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"
+                      ? "bg-blue-600 border-blue-500 text-main"
+                      : "bg-surface border-theme text-muted hover:border-gray-500"
                   }`}
                 >
                   {skill}
@@ -419,7 +419,7 @@ export default function Onboarding() {
 
             <div className="flex gap-2 mb-6">
               <input
-                className="flex-1 bg-[#111] border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-surface border border-theme rounded-lg px-4 py-2 text-main text-sm focus:outline-none focus:border-blue-500"
                 placeholder="Add a custom skill..."
                 value={customSkill}
                 onChange={e => setCustomSkill(e.target.value)}
@@ -427,18 +427,18 @@ export default function Onboarding() {
               />
               <button
                 onClick={addCustomSkill}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition"
+                className="bg-gray-800 hover:bg-gray-700 text-main px-4 py-2 rounded-lg text-sm transition"
               >
                 Add
               </button>
             </div>
 
             <div className="flex gap-3">
-              <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
+              <button onClick={back} className="flex-1 border border-theme text-muted px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
               <button
                 onClick={next}
                 disabled={(form?.skills?.length ?? 0) === 0}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
               >
                 Next
               </button>
@@ -450,15 +450,15 @@ export default function Onboarding() {
         {step === 3 && (
           <div>
             <h2 className="text-2xl font-bold mb-1">Target Role</h2>
-            <p className="text-gray-400 mb-8">What kind of job are you aiming for?</p>
+            <p className="text-muted mb-8">What kind of job are you aiming for?</p>
 
             {lockedFields.targetRole ? (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm text-gray-400">Current selection</p>
+                  <p className="text-sm text-muted">Current selection</p>
                   <button type="button" onClick={() => setLockedFields(f => ({ ...f, targetRole: false }))} className="text-xs text-blue-400 hover:text-blue-300 transition">Edit</button>
                 </div>
-                <div className="w-full px-5 py-4 rounded-xl border bg-blue-600/20 border-blue-500 text-white">
+                <div className="w-full px-5 py-4 rounded-xl border bg-blue-600/20 border-blue-500 text-main">
                   {form.targetRole}
                 </div>
               </div>
@@ -470,8 +470,8 @@ export default function Onboarding() {
                     onClick={() => setForm(f => ({ ...f, targetRole: role }))}
                     className={`w-full text-left px-5 py-4 rounded-xl border transition ${
                       form.targetRole === role
-                        ? "bg-blue-600/20 border-blue-500 text-white"
-                        : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"
+                        ? "bg-blue-600/20 border-blue-500 text-main"
+                        : "bg-surface border-theme text-muted hover:border-gray-500"
                     }`}
                   >
                     {role}
@@ -481,11 +481,11 @@ export default function Onboarding() {
             )}
 
             <div className="flex gap-3">
-              <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
+              <button onClick={back} className="flex-1 border border-theme text-muted px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
               <button
                 onClick={next}
                 disabled={!form.targetRole}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
               >
                 Next
               </button>
@@ -497,12 +497,12 @@ export default function Onboarding() {
         {step === 4 && (
           <div>
             <h2 className="text-2xl font-bold mb-1">Projects & Experience</h2>
-            <p className="text-gray-400 mb-8">Tell us about your practical experience.</p>
+            <p className="text-muted mb-8">Tell us about your practical experience.</p>
 
             <div className="space-y-6">
               {/* Projects */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Projects completed</label>
+                <label className="text-sm text-muted mb-3 block">Projects completed</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["0", "1-2", "3-5", "5+"] as const).map(opt => (
                     <button key={opt} onClick={() => set("projectsCount", opt)} className={optBtn(form.projectsCount === opt)}>
@@ -514,7 +514,7 @@ export default function Onboarding() {
 
               {/* Internship */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Any internship experience?</label>
+                <label className="text-sm text-muted mb-3 block">Any internship experience?</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["yes", "no"] as const).map(opt => (
                     <button
@@ -534,7 +534,7 @@ export default function Onboarding() {
               {/* Internship months — conditional */}
               {form.hasInternship === "yes" && (
                 <div>
-                  <label className="text-sm text-gray-400 mb-3 block">How many months total?</label>
+                  <label className="text-sm text-muted mb-3 block">How many months total?</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(["1-3", "3-6", "6+"] as const).map(opt => (
                       <button key={opt} onClick={() => set("internshipMonths", opt)} className={optBtn(form.internshipMonths === opt)}>
@@ -547,7 +547,7 @@ export default function Onboarding() {
 
               {/* Hackathons */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Hackathons participated in</label>
+                <label className="text-sm text-muted mb-3 block">Hackathons participated in</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(["0", "1-2", "3+"] as const).map(opt => (
                     <button key={opt} onClick={() => set("hackathons", opt)} className={optBtn(form.hackathons === opt)}>
@@ -559,11 +559,11 @@ export default function Onboarding() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
+              <button onClick={back} className="flex-1 border border-theme text-muted px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
               <button
                 onClick={next}
                 disabled={!step4Valid}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
               >
                 Next
               </button>
@@ -575,12 +575,12 @@ export default function Onboarding() {
         {step === 5 && (
           <div>
             <h2 className="text-2xl font-bold mb-1">Competitive Programming & Extras</h2>
-            <p className="text-gray-400 mb-8">A few more signals to sharpen your score.</p>
+            <p className="text-muted mb-8">A few more signals to sharpen your score.</p>
 
             <div className="space-y-6">
               {/* LeetCode */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">LeetCode problems solved</label>
+                <label className="text-sm text-muted mb-3 block">LeetCode problems solved</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["0", "1-50", "51-200", "200+"] as const).map(opt => (
                     <button key={opt} onClick={() => set("leetcodeCount", opt)} className={optBtn(form.leetcodeCount === opt)}>
@@ -592,7 +592,7 @@ export default function Onboarding() {
 
               {/* Open source */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Open source contributions?</label>
+                <label className="text-sm text-muted mb-3 block">Open source contributions?</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["yes", "no"] as const).map(opt => (
                     <button key={opt} onClick={() => set("openSource", opt)} className={optBtn(form.openSource === opt)}>
@@ -604,7 +604,7 @@ export default function Onboarding() {
 
               {/* Certifications */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Certifications earned</label>
+                <label className="text-sm text-muted mb-3 block">Certifications earned</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(["0", "1-2", "3+"] as const).map(opt => (
                     <button key={opt} onClick={() => set("certifications", opt)} className={optBtn(form.certifications === opt)}>
@@ -616,7 +616,7 @@ export default function Onboarding() {
 
               {/* GitHub */}
               <div>
-                <label className="text-sm text-gray-400 mb-3 block">Active on GitHub? (regular commits / public repos)</label>
+                <label className="text-sm text-muted mb-3 block">Active on GitHub? (regular commits / public repos)</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(["yes", "no"] as const).map(opt => (
                     <button key={opt} onClick={() => set("githubActive", opt)} className={optBtn(form.githubActive === opt)}>
@@ -628,11 +628,11 @@ export default function Onboarding() {
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button onClick={back} className="flex-1 border border-gray-700 text-gray-400 px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
+              <button onClick={back} className="flex-1 border border-theme text-muted px-6 py-3 rounded-lg font-medium hover:border-gray-500 transition">Back</button>
               <button
                 onClick={submit}
                 disabled={!step5Valid || submitting}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition"
+                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-main px-6 py-3 rounded-lg font-medium transition"
               >
                 {submitting ? "Saving..." : "Get My Score"}
               </button>

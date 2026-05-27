@@ -57,7 +57,28 @@
       "Bash(sed -n '205,210p' ~/placeiq/app/referral/page.tsx)",
       "Bash(sed -n '104,109p' ~/placeiq/app/resources/page.tsx)",
       "Bash(sed -n '90,100p' ~/placeiq/app/coldemail/page.tsx)",
-      "Bash(sed -n '90,110p' ~/placeiq/app/offcampus/page.tsx)"
+      "Bash(sed -n '90,110p' ~/placeiq/app/offcampus/page.tsx)",
+      "Bash(npm run *)",
+      "PowerShell(git *)",
+      "PowerShell(Head-Object *)",
+      "PowerShell(Head *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\HP\\\\placeiq\\\\backend\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "PowerShell(Get-ChildItem C:\\\\Users\\\\HP\\\\placeiq\\\\backend -Exclude venv -Recurse -File -Name | Where-Object { $_ -notmatch \"venv\" })",
+      "Bash(git -C /mnt/c/Users/HP/placeiq add app/oncampus/page.tsx app/college-stats/page.tsx app/market/page.tsx backend/main.py)",
+      "Bash(git -C /mnt/c/Users/HP/placeiq status)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\HP\\\\placeiq\" -Recurse -Depth 2 -Name | Where-Object { $_ -match '\\\\.\\(py|tsx|ts\\)$' -and $_ -notmatch 'venv' -and $_ -notmatch 'node_modules' -and $_ -notmatch '\\\\.next' })",
+      "Bash(powershell -Command \"\\(Get-Content 'C:/Users/HP/placeiq/app/pyq/page.tsx'\\).Count\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\HP\" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"emilkowal|taste_skill|uiuxpro\" } | Select-Object FullName)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\HP\\\\OneDrive - SRM Institute of Science & Technology\\\\Documents\" -Recurse -Depth 3 | Where-Object { $_.Name -match \"skill|taste|emilkowal|uiux\" } | Select-Object FullName)",
+      "PowerShell(Get-Item *)",
+      "PowerShell(netstat *)",
+      "PowerShell(npm run *)",
+      "PowerShell($r1 = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -TimeoutSec 20 2>&1; Write-Host \"Landing: $\\($r1.StatusCode\\)\")",
+      "PowerShell(git add *)"
     ]
   }
 }

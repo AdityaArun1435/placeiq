@@ -1,15 +1,15 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
   Users, ClipboardList, TrendingUp, FileText, FileSearch,
   BookOpen, BarChart2, Database, School,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
-import config from '@/lib/config'
-import LoadingScreen from '@/components/LoadingScreen'
+import config from "@/lib/config";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type Profile = {
   placementScore: number;
@@ -97,134 +97,44 @@ const FEATURE_GROUPS: FeatureGroup[] = [
   {
     label: "Placement Intelligence",
     features: [
-      {
-        path: "/skills",
-        name: "Skill Gap Analysis",
-        Icon: Zap,
-        description:
-          "See exactly which skills you are missing for your target role based on real job postings. Get a priority list.",
-      },
-      {
-        path: "/companies",
-        name: "Company Matches",
-        Icon: Building2,
-        description:
-          "See your personalised company match list ranked by fit with reasoning for each match.",
-      },
-      {
-        path: "/roadmap",
-        name: "90-Day Roadmap",
-        Icon: MapIcon,
-        description:
-          "Get a personalised 30/60/90 day prep plan with direct clickable resource links. Chat with AI to modify it.",
-      },
+      { path: "/skills", name: "Skill Gap Analysis", Icon: Zap, description: "See exactly which skills you are missing for your target role based on real job postings." },
+      { path: "/companies", name: "Company Matches", Icon: Building2, description: "Personalised company match list ranked by fit with reasoning for each match." },
+      { path: "/roadmap", name: "90-Day Roadmap", Icon: MapIcon, description: "Personalised 30/60/90 day prep plan with direct clickable resource links." },
     ],
   },
   {
     label: "Find Opportunities",
     features: [
-      {
-        path: "/offcampus",
-        name: "Off Campus Jobs",
-        Icon: Globe,
-        description:
-          "Search live job listings from Adzuna filtered by your skills and salary expectations. See match scores per listing.",
-      },
-      {
-        path: "/oncampus",
-        name: "On Campus Drives",
-        Icon: GraduationCap,
-        description:
-          "See which companies are likely to visit your college this placement season with probability scores.",
-      },
-      {
-        path: "/internships",
-        name: "Internships",
-        Icon: Briefcase,
-        description:
-          "Find live internships from multiple sources. Get an AI strategy tailored to your college tier and profile.",
-      },
-      {
-        path: "/referral",
-        name: "Referral Radar",
-        Icon: Users,
-        description:
-          "Find alumni from your college working at top companies. Submit your own to help others.",
-      },
+      { path: "/offcampus", name: "Off Campus Jobs", Icon: Globe, description: "Live job listings from Adzuna filtered by your skills and salary expectations." },
+      { path: "/oncampus", name: "On Campus Drives", Icon: GraduationCap, description: "Companies likely to visit your college this season with probability scores." },
+      { path: "/internships", name: "Internships", Icon: Briefcase, description: "Live internships with an AI strategy tailored to your college tier and profile." },
+      { path: "/referral", name: "Referral Radar", Icon: Users, description: "Find alumni from your college working at top companies." },
     ],
   },
   {
     label: "Track & Prepare",
     features: [
-      {
-        path: "/tracker",
-        name: "Application Tracker",
-        Icon: ClipboardList,
-        description:
-          "Track every company you apply to through stages: Saved, Applied, Interview, Offer, Rejected.",
-      },
-      {
-        path: "/progress",
-        name: "Progress Tracker",
-        Icon: TrendingUp,
-        description:
-          "Track which skills you have learned. Mark them complete and watch your placement score improve.",
-      },
-      {
-        path: "/pyq",
-        name: "Previous Year Questions",
-        Icon: FileText,
-        description:
-          "Previous year interview questions by company and round — Aptitude, Coding, Technical, HR.",
-      },
-      {
-        path: "/resume",
-        name: "Resume Analyser",
-        Icon: FileSearch,
-        description:
-          "Upload your resume and paste a JD. Get an AI-powered gap analysis of exactly what is missing.",
-      },
-      {
-        path: "/resources",
-        name: "Resources",
-        Icon: BookOpen,
-        description:
-          "Curated direct links to DSA sheets, YouTube channels, free courses, and aptitude prep material.",
-      },
+      { path: "/tracker", name: "Application Tracker", Icon: ClipboardList, description: "Track every company through: Saved, Applied, Interview, Offer, Rejected." },
+      { path: "/progress", name: "Progress Tracker", Icon: TrendingUp, description: "Track which skills you have learned. Watch your placement score improve." },
+      { path: "/pyq", name: "Previous Year Questions", Icon: FileText, description: "Interview questions by company and round — Aptitude, Coding, Technical, HR." },
+      { path: "/resume", name: "Resume Analyser", Icon: FileSearch, description: "Upload your resume, paste a JD. Get an AI-powered gap analysis." },
+      { path: "/resources", name: "Resources", Icon: BookOpen, description: "Direct links to DSA sheets, YouTube channels, free courses, and aptitude prep." },
     ],
   },
   {
     label: "Market & Research",
     features: [
-      {
-        path: "/market",
-        name: "Market Intelligence",
-        Icon: BarChart2,
-        description:
-          "See trending job roles, top hiring companies, CTC trends, and real campus placement data insights.",
-      },
-      {
-        path: "/college-stats",
-        name: "College Stats",
-        Icon: School,
-        description:
-          "Explore and compare placement data for 24 colleges. See year-wise CTC trends and company visit history.",
-      },
-      {
-        path: "/company-directory",
-        name: "Company Directory",
-        Icon: Database,
-        description:
-          "Browse all companies in our database with hiring details, tech stack, and prep guides.",
-      },
+      { path: "/market", name: "Market Intelligence", Icon: BarChart2, description: "Trending roles, top hiring companies, CTC trends, and campus placement insights." },
+      { path: "/college-stats", name: "College Stats", Icon: School, description: "Placement data for 24 colleges. Year-wise CTC trends and company visit history." },
+      { path: "/company-directory", name: "Company Directory", Icon: Database, description: "All companies with hiring details, tech stack, and prep guides." },
     ],
   },
 ];
 
-const TIER_STYLES: Record<string, string> = {
-  "Tier 1": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  "Tier 2": "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  "Tier 3": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+const TIER_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  "Tier 1": { bg: "rgba(34,197,94,0.1)", text: "#22c55e", border: "rgba(34,197,94,0.3)" },
+  "Tier 2": { bg: "var(--accent-blue-muted)", text: "var(--accent-blue)", border: "rgba(59,130,246,0.3)" },
+  "Tier 3": { bg: "rgba(245,158,11,0.1)", text: "var(--accent-amber)", border: "rgba(245,158,11,0.3)" },
 };
 
 const SOURCE_LINKS: Record<string, string> = {
@@ -233,22 +143,189 @@ const SOURCE_LINKS: Record<string, string> = {
   Careers360: "https://engineering.careers360.com",
 };
 
+function getHourGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function getDaysToSeason() {
+  const today = new Date();
+  const season = new Date(today.getFullYear(), 9, 1); // October 1
+  if (today >= season) season.setFullYear(today.getFullYear() + 1);
+  return Math.ceil((season.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getProfileStrength(profile: Profile): number {
+  let score = 0;
+  if (profile.cgpa > 0) score += 20;
+  if (profile.skills?.length > 0) score += 20;
+  if (profile.hasInternship === "yes") score += 20;
+  if (Number(profile.leetcodeCount) > 0) score += 20;
+  if (Number(profile.projectsCount) > 0) score += 20;
+  return score;
+}
+
+function getScoreColor(score: number) {
+  if (score < 40) return "#ef4444";
+  if (score < 65) return "var(--accent-amber)";
+  return "var(--accent-green)";
+}
+
+function ScoreRing({ score, loading }: { score: number | undefined; loading: boolean }) {
+  const radius = 48;
+  const circumference = 2 * Math.PI * radius;
+  const [animated, setAnimated] = useState(false);
+  const dashoffset = animated && score !== undefined
+    ? circumference * (1 - score / 100)
+    : circumference;
+
+  useEffect(() => {
+    if (!loading && score !== undefined) {
+      requestAnimationFrame(() => setAnimated(true));
+    }
+  }, [loading, score]);
+
+  const color = score !== undefined ? getScoreColor(score) : "var(--border-default)";
+
+  return (
+    <div style={{ position: "relative", width: 120, height: 120, flexShrink: 0 }}>
+      <svg
+        width={120}
+        height={120}
+        style={{ transform: "rotate(-90deg)" }}
+        aria-hidden="true"
+      >
+        <circle
+          cx={60} cy={60} r={radius}
+          fill="none"
+          stroke="var(--border-default)"
+          strokeWidth={8}
+        />
+        <circle
+          cx={60} cy={60} r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={8}
+          strokeDasharray={circumference}
+          strokeDashoffset={dashoffset}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 1s var(--ease-out), stroke 0.3s ease" }}
+        />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {loading ? (
+          <div style={{ width: 32, height: 8, background: "var(--bg-elevated)", borderRadius: 4 }} />
+        ) : (
+          <>
+            <span
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                color,
+                fontFamily: "var(--font-sans)",
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {score ?? "--"}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2, fontFamily: "var(--font-sans)" }}>
+              / 100
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  loading,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  loading: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-default)",
+        borderLeft: accent ? "3px solid var(--accent-blue)" : "1px solid var(--border-default)",
+        borderRadius: 10,
+        padding: "20px 24px",
+        height: 96,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        transition: `background-color var(--duration-fast) var(--ease-out)`,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--bg-elevated)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--bg-surface)"; }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: "var(--text-tertiary)",
+          fontFamily: "var(--font-sans)",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      {loading ? (
+        <div style={{ width: 48, height: 24, background: "var(--bg-elevated)", borderRadius: 4 }} className="animate-pulse" />
+      ) : (
+        <div
+          style={{
+            fontSize: 24,
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-sans)",
+            letterSpacing: "-0.02em",
+            lineHeight: 1,
+          }}
+        >
+          {value}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [backendSleeping, setBackendSleeping] = useState(false);
   const [liveScore, setLiveScore] = useState<LiveScore | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
-  const [scoreTimedOut, setScoreTimedOut] = useState(false);
   const [skillGaps, setSkillGaps] = useState<SkillItem[] | null>(null);
   const [skillGapLoading, setSkillGapLoading] = useState(false);
   const [companyMatches, setCompanyMatches] = useState<Array<{ name: string; type: string }> | null>(null);
   const [companyCount, setCompanyCount] = useState(0);
   const [companyMatchLoading, setCompanyMatchLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [cardEntered, setCardEntered] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -257,51 +334,30 @@ export default function Dashboard() {
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
     let isMounted = true;
-
-    // Primary: read from localStorage (source of truth)
     try {
       const stored = localStorage.getItem("placeiq_profile");
       if (stored) {
         setProfile(JSON.parse(stored));
         setProfileLoading(false);
         setProfileChecked(true);
-        return () => { isMounted = false };
+        return () => { isMounted = false; };
       }
-    } catch (e) { console.error('Dashboard error:', e) }
-
-    // Fallback: fetch from backend and cache locally
+    } catch (e) { console.error("Dashboard error:", e); }
     const email = encodeURIComponent(session.user.email);
     fetch(`${config.apiUrl}/api/user/profile/${email}`)
-      .then(res => {
-        if (res.status === 404) return null;
-        if (!res.ok) throw new Error("fetch failed");
-        return res.json();
-      })
-      .then(data => {
-        if (!isMounted) return;
-        if (data) localStorage.setItem("placeiq_profile", JSON.stringify(data));
-        setProfile(data);
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setProfile(null);
-      })
-      .finally(() => {
-        if (!isMounted) return;
-        setProfileLoading(false);
-        setProfileChecked(true);
-      });
-    return () => { isMounted = false };
+      .then((res) => { if (res.status === 404) return null; if (!res.ok) throw new Error("fetch failed"); return res.json(); })
+      .then((data) => { if (!isMounted) return; if (data) localStorage.setItem("placeiq_profile", JSON.stringify(data)); setProfile(data); })
+      .catch(() => { if (!isMounted) return; setProfile(null); })
+      .finally(() => { if (!isMounted) return; setProfileLoading(false); setProfileChecked(true); });
+    return () => { isMounted = false; };
   }, [status, session?.user?.email]);
 
-  // Redirect to onboarding if no profile found after 2 seconds
   useEffect(() => {
     if (!profileChecked || profile) return;
-    const timer = setTimeout(() => router.push('/onboarding'), 2000);
+    const timer = setTimeout(() => router.push("/onboarding"), 2000);
     return () => clearTimeout(timer);
   }, [profileChecked, profile]);
 
-  // Fetch live score from backend (never use cached placementScore)
   useEffect(() => {
     if (!profile?.email) return;
     let isMounted = true;
@@ -315,7 +371,7 @@ export default function Dashboard() {
         branch: profile.branch,
         year: "",
         cgpa: profile.cgpa,
-        skills: (profile?.skills ?? []),
+        skills: profile?.skills ?? [],
         targetRole: profile.targetRole,
         projectsCount: profile.projectsCount || "0",
         hasInternship: profile.hasInternship || "no",
@@ -327,17 +383,11 @@ export default function Dashboard() {
         githubActive: profile.githubActive || "no",
       }),
     })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (!isMounted) return;
-        if (data) setLiveScore(data);
-      })
-      .catch((e) => {
-        if (!isMounted) return;
-        console.error('Dashboard error:', e);
-      })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (!isMounted) return; if (data) setLiveScore(data); })
+      .catch((e) => { if (!isMounted) return; console.error("Dashboard error:", e); })
       .finally(() => { if (isMounted) setScoreLoading(false); });
-    return () => { isMounted = false };
+    return () => { isMounted = false; };
   }, [profile]);
 
   useEffect(() => {
@@ -349,13 +399,7 @@ export default function Dashboard() {
         const res = await fetch(`${config.apiUrl}/api/skills/gap`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            target_role: profile.targetRole,
-            skills: (profile?.skills ?? []),
-            college_tier: profile.collegeTier,
-            branch: profile.branch,
-            cgpa: profile.cgpa,
-          }),
+          body: JSON.stringify({ target_role: profile.targetRole, skills: profile?.skills ?? [], college_tier: profile.collegeTier, branch: profile.branch, cgpa: profile.cgpa }),
         });
         if (!res.ok || !isMounted) return;
         const parsed = await res.json();
@@ -363,14 +407,10 @@ export default function Dashboard() {
         if (parsed && !parsed.error && Array.isArray(parsed.must_have_missing)) {
           setSkillGaps(parsed.must_have_missing.slice(0, 3));
         }
-      } catch (e) {
-        if (!isMounted) return;
-        console.error('Dashboard error:', e)
-      } finally {
-        if (isMounted) setSkillGapLoading(false);
-      }
+      } catch (e) { if (!isMounted) return; console.error("Dashboard error:", e); }
+      finally { if (isMounted) setSkillGapLoading(false); }
     })();
-    return () => { isMounted = false };
+    return () => { isMounted = false; };
   }, [profile]);
 
   useEffect(() => {
@@ -383,18 +423,11 @@ export default function Dashboard() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            college: profile.college,
-            college_tier: profile.collegeTier,
-            branch: profile.branch,
-            cgpa: profile.cgpa,
-            skills: (profile?.skills ?? []),
-            target_role: profile.targetRole,
-            projects_count: profile.projectsCount || "0",
-            has_internship: profile.hasInternship || "no",
-            internship_months: profile.internshipMonths || "",
-            leetcode_count: profile.leetcodeCount || "0",
-            hackathons: profile.hackathons || "0",
-            github_active: profile.githubActive || "no",
+            college: profile.college, college_tier: profile.collegeTier, branch: profile.branch,
+            cgpa: profile.cgpa, skills: profile?.skills ?? [], target_role: profile.targetRole,
+            projects_count: profile.projectsCount || "0", has_internship: profile.hasInternship || "no",
+            internship_months: profile.internshipMonths || "", leetcode_count: profile.leetcodeCount || "0",
+            hackathons: profile.hackathons || "0", github_active: profile.githubActive || "no",
           }),
         });
         if (!res.ok || !isMounted) return;
@@ -409,377 +442,294 @@ export default function Dashboard() {
               .map((c: { name: string; type: string }) => ({ name: c.name, type: c.type }))
           );
         }
-      } catch (e) {
-        if (!isMounted) return;
-        console.error('Dashboard error:', e)
-      } finally {
-        if (isMounted) setCompanyMatchLoading(false);
-      }
+      } catch (e) { if (!isMounted) return; console.error("Dashboard error:", e); }
+      finally { if (isMounted) setCompanyMatchLoading(false); }
     })();
-    return () => { isMounted = false };
+    return () => { isMounted = false; };
   }, [profile]);
 
-  const displayScore = scoreTimedOut ? undefined : (liveScore?.score ?? profile?.placementScore);
+  // Stagger cards in on mount
+  useEffect(() => {
+    const timer = requestAnimationFrame(() => setCardEntered(true));
+    return () => cancelAnimationFrame(timer);
+  }, []);
+
+  const displayScore = liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
+  const tierStyle = displayTier ? TIER_STYLES[displayTier] : null;
+  const daysToSeason = getDaysToSeason();
+  const profileStrength = profile ? getProfileStrength(profile) : 0;
 
   if (status === "loading") return <LoadingScreen />;
 
-  if (backendSleeping && !profile) return (
-    <main className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 px-6">
-      <div className="max-w-md text-center">
-        <p className="text-yellow-400 font-semibold text-lg mb-2">Backend is waking up</p>
-        <p className="text-gray-400 text-sm mb-6">
-          The server is starting up (Render free tier takes 30–60 seconds). Please wait and refresh.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-yellow-600/20 hover:bg-yellow-600/40 border border-yellow-500/30 text-yellow-300 px-6 py-2.5 rounded-lg text-sm font-medium transition"
-        >
-          Refresh page
-        </button>
-      </div>
-    </main>
-  );
-
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <div className="max-w-6xl mx-auto px-8 py-10">
-        <h2 className="text-3xl font-bold mb-2">Welcome, {session?.user?.name?.split(" ")?.[0] ?? "there"}</h2>
-        <p className="text-gray-400 mb-10">
-          {profile ? `Targeting ${profile.targetRole} · ${profile.college}` : "Complete your profile to get your placement score."}
-        </p>
+    <main
+      style={{
+        minHeight: "100dvh",
+        background: "var(--bg-primary)",
+        color: "var(--text-primary)",
+      }}
+    >
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 80px" }}>
 
-        {/* Profile banner — shown briefly before 2s redirect fires */}
-        {profileChecked && !profile && (
-          <div className="bg-blue-600/10 border border-blue-500/30 rounded-xl px-5 py-3 flex items-center justify-between mb-6">
-            <p className="text-sm text-gray-300">Complete your profile to get personalised insights</p>
+        {/* No profile banner */}
+        {profileChecked && !profile && !profileLoading && (
+          <div
+            style={{
+              background: "var(--accent-blue-muted)",
+              border: "1px solid rgba(59,130,246,0.25)",
+              borderRadius: 10,
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 24,
+            }}
+          >
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", fontFamily: "var(--font-sans)" }}>
+              Complete your profile to get personalised insights
+            </p>
             <button
-              onClick={() => router.push('/onboarding')}
-              className="shrink-0 ml-4 bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-1.5 rounded-lg font-medium transition"
+              onClick={() => router.push("/onboarding")}
+              className="focus-ring"
+              style={{
+                background: "var(--accent-blue)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 6,
+                padding: "6px 14px",
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+                flexShrink: 0,
+                fontFamily: "var(--font-sans)",
+              }}
             >
-              Complete Profile →
+              Complete Profile
             </button>
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {/* ── TOP ROW: Greeting + Score ring ───────────────────────── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 24,
+            marginBottom: 32,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-sans)",
+                letterSpacing: "-0.02em",
+                lineHeight: 1.2,
+                marginBottom: 6,
+              }}
+            >
+              {getHourGreeting()}, {session?.user?.name?.split(" ")?.[0] ?? "there"}
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              {profile
+                ? `${profile.college} · ${profile.branch} · ${new Date().getFullYear() + 1}`
+                : "Complete your profile to get your placement score"}
+            </p>
 
-          {/* Placement Score Card */}
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-gray-400 text-sm">Placement Score</p>
-              {displayTier && (
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${TIER_STYLES[displayTier] ?? "bg-gray-700/50 text-gray-400 border-gray-600"}`}>
+            {/* Score reasoning */}
+            {!profileLoading && profile?.scoreReasoning && (
+              <div
+                style={{
+                  marginTop: 16,
+                  maxWidth: 560,
+                  padding: "12px 16px",
+                  background: "var(--accent-blue-muted)",
+                  border: "1px solid rgba(59,130,246,0.2)",
+                  borderRadius: 8,
+                }}
+              >
+                <p style={{ fontSize: 11, color: "var(--accent-blue)", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                  Why this score?
+                </p>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, fontFamily: "var(--font-sans)" }}>
+                  {profile.scoreReasoning}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Score ring + label */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <ScoreRing score={displayScore} loading={profileLoading || scoreLoading} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                Placement Score
+              </div>
+              {tierStyle && displayTier && (
+                <span
+                  style={{
+                    display: "inline-block",
+                    marginTop: 4,
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 20,
+                    background: tierStyle.bg,
+                    color: tierStyle.text,
+                    border: `1px solid ${tierStyle.border}`,
+                    fontFamily: "var(--font-sans)",
+                    fontWeight: 500,
+                  }}
+                >
                   {displayTier}
                 </span>
               )}
             </div>
 
-            {profileLoading || scoreLoading ? (
-              <div className="h-10 w-16 bg-gray-800 rounded animate-pulse" />
-            ) : (
-              <p className="text-4xl font-bold text-blue-500">
-                {displayScore !== undefined ? displayScore : "--"}
-              </p>
-            )}
-
-            <p className="text-gray-600 text-xs mt-2">
-              {profile ? "out of 100 · Predicted by ML model trained on NIRF data" : "Complete profile to unlock"}
-            </p>
-
-            {scoreLoading && !liveScore && (
-              <p className="text-yellow-500/80 text-xs mt-2">Backend waking up... this takes ~30s on first load</p>
-            )}
-            {liveScore?.model_last_retrained && (
-              <p className="text-gray-700 text-[10px] mt-1">
-                Model last retrained:{" "}
-                {new Date(liveScore.model_last_retrained).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}{" "}
-                &mdash; retrains monthly
-              </p>
-            )}
-
-            {/* Per-source placement rate */}
-            {liveScore && (liveScore.nirf_stats?.matched || (liveScore.sources?.length ?? 0) > 0) && (
-              <div className="mt-3 pt-3 border-t border-gray-800 space-y-1.5">
-                {liveScore.nirf_stats?.matched && liveScore.nirf_stats.placement_rate != null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400">
-                      {liveScore.nirf_stats.score_breakdown?.data_source?.includes("Researched") ? "Researched data" : "NIRF 2024"}
-                    </span>
-                    <span className="text-[11px] text-gray-300 font-medium">{liveScore.nirf_stats.placement_rate}% placed</span>
-                  </div>
-                )}
-                {(liveScore.sources ?? []).map((src, i) => src.placement_rate != null && (
-                  <div key={i} className="flex items-center justify-between">
-                    <a href={src.url || SOURCE_LINKS[src.source_name] || "#"} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-blue-400 hover:text-blue-300 underline underline-offset-2">
-                      {src.source_name}{src.year ? ` (${src.year})` : ""}
-                    </a>
-                    <span className="text-[11px] text-gray-300 font-medium">{src.placement_rate}%</span>
-                  </div>
-                ))}
-
-                {/* SRM-specific note */}
-                {profile?.college?.toLowerCase().includes("srm ktr") && (
-                  <p className="text-[10px] text-yellow-600/80 pt-1 leading-relaxed">
-                    Note: SRM places ~42% of its large batch of 5000+ students annually — absolute numbers look high but per-student probability is lower than smaller colleges with similar rates.
-                  </p>
-                )}
-
-                <p className="text-[10px] text-gray-600 pt-0.5">
-                  {liveScore.nirf_stats?.score_breakdown?.data_source?.includes("Researched")
-                    ? "Researched · Shiksha/Careers360/NIRF cross-referenced · Not official NIRF figures which overcount"
-                    : "Placement data · 2024 · All sources · Score predicted by ML model"}
-                </p>
-              </div>
-            )}
-
-            {/* Why this score? expandable */}
+            {/* Score breakdown toggle */}
             {liveScore?.nirf_stats?.score_breakdown && displayScore !== undefined && (
-              <div className="mt-3 pt-3 border-t border-gray-800">
-                <button
-                  onClick={() => setShowBreakdown(v => !v)}
-                  className="text-[11px] text-gray-500 hover:text-gray-300 transition flex items-center gap-1"
-                >
-                  {showBreakdown ? "▲" : "▼"} Why this score?
-                </button>
-                {showBreakdown && (() => {
-                  const bd = liveScore.nirf_stats!.score_breakdown!;
-                  const adj = (n: number) => n === 0 ? "—" : n > 0 ? `+${n.toFixed(1)}%` : `${n.toFixed(1)}%`;
-                  return (
-                    <div className="mt-2 space-y-1.5 text-[11px]">
-                      <div className="flex justify-between text-gray-400">
-                        <span>Base rate ({bd.college_name})</span>
-                        <span className="text-gray-200 font-medium">{bd.base_rate}% of students placed</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500">
-                        <span>CGPA impact</span>
-                        <span className={bd.cgpa_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.cgpa_impact)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500">
-                        <span className="flex items-center gap-1">
-                          Skills impact
-                          {bd.skill_reasoning && (
-                            <span title={bd.skill_reasoning} className="cursor-help text-gray-600 hover:text-gray-400 text-[10px]">ⓘ</span>
-                          )}
-                        </span>
-                        <span className={bd.skills_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.skills_impact)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500">
-                        <span>Internship impact</span>
-                        <span className={bd.internship_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.internship_impact)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500">
-                        <span>LeetCode impact</span>
-                        <span className={bd.leetcode_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.leetcode_impact)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500">
-                        <span>Projects impact</span>
-                        <span className={bd.projects_impact >= 0 ? "text-green-400" : "text-red-400"}>{adj(bd.projects_impact)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-500 border-t border-gray-800 pt-1.5 mt-1.5">
-                        <span>Final score</span>
-                        <span className="text-blue-400 font-bold">{bd.final_score}/100</span>
-                      </div>
-                      <p className="text-gray-700 pt-1">
-                        {bd.data_source} · Not official NIRF figures which overcount
-                      </p>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* Score reasoning — spans full width, below the 3-card row */}
-          {!profileLoading && profile?.scoreReasoning && (
-            <div className="md:col-span-3 bg-blue-600/5 border border-blue-500/20 rounded-2xl px-6 py-4">
-              <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Why is your score {displayScore}?</p>
-              {displayScore !== undefined && liveScore?.nirf_stats?.placement_rate != null && (
-                <p className="text-xs text-blue-300/60 mb-2">
-                  Your score ({displayScore}) = personal probability based on your profile · College placement rate ({liveScore.nirf_stats.placement_rate}%) = % of all students placed at {profile?.college}
-                </p>
-              )}
-              <p className="text-gray-300 text-sm leading-relaxed">{profile.scoreReasoning}</p>
-              <p className="text-xs text-gray-700 mt-2">Score computed from researched placement data · Shiksha/Careers360/NIRF cross-referenced</p>
-            </div>
-          )}
-
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 text-sm">Top Skill Gaps</p>
-              {profile && (
-                <button
-                  onClick={() => router.push("/skills")}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition"
-                >
-                  View all &rarr;
-                </button>
-              )}
-            </div>
-            {profileLoading || skillGapLoading ? (
-              <div className="space-y-2.5 mt-1">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-3.5 bg-gray-800 rounded animate-pulse" style={{ width: `${75 - i * 10}%` }} />
-                ))}
-              </div>
-            ) : !profile ? (
-              <>
-                <p className="text-4xl font-bold text-gray-700">--</p>
-                <p className="text-gray-600 text-xs mt-2">Complete profile to unlock</p>
-              </>
-            ) : skillGaps && skillGaps.length > 0 ? (
-              <ul className="space-y-2 mt-1">
-                {skillGaps.map((gap, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <span className="text-red-500 shrink-0">!</span>
-                    <span className="text-gray-300 truncate">{gap.skill}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-green-400 text-sm font-medium mt-1">No critical gaps found</p>
-            )}
-          </div>
-
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <p className="text-gray-400 text-sm mb-2">Skills Listed</p>
-            {profileLoading ? (
-              <div className="h-10 w-16 bg-gray-800 rounded animate-pulse" />
-            ) : (
-              <p className="text-4xl font-bold text-yellow-500">
-                {profile ? (profile?.skills?.length ?? 0) : "--"}
-              </p>
-            )}
-            <p className="text-gray-600 text-xs mt-2">
-              {profile ? "skills on your profile" : "Complete profile to unlock"}
-            </p>
-          </div>
-
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 text-sm">Company Matches</p>
-              {profile && (
-                <button
-                  onClick={() => router.push("/companies")}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition"
-                >
-                  View all &rarr;
-                </button>
-              )}
-            </div>
-            {profileLoading || companyMatchLoading ? (
-              <div className="space-y-2.5 mt-1">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-3.5 bg-gray-800 rounded animate-pulse" style={{ width: `${80 - i * 12}%` }} />
-                ))}
-              </div>
-            ) : !profile ? (
-              <>
-                <p className="text-4xl font-bold text-gray-700">--</p>
-                <p className="text-gray-600 text-xs mt-2">Complete profile to unlock</p>
-              </>
-            ) : companyMatches && companyMatches.length > 0 ? (
-              <>
-                <p className="text-4xl font-bold text-green-500 mb-2">{companyCount}</p>
-                <ul className="space-y-1.5">
-                  {companyMatches.map((c, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm">
-                      <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
-                        c.type === "Product"
-                          ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
-                          : c.type === "Startup"
-                          ? "bg-orange-500/15 text-orange-400 border-orange-500/30"
-                          : "bg-blue-500/15 text-blue-400 border-blue-500/30"
-                      }`}>
-                        {c.type?.[0]}
-                      </span>
-                      <span className="text-gray-300 truncate">{c.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="text-gray-500 text-sm mt-1">No matches found</p>
+              <button
+                onClick={() => setShowBreakdown((v) => !v)}
+                className="focus-ring"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  color: "var(--text-tertiary)",
+                  fontFamily: "var(--font-sans)",
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  transition: `color var(--duration-fast) var(--ease-out)`,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-secondary)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-tertiary)"; }}
+              >
+                {showBreakdown ? "Hide breakdown" : "Why this score?"}
+              </button>
             )}
           </div>
         </div>
 
-        {/* Multi-source placement data panel */}
+        {/* Score breakdown */}
+        {showBreakdown && liveScore?.nirf_stats?.score_breakdown && (
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 10,
+              padding: "20px 24px",
+              marginBottom: 24,
+              maxWidth: 480,
+            }}
+          >
+            {(() => {
+              const bd = liveScore.nirf_stats!.score_breakdown!;
+              const adj = (n: number) => n === 0 ? "—" : n > 0 ? `+${n.toFixed(1)}%` : `${n.toFixed(1)}%`;
+              const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8, fontFamily: "var(--font-sans)" };
+              return (
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12, fontFamily: "var(--font-sans)" }}>Score Breakdown</p>
+                  <div style={rowStyle}><span style={{ color: "var(--text-secondary)" }}>Base rate ({bd.college_name})</span><span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{bd.base_rate}%</span></div>
+                  <div style={rowStyle}><span style={{ color: "var(--text-tertiary)" }}>CGPA</span><span style={{ color: bd.cgpa_impact >= 0 ? "var(--accent-green)" : "#ef4444" }}>{adj(bd.cgpa_impact)}</span></div>
+                  <div style={rowStyle}><span style={{ color: "var(--text-tertiary)" }}>Skills</span><span style={{ color: bd.skills_impact >= 0 ? "var(--accent-green)" : "#ef4444" }}>{adj(bd.skills_impact)}</span></div>
+                  <div style={rowStyle}><span style={{ color: "var(--text-tertiary)" }}>Internship</span><span style={{ color: bd.internship_impact >= 0 ? "var(--accent-green)" : "#ef4444" }}>{adj(bd.internship_impact)}</span></div>
+                  <div style={rowStyle}><span style={{ color: "var(--text-tertiary)" }}>LeetCode</span><span style={{ color: bd.leetcode_impact >= 0 ? "var(--accent-green)" : "#ef4444" }}>{adj(bd.leetcode_impact)}</span></div>
+                  <div style={rowStyle}><span style={{ color: "var(--text-tertiary)" }}>Projects</span><span style={{ color: bd.projects_impact >= 0 ? "var(--accent-green)" : "#ef4444" }}>{adj(bd.projects_impact)}</span></div>
+                  <div style={{ ...rowStyle, borderTop: "1px solid var(--border-subtle)", paddingTop: 8, marginTop: 4 }}>
+                    <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Final score</span>
+                    <span style={{ color: "var(--accent-blue)", fontWeight: 700 }}>{bd.final_score}/100</span>
+                  </div>
+                  <p style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 8, fontFamily: "var(--font-sans)" }}>{bd.data_source}</p>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ── STATS CARDS ROW ──────────────────────────────────────── */}
+        <div
+          ref={cardRef}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 12,
+            marginBottom: 32,
+          }}
+        >
+          {[
+            { label: "Companies Matched", value: profile ? (companyCount || "--") : "--", loading: profileLoading || companyMatchLoading, accent: true },
+            { label: "Skills to Learn", value: profile ? (skillGaps?.length ?? "--") : "--", loading: profileLoading || skillGapLoading, accent: false },
+            { label: "Days to Season", value: daysToSeason, loading: false, accent: false },
+            { label: "Profile Strength", value: profile ? `${profileStrength}%` : "--", loading: profileLoading, accent: profileStrength >= 80 },
+          ].map((card, i) => (
+            <div
+              key={card.label}
+              style={{
+                opacity: cardEntered ? 1 : 0,
+                transform: cardEntered ? "translateY(0)" : "translateY(8px)",
+                transition: `opacity 400ms var(--ease-out) ${i * 50}ms, transform 400ms var(--ease-out) ${i * 50}ms`,
+              }}
+            >
+              <StatCard {...card} />
+            </div>
+          ))}
+        </div>
+
+        {/* Placement data sources panel */}
         {!profileLoading && profile && liveScore && (liveScore.nirf_stats?.matched || (liveScore.sources?.length ?? 0) > 0) && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 10,
+              padding: "20px 24px",
+              marginBottom: 32,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
               <div>
-                <h3 className="font-semibold text-sm">Placement Data Sources</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{profile.college}</p>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-sans)", marginBottom: 2 }}>Placement Data Sources</h3>
+                <p style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>{profile.college}</p>
               </div>
               {liveScore.num_sources > 1 && (
-                <span className="text-xs text-gray-500 bg-gray-800 px-2.5 py-1 rounded-full">
+                <span style={{ fontSize: 11, color: "var(--text-tertiary)", background: "var(--bg-elevated)", padding: "4px 10px", borderRadius: 20, fontFamily: "var(--font-sans)" }}>
                   avg {liveScore.combined_base}% across {liveScore.num_sources} sources
                 </span>
               )}
             </div>
-
-            <div className="space-y-2">
-              {/* NIRF row */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {liveScore.nirf_stats?.matched && (
-                <div className="flex items-center justify-between py-2.5 px-3 bg-gray-900/60 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                      NIRF
-                    </span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "var(--bg-elevated)", borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--accent-green)", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", padding: "2px 8px", borderRadius: 4, fontFamily: "var(--font-sans)" }}>NIRF</span>
                     <div>
-                      <a
-                        href="https://www.nirfindia.org/2024/EngineeringRanking.html"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-gray-200 hover:text-white transition"
-                      >
-                        NIRF 2024
-                      </a>
-                      <p className="text-[11px] text-gray-600">Official govt ranking · Last updated: 2024</p>
+                      <a href="https://www.nirfindia.org/2024/EngineeringRanking.html" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--text-primary)", textDecoration: "none" }}>NIRF 2024</a>
+                      <p style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>Official govt ranking</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-white">
-                      {liveScore.nirf_stats.placement_rate != null ? `${liveScore.nirf_stats.placement_rate}%` : "—"}
-                    </p>
-                    {liveScore.nirf_stats.median_salary != null && (
-                      <p className="text-[11px] text-gray-500">{liveScore.nirf_stats.median_salary} LPA median</p>
-                    )}
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-sans)" }}>{liveScore.nirf_stats.placement_rate != null ? `${liveScore.nirf_stats.placement_rate}%` : "—"}</p>
+                    {liveScore.nirf_stats.median_salary != null && <p style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>{liveScore.nirf_stats.median_salary} LPA</p>}
                   </div>
                 </div>
               )}
-
-              {/* Shiksha / Careers360 rows */}
               {(liveScore.sources ?? []).map((src, i) => (
-                <div key={i} className="flex items-center justify-between py-2.5 px-3 bg-gray-900/60 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
-                      {src.source_name[0]}
-                    </span>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "var(--bg-elevated)", borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--accent-blue)", background: "var(--accent-blue-muted)", border: "1px solid rgba(59,130,246,0.2)", padding: "2px 8px", borderRadius: 4, fontFamily: "var(--font-sans)" }}>{src.source_name[0]}</span>
                     <div>
-                      <a
-                        href={src.url || SOURCE_LINKS[src.source_name] || "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-gray-200 hover:text-white transition"
-                      >
-                        {src.source_name}
-                      </a>
-                      <p className="text-[11px] text-gray-600">
-                        {src.year ? `${src.year} data` : "Placement report"}
-                      </p>
+                      <a href={src.url || SOURCE_LINKS[src.source_name] || "#"} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "var(--text-primary)", textDecoration: "none" }}>{src.source_name}</a>
+                      <p style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>{src.year ? `${src.year} data` : "Placement report"}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-white">
-                      {src.placement_rate != null ? `${src.placement_rate}%` : "—"}
-                    </p>
-                    {src.median_salary != null && (
-                      <p className="text-[11px] text-gray-500">{src.median_salary} LPA median</p>
-                    )}
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-sans)" }}>{src.placement_rate != null ? `${src.placement_rate}%` : "—"}</p>
+                    {src.median_salary != null && <p style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>{src.median_salary} LPA</p>}
                   </div>
                 </div>
               ))}
@@ -787,35 +737,37 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* CTA — only shown when no profile */}
-        {!profileLoading && !profile && (
-          <div className="bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
-            <h3 className="text-xl font-bold mb-2">Complete your profile</h3>
-            <p className="text-gray-400 mb-6">Tell us about your college, skills, and goals to get personalised insights.</p>
-            <button
-              onClick={() => router.push("/onboarding")}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-medium transition"
-            >
-              Get Started →
-            </button>
-          </div>
-        )}
-
-        {/* Skills summary — shown when profile exists */}
+        {/* Skills chips */}
         {!profileLoading && profile && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Your Skills</h3>
-              <button
-                onClick={() => router.push("/onboarding")}
-                className="text-sm text-blue-400 hover:text-blue-300 transition"
-              >
-                Update profile →
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 10,
+              padding: "20px 24px",
+              marginBottom: 32,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-sans)" }}>Your Skills</h3>
+              <button onClick={() => router.push("/onboarding")} className="focus-ring" style={{ fontSize: 12, color: "var(--accent-blue)", background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "4px 0", borderRadius: 4 }}>
+                Update profile
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(Array.isArray(profile?.skills) ? profile.skills : []).map(skill => (
-                <span key={skill} className="bg-gray-800 text-gray-300 text-xs px-3 py-1 rounded-full">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {(Array.isArray(profile?.skills) ? profile.skills : []).map((skill) => (
+                <span
+                  key={skill}
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-secondary)",
+                    padding: "4px 10px",
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: 6,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
                   {skill}
                 </span>
               ))}
@@ -823,51 +775,160 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* View Full Roadmap CTA */}
+        {/* 90-day roadmap CTA */}
         {!profileLoading && profile && (
-          <div className="mt-6 bg-[#111] border border-gray-800 rounded-2xl p-6 flex items-center justify-between">
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 10,
+              padding: "20px 24px",
+              marginBottom: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
-              <h3 className="font-semibold mb-1">Your 90-Day Prep Roadmap</h3>
-              <p className="text-gray-400 text-sm">
-                Personalised daily plan to get placed at your target companies.
-              </p>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-sans)", marginBottom: 4 }}>Your 90-Day Prep Roadmap</h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: "var(--font-sans)" }}>Personalised daily plan to get placed at your target companies.</p>
             </div>
             <button
               onClick={() => router.push("/roadmap")}
-              className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+              className="focus-ring"
+              style={{ background: "var(--accent-blue)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", flexShrink: 0, fontFamily: "var(--font-sans)", transition: `filter var(--duration-fast) var(--ease-out)` }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.1)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.filter = ""; }}
             >
-              View Roadmap →
+              View Roadmap
             </button>
           </div>
         )}
 
-        {/* ── Feature Overview ──────────────────────────────────────────── */}
-        <div className="mt-16 mb-4">
-          <h2 className="text-2xl font-bold mb-1">Explore PlaceIQ</h2>
-          <p className="text-gray-400 mb-10">Everything you need for placements in one place.</p>
+        {/* ── FEATURE CARDS ─────────────────────────────────────────── */}
+        <div>
+          <p
+            style={{
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--text-tertiary)",
+              fontFamily: "var(--font-sans)",
+              marginBottom: 20,
+            }}
+          >
+            Explore PlaceIQ
+          </p>
 
-          <div className="space-y-10">
-            {FEATURE_GROUPS.map(group => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+            {FEATURE_GROUPS.map((group, gi) => (
               <div key={group.label}>
-                <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-4">
+                <p
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--text-tertiary)",
+                    fontFamily: "var(--font-sans)",
+                    marginBottom: 12,
+                    fontWeight: 500,
+                  }}
+                >
                   {group.label}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {group.features.map(({ path, name, Icon, description }) => (
-                    <div
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {group.features.map(({ path, name, Icon, description }, fi) => (
+                    <a
                       key={path}
-                      onClick={() => router.push(path)}
-                      className="bg-[#111] border border-gray-800 rounded-xl p-5 hover:border-blue-500/50 hover:bg-[#161616] transition-all cursor-pointer flex flex-col"
+                      href={path}
+                      onClick={(e) => { e.preventDefault(); router.push(path); }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-default)",
+                        borderRadius: 10,
+                        padding: 20,
+                        cursor: "pointer",
+                        textDecoration: "none",
+                        opacity: cardEntered ? 1 : 0,
+                        transform: cardEntered ? "translateY(0)" : "translateY(8px)",
+                        transition: cardEntered
+                          ? `border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), opacity 400ms var(--ease-out) ${(gi * 3 + fi) * 40 + 200}ms, transform 400ms var(--ease-out) ${(gi * 3 + fi) * 40 + 200}ms`
+                          : `opacity 400ms var(--ease-out) ${(gi * 3 + fi) * 40 + 200}ms, transform 400ms var(--ease-out) ${(gi * 3 + fi) * 40 + 200}ms`,
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget;
+                        el.style.borderColor = "var(--border-strong)";
+                        el.style.background = "var(--bg-elevated)";
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget;
+                        el.style.borderColor = "var(--border-default)";
+                        el.style.background = "var(--bg-surface)";
+                      }}
                     >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                          <Icon size={15} />
-                        </div>
-                        <h4 className="font-semibold text-white text-sm leading-snug">{name}</h4>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          background: "var(--accent-blue-muted)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: 12,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon size={16} color="var(--accent-blue)" />
                       </div>
-                      <p className="text-xs text-gray-400 leading-relaxed flex-1">{description}</p>
-                      <p className="text-xs text-blue-400 font-medium mt-3">Open →</p>
-                    </div>
+                      <h4
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: "var(--text-primary)",
+                          marginBottom: 4,
+                          fontFamily: "var(--font-sans)",
+                          letterSpacing: "-0.01em",
+                        }}
+                      >
+                        {name}
+                      </h4>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "var(--text-secondary)",
+                          lineHeight: 1.5,
+                          fontFamily: "var(--font-sans)",
+                          flex: 1,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {description}
+                      </p>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "var(--accent-blue)",
+                          marginTop: 12,
+                          fontFamily: "var(--font-sans)",
+                        }}
+                      >
+                        Open →
+                      </span>
+                    </a>
                   ))}
                 </div>
               </div>

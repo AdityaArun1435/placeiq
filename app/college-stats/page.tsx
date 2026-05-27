@@ -1,5 +1,5 @@
-"use client";
-import { useEffect, useMemo, useState } from "react";
+﻿"use client";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -164,35 +164,35 @@ export default function CollegeStatsPage() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
 
         <div className="mb-8">
           <h2 className="text-3xl font-bold">College Stats</h2>
-          <p className="text-gray-400 mt-1">Browse placement data across {colleges.length} colleges</p>
+          <p className="text-muted mt-1">Browse placement data across {colleges.length} colleges</p>
         </div>
 
         {/* College Selector */}
-        <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+        <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
           <div className="flex flex-wrap gap-4 items-end">
             <div className="flex-1 min-w-[200px]">
-              <label className="text-xs text-gray-500 uppercase tracking-widest mb-2 block">Select College</label>
+              <label className="text-xs text-faint uppercase tracking-widest mb-2 block">Select College</label>
               {loadingColleges ? (
-                <div className="h-10 bg-gray-800 rounded-lg animate-pulse" />
+                <div className="h-10 bg-elevated rounded-lg animate-pulse" />
               ) : (
                 <select
                   value={selectedA}
                   onChange={e => { setSelectedA(e.target.value); setExpandedRow(null); setCompanySearch(""); setCategoryFilter("All"); }}
-                  className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                 >
                   <option value="">-- Select a college --</option>
                   {tier1Colleges.length > 0 && (
-                    <optgroup label="🏆 Tier 1 — IITs, NITs, BITS">
+                    <optgroup label="Tier 1 — IITs, NITs, BITS">
                       {tier1Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
                   {tier2Colleges.length > 0 && (
-                    <optgroup label="⭐ Tier 2 — Private & State Colleges">
+                    <optgroup label="Tier 2 — Private & State Colleges">
                       {tier2Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
@@ -200,7 +200,7 @@ export default function CollegeStatsPage() {
               )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-sm text-muted cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={compareMode}
@@ -212,20 +212,20 @@ export default function CollegeStatsPage() {
 
             {compareMode && (
               <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-gray-500 uppercase tracking-widest mb-2 block">Compare College</label>
+                <label className="text-xs text-faint uppercase tracking-widest mb-2 block">Compare College</label>
                 <select
                   value={selectedB}
                   onChange={e => setSelectedB(e.target.value)}
-                  className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                 >
                   <option value="">-- Select second college --</option>
                   {tier1Colleges.length > 0 && (
-                    <optgroup label="🏆 Tier 1 — IITs, NITs, BITS">
+                    <optgroup label="Tier 1 — IITs, NITs, BITS">
                       {tier1Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
                   {tier2Colleges.length > 0 && (
-                    <optgroup label="⭐ Tier 2 — Private & State Colleges">
+                    <optgroup label="Tier 2 — Private & State Colleges">
                       {tier2Colleges.map(c => <option key={c.college_name} value={c.college_name}>{c.college_name}</option>)}
                     </optgroup>
                   )}
@@ -238,7 +238,7 @@ export default function CollegeStatsPage() {
         {loadingStats && (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-6 animate-pulse h-40" />
+              <div key={i} className="bg-surface border border-theme rounded-2xl p-6 animate-pulse h-40" />
             ))}
           </div>
         )}
@@ -255,11 +255,11 @@ export default function CollegeStatsPage() {
                     {[
                       { label: "Highest CTC", value: latestStat.highest_ctc != null ? `${latestStat.highest_ctc} LPA` : "—", color: "text-yellow-400" },
                       { label: "Avg CTC", value: latestStat.avg_ctc != null ? `${latestStat.avg_ctc} LPA` : "—", color: "text-blue-400" },
-                      { label: "Total Companies", value: latestStat.total_companies?.toString() ?? "—", color: "text-white" },
+                      { label: "Total Companies", value: latestStat.total_companies?.toString() ?? "—", color: "text-main" },
                       { label: "Total Offers", value: latestStat.total_offers?.toString() ?? "—", color: "text-blue-400" },
                     ].map(card => (
-                      <div key={card.label} className="bg-[#111] border border-blue-500/20 rounded-2xl px-4 py-3">
-                        <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                      <div key={card.label} className="bg-surface border border-blue-500/20 rounded-2xl px-4 py-3">
+                        <p className="text-xs text-faint mb-1">{card.label}</p>
                         <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
                       </div>
                     ))}
@@ -268,7 +268,7 @@ export default function CollegeStatsPage() {
 
                 {/* VS badge */}
                 <div className="flex items-center justify-center self-center pt-6 shrink-0">
-                  <span className="text-xs font-bold text-gray-400 bg-gray-800 border border-gray-700 rounded-full px-3 py-1.5">VS</span>
+                  <span className="text-xs font-bold text-muted bg-elevated border border-theme rounded-full px-3 py-1.5">VS</span>
                 </div>
 
                 {/* College B */}
@@ -278,11 +278,11 @@ export default function CollegeStatsPage() {
                     {[
                       { label: "Highest CTC", value: latestStatB.highest_ctc != null ? `${latestStatB.highest_ctc} LPA` : "—", color: "text-yellow-400" },
                       { label: "Avg CTC", value: latestStatB.avg_ctc != null ? `${latestStatB.avg_ctc} LPA` : "—", color: "text-purple-400" },
-                      { label: "Total Companies", value: latestStatB.total_companies?.toString() ?? "—", color: "text-white" },
+                      { label: "Total Companies", value: latestStatB.total_companies?.toString() ?? "—", color: "text-main" },
                       { label: "Total Offers", value: latestStatB.total_offers?.toString() ?? "—", color: "text-purple-400" },
                     ].map(card => (
-                      <div key={card.label} className="bg-[#111] border border-purple-500/20 rounded-2xl px-4 py-3">
-                        <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                      <div key={card.label} className="bg-surface border border-purple-500/20 rounded-2xl px-4 py-3">
+                        <p className="text-xs text-faint mb-1">{card.label}</p>
                         <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
                       </div>
                     ))}
@@ -294,11 +294,11 @@ export default function CollegeStatsPage() {
                 {[
                   { label: "Highest CTC", value: latestStat.highest_ctc != null ? `${latestStat.highest_ctc} LPA` : "—", color: "text-yellow-400" },
                   { label: "Avg CTC", value: latestStat.avg_ctc != null ? `${latestStat.avg_ctc} LPA` : "—", color: "text-blue-400" },
-                  { label: "Total Companies", value: latestStat.total_companies?.toString() ?? "—", color: "text-white" },
+                  { label: "Total Companies", value: latestStat.total_companies?.toString() ?? "—", color: "text-main" },
                   { label: "Total Offers (latest)", value: latestStat.total_offers?.toString() ?? "—", color: "text-purple-400" },
                 ].map(card => (
-                  <div key={card.label} className="bg-[#111] border border-gray-800 rounded-2xl px-5 py-4">
-                    <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                  <div key={card.label} className="bg-surface border border-theme rounded-2xl px-5 py-4">
+                    <p className="text-xs text-faint mb-1">{card.label}</p>
                     <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
                   </div>
                 ))}
@@ -306,7 +306,7 @@ export default function CollegeStatsPage() {
             ) : null}
 
             {/* Trend Charts */}
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
+            <div className="bg-surface border border-theme rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-4">
                 {compareMode && selectedB ? `${selectedA} vs ${selectedB} — Avg CTC Trend` : "Avg CTC Trend"}
               </h3>
@@ -316,7 +316,7 @@ export default function CollegeStatsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                     <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 11 }} />
                     <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} />
+                    <Tooltip contentStyle={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", borderRadius: 8 }} labelStyle={{ color: "var(--text-primary)" }} />
                     <Legend wrapperStyle={{ fontSize: 12, color: "#9ca3af" }} />
                     <Line type="monotone" dataKey="a" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} name={selectedA} connectNulls />
                     <Line type="monotone" dataKey="b" stroke="#a855f7" strokeWidth={2} dot={{ fill: "#a855f7", r: 4 }} name={selectedB} connectNulls />
@@ -328,7 +328,7 @@ export default function CollegeStatsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                     <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 11 }} />
                     <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#111", border: "1px solid #374151", borderRadius: 8 }} labelStyle={{ color: "#fff" }} itemStyle={{ color: "#60a5fa" }} />
+                    <Tooltip contentStyle={{ background: "var(--bg-elevated)", border: "1px solid var(--border-default)", borderRadius: 8 }} labelStyle={{ color: "var(--text-primary)" }} itemStyle={{ color: "#60a5fa" }} />
                     <Line type="monotone" dataKey="avg_ctc" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} name="Avg CTC" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -336,16 +336,16 @@ export default function CollegeStatsPage() {
             </div>
 
             {/* Company Table */}
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
+            <div className="bg-surface border border-theme rounded-2xl p-6">
               <h3 className="text-base font-semibold mb-1">Company Visits — {selectedA}</h3>
-              <p className="text-gray-500 text-sm mb-4">{recordsA.length} records</p>
+              <p className="text-faint text-sm mb-4">{recordsA.length} records</p>
 
               <div className="flex gap-3 flex-wrap mb-4">
                 <input
                   value={companySearch}
                   onChange={e => setCompanySearch(e.target.value)}
                   placeholder="Search company..."
-                  className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition w-52"
+                  className="bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition w-52"
                 />
                 <div className="flex gap-2 flex-wrap">
                   {categories.map(cat => (
@@ -355,7 +355,7 @@ export default function CollegeStatsPage() {
                       className={`text-xs px-3 py-1.5 rounded-full border transition ${
                         categoryFilter === cat
                           ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
-                          : "border-gray-700 text-gray-500 hover:text-gray-300"
+                          : "border-theme text-faint hover:text-muted"
                       }`}
                     >
                       {cat}
@@ -375,7 +375,7 @@ export default function CollegeStatsPage() {
                     <col style={{ width: "10%" }} />
                   </colgroup>
                   <thead>
-                    <tr className="border-b border-gray-800 text-[11px] text-gray-500 uppercase tracking-widest">
+                    <tr className="border-b border-theme text-[11px] text-faint uppercase tracking-widest">
                       <th className="text-left py-2 pr-4">Company</th>
                       <th className="text-left py-2 pr-4">Role</th>
                       <th className="text-left py-2 pr-4">Category</th>
@@ -386,16 +386,15 @@ export default function CollegeStatsPage() {
                   </thead>
                   <tbody>
                     {filteredRecords.length === 0 ? (
-                      <tr><td colSpan={6} className="py-8 text-center text-gray-600">No records match your filter</td></tr>
+                      <tr><td colSpan={6} className="py-8 text-center text-faint">No records match your filter</td></tr>
                     ) : filteredRecords.map((r, i) => (
-                      <>
+                      <Fragment key={r.id}>
                         <tr
-                          key={r.id}
                           onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                          className="border-b border-gray-800/50 hover:bg-white/[0.02] cursor-pointer transition"
+                          className="border-b border-theme/50 hover:bg-white/[0.02] cursor-pointer transition"
                         >
-                          <td className="py-3 pr-4 font-medium text-white overflow-hidden truncate" title={r.company_name || ""}>{r.company_name || "—"}</td>
-                          <td className="py-3 pr-4 text-gray-400 overflow-hidden truncate" title={r.role_profile || ""}>{r.role_profile || "—"}</td>
+                          <td className="py-3 pr-4 font-medium text-main overflow-hidden truncate" title={r.company_name || ""}>{r.company_name || "—"}</td>
+                          <td className="py-3 pr-4 text-muted overflow-hidden truncate" title={r.role_profile || ""}>{r.role_profile || "—"}</td>
                           <td className="py-3 pr-4 overflow-hidden">
                             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 inline-block truncate max-w-full" title={r.category_tier || ""}>
                               {r.category_tier || "—"}
@@ -404,26 +403,26 @@ export default function CollegeStatsPage() {
                           <td className="py-3 pr-4 text-green-400 font-medium overflow-hidden truncate">
                             {r.ctc_min != null && r.ctc_max != null ? `${r.ctc_min}–${r.ctc_max} LPA` : r.ctc_min != null ? `${r.ctc_min}+ LPA` : "—"}
                           </td>
-                          <td className="py-3 pr-4 text-gray-300">{r.avg_headcount ?? "—"}</td>
-                          <td className="py-3 text-gray-400 overflow-hidden truncate" title={r.visit_month || ""}>{r.visit_month || "—"}</td>
+                          <td className="py-3 pr-4 text-muted">{r.avg_headcount ?? "—"}</td>
+                          <td className="py-3 text-muted overflow-hidden truncate" title={r.visit_month || ""}>{r.visit_month || "—"}</td>
                         </tr>
                         {expandedRow === i && (
-                          <tr key={`exp-${r.id}`} className="border-b border-gray-800">
-                            <td colSpan={6} className="py-3 px-2 bg-gray-900/40">
+                          <tr className="border-b border-theme">
+                            <td colSpan={6} className="py-3 px-2 bg-primary-bg">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                 <div>
-                                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Hiring Rounds</p>
-                                  <p className="text-gray-300">{r.hiring_rounds || "—"}</p>
+                                  <p className="text-xs text-faint uppercase tracking-widest mb-1">Hiring Rounds</p>
+                                  <p className="text-muted">{r.hiring_rounds || "—"}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Key Topics Tested</p>
-                                  <p className="text-gray-300">{r.key_topics || "—"}</p>
+                                  <p className="text-xs text-faint uppercase tracking-widest mb-1">Key Topics Tested</p>
+                                  <p className="text-muted">{r.key_topics || "—"}</p>
                                 </div>
                               </div>
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -433,9 +432,9 @@ export default function CollegeStatsPage() {
         )}
 
         {!loadingStats && !selectedA && !loadingColleges && (
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-            <p className="text-gray-400 text-lg font-medium mb-2">Select a college to get started</p>
-            <p className="text-gray-600 text-sm">{colleges.length} colleges available in our placement database</p>
+          <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+            <p className="text-muted text-lg font-medium mb-2">Select a college to get started</p>
+            <p className="text-faint text-sm">{colleges.length} colleges available in our placement database</p>
           </div>
         )}
       </div>

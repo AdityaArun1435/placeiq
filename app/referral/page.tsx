@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { GraduationCap, Search, Check } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -206,28 +207,28 @@ export default function Referral() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
         {/* Banner */}
         <div className="bg-blue-600/10 border border-blue-500/20 rounded-2xl px-6 py-4 mb-8 flex items-center gap-3">
-          <span className="text-xl">🎓</span>
+          <GraduationCap size={20} className="text-blue-300" />
           <p className="text-sm text-blue-300">
             <span className="font-semibold">Alumni Network</span>{" — "}
-            <span className="text-white font-medium">{stats.total}</span> professionals from{" "}
-            <span className="text-white font-medium">{stats.college_count}</span> colleges have joined. Be part of it.
+            <span className="text-main font-medium">{stats.total}</span> professionals from{" "}
+            <span className="text-main font-medium">{stats.college_count}</span> colleges have joined. Be part of it.
           </p>
         </div>
 
         <h2 className="text-3xl font-bold mb-2">Referral Radar</h2>
-        <p className="text-gray-400 mb-8">Connect with alumni from your college working at top companies</p>
+        <p className="text-muted mb-8">Connect with alumni from your college working at top companies</p>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-[#111] border border-gray-800 rounded-xl p-1 w-fit mb-8">
+        <div className="flex gap-1 bg-surface border border-theme rounded-xl p-1 w-fit mb-8">
           {(["find", "submit"] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition ${tab === t ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition ${tab === t ? "bg-blue-600 text-main" : "text-muted hover:text-main"}`}
             >
               {t === "find" ? "Find Alumni" : "Submit Your Info"}
             </button>
@@ -237,45 +238,45 @@ export default function Referral() {
         {/* ── Find Alumni Tab ── */}
         {tab === "find" && (
           <div>
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 mb-6">
+            <div className="bg-surface border border-theme rounded-2xl p-6 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">College</label>
+                  <label className="text-xs text-muted mb-1.5 block">College</label>
                   <select
                     value={collegeFilter}
                     onChange={e => setCollegeFilter(e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                   >
                     <option value="">All Colleges</option>
                     {COLLEGES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Branch</label>
+                  <label className="text-xs text-muted mb-1.5 block">Branch</label>
                   <select
                     value={branchFilter}
                     onChange={e => setBranchFilter(e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                   >
                     <option value="">All Branches</option>
                     {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Company</label>
+                  <label className="text-xs text-muted mb-1.5 block">Company</label>
                   <input
                     value={companyFilter}
                     onChange={e => setCompanyFilter(e.target.value)}
                     placeholder="e.g. Google, Razorpay..."
                     onKeyDown={e => e.key === "Enter" && fetchAlumni()}
-                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
                 <div className="flex items-end">
                   <button
                     onClick={fetchAlumni}
                     disabled={listLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-2.5 rounded-xl font-medium transition text-sm"
+                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-main py-2.5 rounded-xl font-medium transition text-sm"
                   >
                     {listLoading ? "Searching..." : "Search Alumni"}
                   </button>
@@ -288,16 +289,16 @@ export default function Referral() {
             )}
 
             {hasSearched && !listLoading && (
-              <p className="text-gray-500 text-sm mb-4">
+              <p className="text-faint text-sm mb-4">
                 {alumni.length > 0 ? `${alumni.length} alumni found` : "No alumni found for these filters"}
               </p>
             )}
 
             {hasSearched && alumni.length === 0 && !listLoading && (
-              <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-                <p className="text-4xl mb-4">🎓</p>
-                <p className="text-gray-400 text-sm mb-1">No alumni found for these filters</p>
-                <p className="text-gray-600 text-xs mb-4">Be the first to submit from your college!</p>
+              <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+                <GraduationCap size={40} className="mx-auto mb-4 text-faint" />
+                <p className="text-muted text-sm mb-1">No alumni found for these filters</p>
+                <p className="text-faint text-xs mb-4">Be the first to submit from your college!</p>
                 <button
                   onClick={() => setTab("submit")}
                   className="text-blue-400 hover:text-blue-300 text-sm transition"
@@ -308,21 +309,21 @@ export default function Referral() {
             )}
 
             {!hasSearched && (
-              <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
-                <p className="text-4xl mb-4">🔍</p>
-                <p className="text-gray-400 text-sm">Use the filters above to find alumni from your college</p>
-                <p className="text-gray-600 text-xs mt-2">Filter by college, branch, or company to narrow results</p>
+              <div className="bg-surface border border-theme rounded-2xl p-12 text-center">
+                <Search size={40} className="mx-auto mb-4 text-faint" />
+                <p className="text-muted text-sm">Use the filters above to find alumni from your college</p>
+                <p className="text-faint text-xs mt-2">Filter by college, branch, or company to narrow results</p>
               </div>
             )}
 
             {alumni.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {alumni.map(a => (
-                  <div key={a.id} className="bg-[#111] border border-gray-800 rounded-2xl p-5 flex flex-col gap-3 hover:border-gray-700 transition">
+                  <div key={a.id} className="bg-surface border border-theme rounded-2xl p-5 flex flex-col gap-3 hover:border-theme transition">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-white">{a.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{a.college} · {a.graduation_year}</p>
+                        <p className="font-semibold text-main">{a.name}</p>
+                        <p className="text-xs text-faint mt-0.5">{a.college} · {a.graduation_year}</p>
                       </div>
                       {a.open_to_referrals && (
                         <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
@@ -333,8 +334,8 @@ export default function Referral() {
 
                     <div>
                       <p className="text-sm text-blue-400 font-medium">{a.role}</p>
-                      <p className="text-sm text-gray-300">{a.company}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{a.branch}</p>
+                      <p className="text-sm text-muted">{a.company}</p>
+                      <p className="text-xs text-faint mt-0.5">{a.branch}</p>
                     </div>
 
                     <div className="flex gap-2 mt-auto pt-1">
@@ -350,13 +351,13 @@ export default function Referral() {
                         onClick={() => generateMessage(a)}
                         title={!profile ? "Complete your profile to generate a message" : ""}
                         disabled={!profile}
-                        className="flex-1 text-xs px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 rounded-lg transition"
+                        className="flex-1 text-xs px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-muted rounded-lg transition"
                       >
                         Generate Message
                       </button>
                     </div>
                     {!profile && (
-                      <p className="text-xs text-gray-600 text-center -mt-1">
+                      <p className="text-xs text-faint text-center -mt-1">
                         <button onClick={() => router.push("/onboarding")} className="text-blue-500 hover:text-blue-400 transition">
                           Complete profile
                         </button>{" "}to generate a personalised message
@@ -375,10 +376,10 @@ export default function Referral() {
             {submitSuccess ? (
               <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-10 text-center">
                 <div className="w-14 h-14 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">✓</span>
+                  <Check size={24} className="text-green-400" />
                 </div>
-                <p className="text-white font-semibold text-lg mb-3">You&apos;re in the network!</p>
-                <p className="text-gray-400 text-sm leading-relaxed max-w-sm mx-auto">
+                <p className="text-main font-semibold text-lg mb-3">You&apos;re in the network!</p>
+                <p className="text-muted text-sm leading-relaxed max-w-sm mx-auto">
                   Thanks! You&apos;ve been added to the PlaceIQ alumni network. Your profile helps future students from your college.
                 </p>
                 <button
@@ -389,29 +390,29 @@ export default function Referral() {
                 </button>
               </div>
             ) : (
-              <div className="bg-[#111] border border-gray-800 rounded-2xl p-8">
-                <h3 className="font-semibold text-white mb-1">Add yourself to the network</h3>
-                <p className="text-xs text-gray-500 mb-6">
+              <div className="bg-surface border border-theme rounded-2xl p-8">
+                <h3 className="font-semibold text-main mb-1">Add yourself to the network</h3>
+                <p className="text-xs text-faint mb-6">
                   Your LinkedIn profile will be visible to students from your college only.
                 </p>
 
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Full Name *</label>
+                      <label className="text-xs text-muted mb-1.5 block">Full Name *</label>
                       <input
                         value={submitForm.name}
                         onChange={e => setSubmitForm(f => ({ ...f, name: e.target.value }))}
                         placeholder="Your name"
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Graduation Year *</label>
+                      <label className="text-xs text-muted mb-1.5 block">Graduation Year *</label>
                       <select
                         value={submitForm.graduation_year}
                         onChange={e => setSubmitForm(f => ({ ...f, graduation_year: e.target.value }))}
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                       >
                         {GRAD_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
@@ -420,22 +421,22 @@ export default function Referral() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">College *</label>
+                      <label className="text-xs text-muted mb-1.5 block">College *</label>
                       <select
                         value={submitForm.college}
                         onChange={e => setSubmitForm(f => ({ ...f, college: e.target.value }))}
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                       >
                         <option value="">Select college</option>
                         {COLLEGES.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Branch *</label>
+                      <label className="text-xs text-muted mb-1.5 block">Branch *</label>
                       <select
                         value={submitForm.branch}
                         onChange={e => setSubmitForm(f => ({ ...f, branch: e.target.value }))}
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main focus:outline-none focus:border-blue-500 transition"
                       >
                         <option value="">Select branch</option>
                         {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
@@ -445,39 +446,39 @@ export default function Referral() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Current Company *</label>
+                      <label className="text-xs text-muted mb-1.5 block">Current Company *</label>
                       <input
                         value={submitForm.company}
                         onChange={e => setSubmitForm(f => ({ ...f, company: e.target.value }))}
                         placeholder="e.g. Google, Razorpay"
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Current Role *</label>
+                      <label className="text-xs text-muted mb-1.5 block">Current Role *</label>
                       <input
                         value={submitForm.role}
                         onChange={e => setSubmitForm(f => ({ ...f, role: e.target.value }))}
                         placeholder="e.g. SDE-1, Data Engineer"
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                        className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-400 mb-1.5 block">LinkedIn URL *</label>
+                    <label className="text-xs text-muted mb-1.5 block">LinkedIn URL *</label>
                     <input
                       value={submitForm.linkedin_url}
                       onChange={e => setSubmitForm(f => ({ ...f, linkedin_url: e.target.value }))}
                       placeholder="https://linkedin.com/in/your-profile"
-                      className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                      className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between bg-[#0a0a0a] border border-gray-700 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between bg-primary-bg border border-theme rounded-lg px-4 py-3">
                     <div>
-                      <p className="text-sm text-white font-medium">Open to Referrals</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Students can reach out to you for referrals</p>
+                      <p className="text-sm text-main font-medium">Open to Referrals</p>
+                      <p className="text-xs text-faint mt-0.5">Students can reach out to you for referrals</p>
                     </div>
                     <button
                       type="button"
@@ -496,7 +497,7 @@ export default function Referral() {
                 <button
                   onClick={submitAlumni}
                   disabled={submitLoading}
-                  className="w-full mt-6 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white py-3 rounded-xl font-medium transition text-sm"
+                  className="w-full mt-6 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-main py-3 rounded-xl font-medium transition text-sm"
                 >
                   {submitLoading ? "Submitting..." : "Join Alumni Network →"}
                 </button>
@@ -513,33 +514,33 @@ export default function Referral() {
           onClick={() => setPopup(null)}
         >
           <div
-            className="bg-[#111] border border-gray-700 rounded-2xl p-6 max-w-md w-full"
+            className="bg-surface border border-theme rounded-2xl p-6 max-w-md w-full"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-white text-sm">LinkedIn Connection Message</h3>
+              <h3 className="font-semibold text-main text-sm">LinkedIn Connection Message</h3>
               <button
                 onClick={() => setPopup(null)}
-                className="text-gray-500 hover:text-white text-xl leading-none w-6 h-6 flex items-center justify-center"
+                className="text-faint hover:text-main text-xl leading-none w-6 h-6 flex items-center justify-center"
               >
                 ×
               </button>
             </div>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-faint mb-4">
               To connect with{" "}
-              <span className="text-gray-300">{popup.alumni.name}</span> at{" "}
-              <span className="text-gray-300">{popup.alumni.company}</span>
+              <span className="text-muted">{popup.alumni.name}</span> at{" "}
+              <span className="text-muted">{popup.alumni.company}</span>
             </p>
 
             {popup.loading ? (
               <div className="flex flex-col items-center justify-center py-10 gap-3">
                 <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-500 text-xs">Crafting your message...</p>
+                <p className="text-faint text-xs">Crafting your message...</p>
               </div>
             ) : (
               <>
-                <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 mb-4 min-h-16">
-                  <p className="text-sm text-gray-300 leading-relaxed">{popup.message}</p>
+                <div className="bg-primary-bg border border-theme rounded-xl p-4 mb-4 min-h-16">
+                  <p className="text-sm text-muted leading-relaxed">{popup.message}</p>
                 </div>
                 <div className="flex gap-3">
                   <button
@@ -547,7 +548,7 @@ export default function Referral() {
                     className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition ${
                       popup.copied
                         ? "bg-green-600/20 text-green-400 border border-green-500/30"
-                        : "bg-blue-600 hover:bg-blue-500 text-white"
+                        : "bg-blue-600 hover:bg-blue-500 text-main"
                     }`}
                   >
                     {popup.copied ? "Copied!" : "Copy Message"}
@@ -556,7 +557,7 @@ export default function Referral() {
                     href={popup.alumni.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 text-center transition"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-800 hover:bg-gray-700 text-muted text-center transition"
                   >
                     Open LinkedIn →
                   </a>

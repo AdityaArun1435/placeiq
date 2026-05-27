@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
+import { Star, Check, Flame, Code2 } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -131,7 +132,7 @@ function getCfRankColor(rank: string): string {
   if (r.includes("expert")) return "text-blue-400";
   if (r.includes("specialist")) return "text-cyan-400";
   if (r.includes("pupil")) return "text-green-400";
-  return "text-gray-400";
+  return "text-muted";
 }
 
 function getCfRatingColor(rating: number): string {
@@ -141,7 +142,7 @@ function getCfRatingColor(rating: number): string {
   if (rating >= 1600) return "text-blue-400";
   if (rating >= 1400) return "text-cyan-400";
   if (rating >= 1200) return "text-green-400";
-  return "text-gray-400";
+  return "text-muted";
 }
 
 function getMotivation(total: number): string {
@@ -161,7 +162,7 @@ function StarDisplay({ stars, total = 7 }: { stars: number; total?: number }) {
   return (
     <div className="flex gap-0.5">
       {Array.from({ length: total }, (_, i) => (
-        <span key={i} className={`text-base ${i < stars ? "text-yellow-400" : "text-gray-700"}`}>★</span>
+        <Star key={i} size={14} className={i < stars ? "text-yellow-400 fill-yellow-400" : "text-faint"} />
       ))}
     </div>
   );
@@ -171,7 +172,7 @@ function StarDisplay({ stars, total = 7 }: { stars: number; total?: number }) {
 
 function LeetCodeDonut({ easy, medium, hard }: { easy: number; medium: number; hard: number }) {
   const total = easy + medium + hard;
-  if (total === 0) return <div className="w-[140px] h-[140px] flex items-center justify-center text-gray-600 text-xs">No data</div>;
+  if (total === 0) return <div className="w-[140px] h-[140px] flex items-center justify-center text-faint text-xs">No data</div>;
   const data = [
     { name: "Easy", value: easy, color: "#22c55e" },
     { name: "Medium", value: medium, color: "#eab308" },
@@ -188,7 +189,7 @@ function LeetCodeDonut({ easy, medium, hard }: { easy: number; medium: number; h
         />
       </PieChart>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-white font-bold text-lg">{total}</span>
+        <span className="text-main font-bold text-lg">{total}</span>
       </div>
     </div>
   );
@@ -337,21 +338,21 @@ export default function ProgressTracker() {
   if (status === "loading") return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-4xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-1">Progress Tracker</h2>
-        <p className="text-gray-400 mb-8">Track your learning and coding platform achievements.</p>
+        <p className="text-muted mb-8">Track your learning and coding platform achievements.</p>
 
         {/* ── Connect Coding Profiles ─────────────────────────────────────── */}
-        <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 mb-8">
+        <div className="bg-surface border border-theme rounded-2xl p-6 mb-8">
           <h3 className="font-semibold mb-1">Connect Coding Profiles</h3>
-          <p className="text-gray-500 text-sm mb-5">Link your profiles to see combined stats and progress.</p>
+          <p className="text-faint text-sm mb-5">Link your profiles to see combined stats and progress.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* LeetCode */}
             <div>
-              <label className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest mb-2">
-                <span className="text-yellow-400">⬡</span> LeetCode
-                {savedFlags.leetcode && <span className="text-green-400 ml-auto">✓</span>}
+              <label className="flex items-center gap-2 text-xs text-faint uppercase tracking-widest mb-2">
+                <Code2 size={13} className="text-yellow-400" /> LeetCode
+                {savedFlags.leetcode && <Check size={13} className="text-green-400 ml-auto" />}
               </label>
               <div className="flex gap-2">
                 <input
@@ -360,7 +361,7 @@ export default function ProgressTracker() {
                   value={editProfiles.leetcode}
                   onChange={e => setEditProfiles(p => ({ ...p, leetcode: e.target.value }))}
                   onKeyDown={e => e.key === "Enter" && connectPlatform("leetcode")}
-                  className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-yellow-500/50 transition"
+                  className="flex-1 bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 outline-none focus:border-yellow-500/50 transition"
                 />
                 <button
                   onClick={() => connectPlatform("leetcode")}
@@ -373,9 +374,9 @@ export default function ProgressTracker() {
 
             {/* CodeChef */}
             <div>
-              <label className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest mb-2">
-                <span className="text-orange-400">♨</span> CodeChef
-                {savedFlags.codechef && <span className="text-green-400 ml-auto">✓</span>}
+              <label className="flex items-center gap-2 text-xs text-faint uppercase tracking-widest mb-2">
+                <Flame size={13} className="text-orange-400" /> CodeChef
+                {savedFlags.codechef && <Check size={13} className="text-green-400 ml-auto" />}
               </label>
               <div className="flex gap-2">
                 <input
@@ -384,7 +385,7 @@ export default function ProgressTracker() {
                   value={editProfiles.codechef}
                   onChange={e => setEditProfiles(p => ({ ...p, codechef: e.target.value }))}
                   onKeyDown={e => e.key === "Enter" && connectPlatform("codechef")}
-                  className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-orange-500/50 transition"
+                  className="flex-1 bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 outline-none focus:border-orange-500/50 transition"
                 />
                 <button
                   onClick={() => connectPlatform("codechef")}
@@ -397,9 +398,9 @@ export default function ProgressTracker() {
 
             {/* Codeforces */}
             <div>
-              <label className="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-widest mb-2">
-                <span className="text-blue-400">◈</span> Codeforces
-                {savedFlags.codeforces && <span className="text-green-400 ml-auto">✓</span>}
+              <label className="flex items-center gap-2 text-xs text-faint uppercase tracking-widest mb-2">
+                <Code2 size={13} className="text-blue-400" /> Codeforces
+                {savedFlags.codeforces && <Check size={13} className="text-green-400 ml-auto" />}
               </label>
               <div className="flex gap-2">
                 <input
@@ -408,7 +409,7 @@ export default function ProgressTracker() {
                   value={editProfiles.codeforces}
                   onChange={e => setEditProfiles(p => ({ ...p, codeforces: e.target.value }))}
                   onKeyDown={e => e.key === "Enter" && connectPlatform("codeforces")}
-                  className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/50 transition"
+                  className="flex-1 bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 outline-none focus:border-blue-500/50 transition"
                 />
                 <button
                   onClick={() => connectPlatform("codeforces")}
@@ -425,8 +426,8 @@ export default function ProgressTracker() {
         {anyProfileConnected && (
           <>
             {loadingStats && (
-              <div className="bg-[#111] border border-gray-800 rounded-2xl p-8 text-center mb-8">
-                <p className="text-gray-400 text-sm">Fetching your stats...</p>
+              <div className="bg-surface border border-theme rounded-2xl p-8 text-center mb-8">
+                <p className="text-muted text-sm">Fetching your stats...</p>
               </div>
             )}
             {statsError && (
@@ -438,12 +439,12 @@ export default function ProgressTracker() {
             {hasAnyStats && !loadingStats && (
               <>
                 {/* Summary bar */}
-                <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
+                <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Total Problems Solved</p>
-                      <p className="text-3xl font-bold text-white">{totalSolved.toLocaleString()}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">LeetCode + CodeChef</p>
+                      <p className="text-xs text-faint uppercase tracking-widest mb-1">Total Problems Solved</p>
+                      <p className="text-3xl font-bold text-main">{totalSolved.toLocaleString()}</p>
+                      <p className="text-xs text-faint mt-0.5">LeetCode + CodeChef</p>
                     </div>
                     <div className="text-right">
                       <p className={`text-lg font-semibold ${
@@ -462,7 +463,7 @@ export default function ProgressTracker() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                   {/* LeetCode card */}
                   {lcStats && (
-                    <div className="bg-[#111] border border-yellow-500/20 rounded-2xl p-5">
+                    <div className="bg-surface border border-yellow-500/20 rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-4">
                         <span className="text-yellow-400 text-lg">⬡</span>
                         <span className="font-semibold text-yellow-400">LeetCode</span>
@@ -476,22 +477,22 @@ export default function ProgressTracker() {
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-green-400">Easy</span>
-                            <span className="text-xs text-white font-medium">{lcStats.easy_solved}</span>
+                            <span className="text-xs text-main font-medium">{lcStats.easy_solved}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-yellow-400">Medium</span>
-                            <span className="text-xs text-white font-medium">{lcStats.medium_solved}</span>
+                            <span className="text-xs text-main font-medium">{lcStats.medium_solved}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-red-400">Hard</span>
-                            <span className="text-xs text-white font-medium">{lcStats.hard_solved}</span>
+                            <span className="text-xs text-main font-medium">{lcStats.hard_solved}</span>
                           </div>
                         </div>
                       </div>
                       {lcStats.ranking > 0 && (
-                        <div className="border-t border-gray-800 pt-3">
-                          <p className="text-xs text-gray-500 mb-0.5">Global Ranking</p>
-                          <p className="text-white font-semibold">#{lcStats.ranking.toLocaleString()}</p>
+                        <div className="border-t border-theme pt-3">
+                          <p className="text-xs text-faint mb-0.5">Global Ranking</p>
+                          <p className="text-main font-semibold">#{lcStats.ranking.toLocaleString()}</p>
                         </div>
                       )}
                       <a
@@ -507,31 +508,31 @@ export default function ProgressTracker() {
 
                   {/* CodeChef card */}
                   {ccStats && (
-                    <div className="bg-[#111] border border-orange-500/20 rounded-2xl p-5">
+                    <div className="bg-surface border border-orange-500/20 rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-4">
-                        <span className="text-orange-400 text-lg">♨</span>
+                        <Flame size={18} className="text-orange-400" />
                         <span className="font-semibold text-orange-400">CodeChef</span>
                       </div>
                       <div className="mb-4">
-                        <p className="text-3xl font-bold text-white">{ccStats.rating || "—"}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 mb-2">Current Rating</p>
+                        <p className="text-3xl font-bold text-main">{ccStats.rating || "—"}</p>
+                        <p className="text-xs text-faint mt-0.5 mb-2">Current Rating</p>
                         <StarDisplay stars={ccStats.stars} />
                       </div>
-                      <div className="space-y-2 border-t border-gray-800 pt-3">
+                      <div className="space-y-2 border-t border-theme pt-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">Highest Rating</span>
-                          <span className="text-xs text-white font-medium">{ccStats.highest_rating || "—"}</span>
+                          <span className="text-xs text-faint">Highest Rating</span>
+                          <span className="text-xs text-main font-medium">{ccStats.highest_rating || "—"}</span>
                         </div>
                         {ccStats.problems_solved > 0 && (
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">Problems Solved</span>
-                            <span className="text-xs text-white font-medium">{ccStats.problems_solved}</span>
+                            <span className="text-xs text-faint">Problems Solved</span>
+                            <span className="text-xs text-main font-medium">{ccStats.problems_solved}</span>
                           </div>
                         )}
                         {ccStats.global_rank > 0 && (
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">Global Rank</span>
-                            <span className="text-xs text-white font-medium">#{ccStats.global_rank.toLocaleString()}</span>
+                            <span className="text-xs text-faint">Global Rank</span>
+                            <span className="text-xs text-main font-medium">#{ccStats.global_rank.toLocaleString()}</span>
                           </div>
                         )}
                       </div>
@@ -548,7 +549,7 @@ export default function ProgressTracker() {
 
                   {/* Codeforces card */}
                   {cfStats && (
-                    <div className="bg-[#111] border border-blue-500/20 rounded-2xl p-5">
+                    <div className="bg-surface border border-blue-500/20 rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-4">
                         <span className="text-blue-400 text-lg">◈</span>
                         <span className="font-semibold text-blue-400">Codeforces</span>
@@ -557,23 +558,23 @@ export default function ProgressTracker() {
                         <p className={`text-3xl font-bold ${getCfRatingColor(cfStats.rating)}`}>
                           {cfStats.rating || "Unrated"}
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5 mb-1">Current Rating</p>
+                        <p className="text-xs text-faint mt-0.5 mb-1">Current Rating</p>
                         {cfStats.rank && (
                           <p className={`text-sm font-medium capitalize ${getCfRankColor(cfStats.rank)}`}>
                             {cfStats.rank}
                           </p>
                         )}
                       </div>
-                      <div className="space-y-2 border-t border-gray-800 pt-3">
+                      <div className="space-y-2 border-t border-theme pt-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">Max Rating</span>
+                          <span className="text-xs text-faint">Max Rating</span>
                           <span className={`text-xs font-medium ${getCfRatingColor(cfStats.max_rating)}`}>
                             {cfStats.max_rating || "—"}
                           </span>
                         </div>
                         {cfStats.max_rank && cfStats.max_rank !== cfStats.rank && (
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">Best Rank</span>
+                            <span className="text-xs text-faint">Best Rank</span>
                             <span className={`text-xs font-medium capitalize ${getCfRankColor(cfStats.max_rank)}`}>
                               {cfStats.max_rank}
                             </span>
@@ -581,7 +582,7 @@ export default function ProgressTracker() {
                         )}
                         {cfStats.contribution !== 0 && (
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">Contribution</span>
+                            <span className="text-xs text-faint">Contribution</span>
                             <span className={`text-xs font-medium ${cfStats.contribution > 0 ? "text-green-400" : "text-red-400"}`}>
                               {cfStats.contribution > 0 ? "+" : ""}{cfStats.contribution}
                             </span>
@@ -601,20 +602,20 @@ export default function ProgressTracker() {
 
                   {/* Error states */}
                   {codingStats?.leetcode && hasError(codingStats.leetcode) && profiles.leetcode && (
-                    <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
-                      <p className="text-yellow-400 text-sm font-medium mb-1">⬡ LeetCode</p>
+                    <div className="bg-surface border border-theme rounded-2xl p-5">
+                      <p className="text-yellow-400 text-sm font-medium mb-1 flex items-center gap-1"><Code2 size={13} /> LeetCode</p>
                       <p className="text-red-400 text-xs">{codingStats.leetcode.error}</p>
                     </div>
                   )}
                   {codingStats?.codechef && hasError(codingStats.codechef) && profiles.codechef && (
-                    <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
-                      <p className="text-orange-400 text-sm font-medium mb-1">♨ CodeChef</p>
+                    <div className="bg-surface border border-theme rounded-2xl p-5">
+                      <p className="text-orange-400 text-sm font-medium mb-1 flex items-center gap-1"><Flame size={13} /> CodeChef</p>
                       <p className="text-red-400 text-xs">{codingStats.codechef.error}</p>
                     </div>
                   )}
                   {codingStats?.codeforces && hasError(codingStats.codeforces) && profiles.codeforces && (
-                    <div className="bg-[#111] border border-gray-800 rounded-2xl p-5">
-                      <p className="text-blue-400 text-sm font-medium mb-1">◈ Codeforces</p>
+                    <div className="bg-surface border border-theme rounded-2xl p-5">
+                      <p className="text-blue-400 text-sm font-medium mb-1 flex items-center gap-1"><Code2 size={13} /> Codeforces</p>
                       <p className="text-red-400 text-xs">{codingStats.codeforces.error}</p>
                     </div>
                   )}
@@ -634,11 +635,11 @@ export default function ProgressTracker() {
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addSkill(input)}
             placeholder="Type a skill to learn, e.g. React, SQL, System Design..."
-            className="flex-1 bg-[#111] border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+            className="flex-1 bg-surface border border-theme rounded-xl px-4 py-3 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
           />
           <button
             onClick={() => addSkill(input)}
-            className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition"
+            className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-main text-sm font-medium rounded-xl transition"
           >
             Add
           </button>
@@ -646,11 +647,11 @@ export default function ProgressTracker() {
 
         {/* Summary stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="md:col-span-2 bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <p className="text-gray-400 text-sm mb-1">Progress</p>
+          <div className="md:col-span-2 bg-surface border border-theme rounded-2xl p-6">
+            <p className="text-muted text-sm mb-1">Progress</p>
             <p className="text-2xl font-bold mb-4">
               {completedCount}{" "}
-              <span className="text-gray-500 text-base font-normal">of {total} skills completed</span>
+              <span className="text-faint text-base font-normal">of {total} skills completed</span>
             </p>
             <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
               <div
@@ -658,12 +659,12 @@ export default function ProgressTracker() {
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-2">{pct}% complete</p>
+            <p className="text-xs text-faint mt-2">{pct}% complete</p>
           </div>
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
-            <p className="text-gray-400 text-sm mb-1">Daily Streak</p>
+          <div className="bg-surface border border-theme rounded-2xl p-6">
+            <p className="text-muted text-sm mb-1">Daily Streak</p>
             <p className="text-4xl font-bold text-orange-400">{data.streak.count}</p>
-            <p className="text-xs text-gray-500 mt-1">days in a row</p>
+            <p className="text-xs text-faint mt-1">days in a row</p>
           </div>
         </div>
 
@@ -673,7 +674,7 @@ export default function ProgressTracker() {
             <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider mb-1">
               Suggested Skills to Learn
             </p>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-faint mb-3">
               From your skill gap analysis — click to add instantly
             </p>
             <div className="flex flex-wrap gap-2">
@@ -693,14 +694,14 @@ export default function ProgressTracker() {
         {/* Active skills */}
         {active.length > 0 && (
           <section className="mb-8">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 className="text-sm font-semibold text-faint uppercase tracking-wider mb-3">
               In Progress ({active.length})
             </h3>
             <div className="space-y-3">
               {active.map(skill => (
                 <div
                   key={skill.id}
-                  className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 flex items-center gap-4"
+                  className="bg-surface border border-theme rounded-xl px-5 py-4 flex items-center gap-4"
                 >
                   <input
                     type="checkbox"
@@ -709,12 +710,12 @@ export default function ProgressTracker() {
                     className="w-4 h-4 rounded border-gray-600 bg-gray-800 cursor-pointer accent-blue-500 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white font-medium">{skill.name}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Added {formatDate(skill.addedAt)}</p>
+                    <p className="text-sm text-main font-medium">{skill.name}</p>
+                    <p className="text-xs text-faint mt-0.5">Added {formatDate(skill.addedAt)}</p>
                   </div>
                   <button
                     onClick={() => deleteSkill(skill.id)}
-                    className="text-gray-700 hover:text-red-400 text-xs transition shrink-0"
+                    className="text-faint hover:text-red-400 text-xs transition shrink-0"
                   >
                     Delete
                   </button>
@@ -727,14 +728,14 @@ export default function ProgressTracker() {
         {/* Completed skills */}
         {completed.length > 0 && (
           <section className="mb-8">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 className="text-sm font-semibold text-faint uppercase tracking-wider mb-3">
               Completed ({completedCount})
             </h3>
             <div className="space-y-3">
               {completed.map(skill => (
                 <div
                   key={skill.id}
-                  className="bg-[#111] border border-gray-800 rounded-xl px-5 py-4 flex items-center gap-4 opacity-60"
+                  className="bg-surface border border-theme rounded-xl px-5 py-4 flex items-center gap-4 opacity-60"
                 >
                   <input
                     type="checkbox"
@@ -743,14 +744,14 @@ export default function ProgressTracker() {
                     className="w-4 h-4 rounded border-gray-600 cursor-pointer accent-blue-500 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-400 font-medium line-through">{skill.name}</p>
+                    <p className="text-sm text-muted font-medium line-through">{skill.name}</p>
                     {skill.completedAt && (
-                      <p className="text-xs text-gray-600 mt-0.5">Completed {formatDate(skill.completedAt)}</p>
+                      <p className="text-xs text-faint mt-0.5">Completed {formatDate(skill.completedAt)}</p>
                     )}
                   </div>
                   <button
                     onClick={() => deleteSkill(skill.id)}
-                    className="text-gray-700 hover:text-red-400 text-xs transition shrink-0"
+                    className="text-faint hover:text-red-400 text-xs transition shrink-0"
                   >
                     Delete
                   </button>
@@ -762,7 +763,7 @@ export default function ProgressTracker() {
 
         {/* Empty state */}
         {data.skills.length === 0 && (
-          <div className="text-center py-16 text-gray-500">
+          <div className="text-center py-16 text-faint">
             <p className="text-lg mb-2">No skills yet.</p>
             <p className="text-sm">Type a skill above and press Add to start tracking.</p>
           </div>

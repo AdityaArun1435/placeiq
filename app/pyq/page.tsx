@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Check, X, AlertTriangle } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -549,37 +550,37 @@ export default function PYQPage() {
   // ── Results screen ─────────────────────────────────────────────────────────
   if (mode === "results") {
     return (
-      <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <main className="min-h-screen bg-primary-bg text-main">
         <div className="max-w-2xl mx-auto px-8 py-16 text-center">
           <div className="mb-6">
-            <p className="text-gray-500 text-sm mb-2 uppercase tracking-widest">{quizCompany} Quiz</p>
+            <p className="text-faint text-sm mb-2 uppercase tracking-widest">{quizCompany} Quiz</p>
             <h2 className="text-3xl font-bold mb-1">Quiz Complete!</h2>
           </div>
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-10 mb-6">
+          <div className="bg-surface border border-theme rounded-2xl p-10 mb-6">
             <p className="text-7xl font-bold text-blue-400 mb-2">{scorePercentage}%</p>
-            <p className="text-gray-400 text-lg mb-1">{correctCount} out of {totalQuestions} correct</p>
+            <p className="text-muted text-lg mb-1">{correctCount} out of {totalQuestions} correct</p>
             {quizTimed && quizStartTime && quizEndTime && (
-              <p className="text-gray-600 text-sm">Time taken: {formatSeconds(timeTaken)}</p>
+              <p className="text-faint text-sm">Time taken: {formatSeconds(timeTaken)}</p>
             )}
           </div>
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-5">
               <p className="text-3xl font-bold text-green-400">{correctCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Correct</p>
+              <p className="text-sm text-faint mt-1">Correct</p>
             </div>
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5">
               <p className="text-3xl font-bold text-red-400">{wrongCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Wrong</p>
+              <p className="text-sm text-faint mt-1">Wrong</p>
             </div>
-            <div className="bg-gray-700/20 border border-gray-700/30 rounded-xl p-5">
-              <p className="text-3xl font-bold text-gray-400">{skippedCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Skipped</p>
+            <div className="bg-gray-700/20 border border-theme/30 rounded-xl p-5">
+              <p className="text-3xl font-bold text-muted">{skippedCount}</p>
+              <p className="text-sm text-faint mt-1">Skipped</p>
             </div>
           </div>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => setMode("review")} className="px-6 py-3 bg-[#111] border border-gray-700 text-white rounded-xl text-sm font-medium hover:border-gray-500 transition">See Answers</button>
-            <button onClick={retakeQuiz} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Retake Quiz</button>
-            <button onClick={() => setMode("browse")} className="px-6 py-3 bg-[#111] border border-gray-700 text-white rounded-xl text-sm font-medium hover:border-gray-500 transition">Back to Browse</button>
+            <button onClick={() => setMode("review")} className="px-6 py-3 bg-surface border border-theme text-main rounded-xl text-sm font-medium hover:border-gray-500 transition">See Answers</button>
+            <button onClick={retakeQuiz} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Retake Quiz</button>
+            <button onClick={() => setMode("browse")} className="px-6 py-3 bg-surface border border-theme text-main rounded-xl text-sm font-medium hover:border-gray-500 transition">Back to Browse</button>
           </div>
         </div>
       </main>
@@ -589,10 +590,10 @@ export default function PYQPage() {
   // ── Review screen ──────────────────────────────────────────────────────────
   if (mode === "review") {
     return (
-      <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <main className="min-h-screen bg-primary-bg text-main">
         <div className="max-w-2xl mx-auto px-8 py-10">
           <div className="flex items-center gap-4 mb-8">
-            <button onClick={() => setMode("results")} className="text-gray-500 hover:text-gray-300 text-sm transition">← Back to Results</button>
+            <button onClick={() => setMode("results")} className="text-faint hover:text-muted text-sm transition">← Back to Results</button>
             <h2 className="text-2xl font-bold">Answer Review — {quizCompany}</h2>
           </div>
           <div className="space-y-6">
@@ -600,30 +601,30 @@ export default function PYQPage() {
               const ans = answers[i];
               const st = ans?.status ?? "skipped";
               return (
-                <div key={q.id} className="bg-[#111] border border-gray-800 rounded-xl p-6">
+                <div key={q.id} className="bg-surface border border-theme rounded-xl p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-gray-500 text-sm font-mono">Q{i + 1}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st === "correct" ? "bg-green-500/20 text-green-400" : st === "skipped" ? "bg-gray-600/20 text-gray-400" : "bg-red-500/20 text-red-400"}`}>
-                      {st === "correct" ? "✓ Correct" : st === "skipped" ? "— Skipped" : "✗ Wrong"}
+                    <span className="text-faint text-sm font-mono">Q{i + 1}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st === "correct" ? "bg-green-500/20 text-green-400" : st === "skipped" ? "bg-gray-600/20 text-muted" : "bg-red-500/20 text-red-400"}`}>
+                      {st === "correct" ? <><Check size={10} className="inline mr-0.5" />Correct</> : st === "skipped" ? "— Skipped" : <><X size={10} className="inline mr-0.5" />Wrong</>}
                     </span>
-                    <span className="text-xs text-gray-600 ml-auto">{q.topic}</span>
+                    <span className="text-xs text-faint ml-auto">{q.topic}</span>
                   </div>
-                  <p className="text-white font-medium mb-4 leading-relaxed">{q.question}</p>
+                  <p className="text-main font-medium mb-4 leading-relaxed">{q.question}</p>
                   <div className="space-y-2 mb-4">
                     {q.options.map((opt, idx) => {
                       const isCorrect = idx === q.correct_index;
                       const wasSelected = ans?.selected === idx;
                       return (
-                        <div key={idx} className={`rounded-xl p-3 text-sm border ${isCorrect ? "border-green-500 bg-green-500/10 text-green-300" : wasSelected && !isCorrect ? "border-red-500 bg-red-500/10 text-red-300" : "border-gray-800 text-gray-400"}`}>
+                        <div key={idx} className={`rounded-xl p-3 text-sm border ${isCorrect ? "border-green-500 bg-green-500/10 text-green-300" : wasSelected && !isCorrect ? "border-red-500 bg-red-500/10 text-red-300" : "border-theme text-muted"}`}>
                           <span className="font-mono mr-2">{OPTION_LABELS[idx]}.</span>{opt}
-                          {isCorrect && <span className="ml-2 text-green-500">✓</span>}
+                          {isCorrect && <Check size={12} className="inline ml-2 text-green-500" />}
                         </div>
                       );
                     })}
                   </div>
                   <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
                     <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Explanation</p>
-                    <p className="text-gray-300 text-sm leading-relaxed">{q.explanation}</p>
+                    <p className="text-muted text-sm leading-relaxed">{q.explanation}</p>
                   </div>
                 </div>
               );
@@ -640,35 +641,35 @@ export default function PYQPage() {
     const progress = (currentIndex / totalQuestions) * 100;
     const isLastQuestion = currentIndex === totalQuestions - 1;
     return (
-      <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <main className="min-h-screen bg-primary-bg text-main">
         <div className="max-w-2xl mx-auto px-8 py-10">
-          <div className="w-full bg-gray-800 rounded-full h-1.5 mb-8 overflow-hidden">
+          <div className="w-full rounded-full h-1.5 mb-8 overflow-hidden" style={{ background: "var(--border-default)" }}>
             <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
           <div className="flex items-center justify-between mb-8">
             <div>
-              <p className="text-gray-500 text-sm">Question <span className="text-white font-semibold">{currentIndex + 1}</span> of {totalQuestions}</p>
-              <p className="text-xs text-gray-600 mt-0.5">{quizCompany} · {currentQ.topic}</p>
+              <p className="text-faint text-sm">Question <span className="text-main font-semibold">{currentIndex + 1}</span> of {totalQuestions}</p>
+              <p className="text-xs text-faint mt-0.5">{quizCompany} · {currentQ.topic}</p>
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs px-2 py-0.5 rounded border font-medium ${difficultyBadge(currentQ.difficulty)}`}>{currentQ.difficulty}</span>
-              {quizTimed && <span className={`text-lg font-mono font-bold tabular-nums ${timeLeft <= 10 ? "text-red-400" : "text-gray-400"}`}>{timeLeft}s</span>}
+              {quizTimed && <span className={`text-lg font-mono font-bold tabular-nums ${timeLeft <= 10 ? "text-red-400" : "text-muted"}`}>{timeLeft}s</span>}
             </div>
           </div>
-          <h2 className="text-xl font-semibold leading-relaxed mb-8 text-white">{currentQ.question}</h2>
+          <h2 className="text-xl font-semibold leading-relaxed mb-8 text-main">{currentQ.question}</h2>
           <div className="space-y-3 mb-6">
             {currentQ.options.map((opt, idx) => {
               const isCorrect = idx === currentQ.correct_index;
               const wasSelected = selectedAnswer === idx;
-              let cls = "bg-[#111] border border-gray-800 text-gray-200 hover:border-blue-500 cursor-pointer";
+              let cls = "bg-surface border border-theme text-muted hover:border-blue-500 cursor-pointer";
               if (showAnswer) {
                 if (isCorrect) cls = "border-green-500 bg-green-500/10 text-green-300 cursor-default";
                 else if (wasSelected) cls = "border-red-500 bg-red-500/10 text-red-300 cursor-default";
-                else cls = "border-gray-800 bg-[#111] text-gray-500 cursor-default opacity-60";
+                else cls = "border-theme bg-surface text-faint cursor-default opacity-60";
               }
               return (
                 <button key={idx} onClick={() => handleAnswer(idx)} disabled={showAnswer} className={`w-full rounded-xl p-4 text-left transition text-sm ${cls}`}>
-                  <span className={`font-mono mr-3 ${showAnswer && isCorrect ? "text-green-400" : "text-gray-500"}`}>{OPTION_LABELS[idx]}.</span>
+                  <span className={`font-mono mr-3 ${showAnswer && isCorrect ? "text-green-400" : "text-faint"}`}>{OPTION_LABELS[idx]}.</span>
                   {opt}
                 </button>
               );
@@ -677,13 +678,13 @@ export default function PYQPage() {
           {showAnswer && (
             <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-6">
               <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Explanation</p>
-              <p className="text-gray-300 text-sm leading-relaxed">{currentQ.explanation}</p>
+              <p className="text-muted text-sm leading-relaxed">{currentQ.explanation}</p>
             </div>
           )}
           <div className="flex items-center gap-4">
-            {!showAnswer && <button onClick={handleSkip} className="text-gray-500 hover:text-gray-300 text-sm transition">Skip →</button>}
+            {!showAnswer && <button onClick={handleSkip} className="text-faint hover:text-muted text-sm transition">Skip →</button>}
             {showAnswer && (
-              <button onClick={nextQuestion} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">
+              <button onClick={nextQuestion} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">
                 {isLastQuestion ? "See Results →" : "Next Question →"}
               </button>
             )}
@@ -709,17 +710,17 @@ export default function PYQPage() {
       const aptColor = r1Correct >= 7 ? "text-green-400" : r1Correct >= 5 ? "text-yellow-400" : "text-red-400";
       const techColor = r3Correct >= 6 ? "text-green-400" : r3Correct >= 4 ? "text-yellow-400" : "text-red-400";
       return (
-        <main className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4">
+        <main className="min-h-screen bg-primary-bg text-main flex items-center justify-center p-4">
           <div className="max-w-xl w-full">
             <h2 className="text-2xl font-bold text-center mb-1">Interview Complete</h2>
-            <p className="text-center text-gray-500 mb-6 text-sm">{simCompany} · {new Date().toLocaleDateString("en-IN")}</p>
-            <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 space-y-3 mb-6">
-              <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Aptitude (Round 1)</span><span className={`font-bold ${aptColor}`}>{r1Correct}/{APT_QUESTIONS.length}</span></div>
-              <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Coding (Round 2)</span><span className="font-bold text-blue-400">{r2SelfScores.map((s, i) => `Q${i+1}: ${s ?? "–"}/5`).join(", ")}</span></div>
-              <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Technical (Round 3)</span><span className={`font-bold ${techColor}`}>{r3Correct}/{r3Total}</span></div>
-              <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">HR (Round 4)</span><span className="font-bold text-green-400">Completed ✓</span></div>
-              <div className="border-t border-gray-800 pt-3 flex justify-between items-center">
-                <span className="text-gray-300 font-medium">Overall Readiness</span>
+            <p className="text-center text-faint mb-6 text-sm">{simCompany} · {new Date().toLocaleDateString("en-IN")}</p>
+            <div className="bg-surface border border-theme rounded-2xl p-6 space-y-3 mb-6">
+              <div className="flex justify-between items-center"><span className="text-muted text-sm">Aptitude (Round 1)</span><span className={`font-bold ${aptColor}`}>{r1Correct}/{APT_QUESTIONS.length}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted text-sm">Coding (Round 2)</span><span className="font-bold text-blue-400">{r2SelfScores.map((s, i) => `Q${i+1}: ${s ?? "–"}/5`).join(", ")}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted text-sm">Technical (Round 3)</span><span className={`font-bold ${techColor}`}>{r3Correct}/{r3Total}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted text-sm">HR (Round 4)</span><span className="font-bold text-green-400 flex items-center gap-1">Completed <Check size={12} /></span></div>
+              <div className="border-t border-theme pt-3 flex justify-between items-center">
+                <span className="text-muted font-medium">Overall Readiness</span>
                 <span className={`text-xl font-bold ${readiness >= 70 ? "text-green-400" : readiness >= 50 ? "text-yellow-400" : "text-red-400"}`}>{readiness}%</span>
               </div>
             </div>
@@ -730,8 +731,8 @@ export default function PYQPage() {
               </div>
             )}
             <div className="flex gap-3 justify-center">
-              <button onClick={() => startSimulation(simCompany)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Retry this company</button>
-              <button onClick={() => setSimPhase("idle")} className="px-5 py-2.5 bg-[#111] border border-gray-700 text-white rounded-xl text-sm font-medium hover:border-gray-500 transition">Try another company</button>
+              <button onClick={() => startSimulation(simCompany)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Retry this company</button>
+              <button onClick={() => setSimPhase("idle")} className="px-5 py-2.5 bg-surface border border-theme text-main rounded-xl text-sm font-medium hover:border-gray-500 transition">Try another company</button>
             </div>
           </div>
         </main>
@@ -742,7 +743,7 @@ export default function PYQPage() {
     if (simPhase === "r1_result") {
       const wrong = APT_QUESTIONS.map((q, i) => r1Answers[i] !== q.correct_index ? q : null).filter(Boolean) as SimAptQ[];
       return (
-        <main className="min-h-screen bg-[#0a0a0a] text-white">
+        <main className="min-h-screen bg-primary-bg text-main">
           <div className="max-w-2xl mx-auto px-6 py-10">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold mb-1">Round 1 Complete — Aptitude</h2>
@@ -753,18 +754,18 @@ export default function PYQPage() {
             </div>
             {wrong.length > 0 && (
               <div className="space-y-3 mb-8">
-                <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Questions you got wrong:</p>
+                <p className="text-xs text-faint uppercase tracking-widest mb-3">Questions you got wrong:</p>
                 {wrong.map((q, i) => (
-                  <div key={q.id} className="bg-[#111] border border-red-800/30 rounded-xl p-4">
-                    <p className="text-sm text-white mb-2 font-medium">{q.question}</p>
+                  <div key={q.id} className="bg-surface border border-red-800/30 rounded-xl p-4">
+                    <p className="text-sm text-main mb-2 font-medium">{q.question}</p>
                     <p className="text-xs text-green-400 mb-1">Correct: {q.options[q.correct_index]}</p>
-                    <p className="text-xs text-gray-500">{q.explanation}</p>
+                    <p className="text-xs text-faint">{q.explanation}</p>
                   </div>
                 ))}
               </div>
             )}
             <div className="flex gap-3 justify-center">
-              <button onClick={() => { setSimTimeLeft(30 * 60); setSimPhase("r2"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Continue to Round 2: Coding →</button>
+              <button onClick={() => { setSimTimeLeft(30 * 60); setSimPhase("r2"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Continue to Round 2: Coding →</button>
             </div>
           </div>
         </main>
@@ -773,11 +774,11 @@ export default function PYQPage() {
 
     if (simPhase === "r2_result") {
       return (
-        <main className="min-h-screen bg-[#0a0a0a] text-white">
+        <main className="min-h-screen bg-primary-bg text-main">
           <div className="max-w-2xl mx-auto px-6 py-10 text-center">
             <h2 className="text-2xl font-bold mb-1">Round 2 Complete — Coding</h2>
-            <p className="text-gray-400 text-sm mb-6">Self-assessed scores: {r2SelfScores.map((s, i) => `Q${i+1}: ${s ?? "–"}/5`).join(" · ")}</p>
-            <button onClick={() => { setSimTimeLeft(25 * 60); setSimPhase("r3"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Continue to Round 3: Technical →</button>
+            <p className="text-muted text-sm mb-6">Self-assessed scores: {r2SelfScores.map((s, i) => `Q${i+1}: ${s ?? "–"}/5`).join(" · ")}</p>
+            <button onClick={() => { setSimTimeLeft(25 * 60); setSimPhase("r3"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Continue to Round 3: Technical →</button>
           </div>
         </main>
       );
@@ -785,11 +786,11 @@ export default function PYQPage() {
 
     if (simPhase === "r3_result") {
       return (
-        <main className="min-h-screen bg-[#0a0a0a] text-white">
+        <main className="min-h-screen bg-primary-bg text-main">
           <div className="max-w-2xl mx-auto px-6 py-10 text-center">
             <h2 className="text-2xl font-bold mb-1">Round 3 Complete — Technical</h2>
             <p className="text-3xl font-bold text-blue-400 my-3">{r3Correct}/{r3Total}</p>
-            <button onClick={() => { setSimTimeLeft(20 * 60); setSimPhase("r4"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Continue to Round 4: HR →</button>
+            <button onClick={() => { setSimTimeLeft(20 * 60); setSimPhase("r4"); }} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Continue to Round 4: HR →</button>
           </div>
         </main>
       );
@@ -797,11 +798,11 @@ export default function PYQPage() {
 
     if (simPhase === "r4_result") {
       return (
-        <main className="min-h-screen bg-[#0a0a0a] text-white">
+        <main className="min-h-screen bg-primary-bg text-main">
           <div className="max-w-2xl mx-auto px-6 py-10 text-center">
             <h2 className="text-2xl font-bold mb-1">Round 4 Complete — HR</h2>
-            <p className="text-gray-400 text-sm mb-6">Review your answers and the tips provided.</p>
-            <button onClick={finishSimulation} className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">See Final Summary →</button>
+            <p className="text-muted text-sm mb-6">Review your answers and the tips provided.</p>
+            <button onClick={finishSimulation} className="px-6 py-3 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">See Final Summary →</button>
           </div>
         </main>
       );
@@ -816,37 +817,37 @@ export default function PYQPage() {
         const progress = ((r1Index + 1) / APT_QUESTIONS.length) * 100;
         void correct;
         return (
-          <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+          <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
             <div className="max-w-2xl mx-auto px-6 py-10">
               <div className="flex items-center justify-between mb-6">
-                <div><p className="text-xs text-gray-500 uppercase tracking-widest">Round 1 — Aptitude</p><h3 className="text-lg font-bold">{simCompany} Interview</h3></div>
+                <div><p className="text-xs text-faint uppercase tracking-widest">Round 1 — Aptitude</p><h3 className="text-lg font-bold">{simCompany} Interview</h3></div>
                 <span className="text-red-400 font-mono font-bold text-lg">{formatSimTime(simTimeLeft)}</span>
               </div>
-              <div className="w-full bg-gray-800 h-1.5 rounded-full mb-6"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} /></div>
-              <p className="text-xs text-gray-500 mb-1">Q{r1Index + 1}/{APT_QUESTIONS.length} — {q.topic}</p>
-              <p className="text-white font-medium text-base leading-relaxed mb-5">{q.question}</p>
+              <div className="w-full h-1.5 rounded-full mb-6" style={{ background: "var(--border-default)" }}><div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} /></div>
+              <p className="text-xs text-faint mb-1">Q{r1Index + 1}/{APT_QUESTIONS.length} — {q.topic}</p>
+              <p className="text-main font-medium text-base leading-relaxed mb-5">{q.question}</p>
               <div className="space-y-3 mb-6">
                 {q.options.map((opt, idx) => {
                   const isCorrect = idx === q.correct_index;
                   const wasSelected = r1Answers[r1Index] === idx;
                   return (
-                    <div key={idx} className={`rounded-xl p-3.5 text-sm border ${isCorrect ? "border-green-500 bg-green-500/10 text-green-300" : wasSelected ? "border-red-500 bg-red-500/10 text-red-300" : "border-gray-800 text-gray-400"}`}>
-                      <span className="font-mono mr-2 text-gray-500">{OPTION_LABELS[idx]}.</span>{opt}
-                      {isCorrect && <span className="ml-2 text-green-400 text-xs">✓ Correct</span>}
+                    <div key={idx} className={`rounded-xl p-3.5 text-sm border ${isCorrect ? "border-green-500 bg-green-500/10 text-green-300" : wasSelected ? "border-red-500 bg-red-500/10 text-red-300" : "border-theme text-muted"}`}>
+                      <span className="font-mono mr-2 text-faint">{OPTION_LABELS[idx]}.</span>{opt}
+                      {isCorrect && <span className="ml-2 text-green-400 text-xs flex items-center gap-0.5 inline-flex"><Check size={10} /> Correct</span>}
                     </div>
                   );
                 })}
               </div>
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 mb-6">
                 <p className="text-xs text-blue-400 uppercase mb-1">Explanation</p>
-                <p className="text-sm text-gray-300">{q.explanation}</p>
+                <p className="text-sm text-muted">{q.explanation}</p>
               </div>
               <div className="flex gap-3">
-                {r1Index > 0 && <button onClick={() => setR1Index(i => i - 1)} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
+                {r1Index > 0 && <button onClick={() => setR1Index(i => i - 1)} className="px-4 py-2.5 border border-theme text-muted rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
                 {!isLast ? (
-                  <button onClick={() => setR1Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Next →</button>
+                  <button onClick={() => setR1Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Next →</button>
                 ) : (
-                  <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r1_result"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">See Results →</button>
+                  <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r1_result"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">See Results →</button>
                 )}
               </div>
             </div>
@@ -855,29 +856,29 @@ export default function PYQPage() {
       }
       const progress = (r1Index / APT_QUESTIONS.length) * 100;
       return (
-        <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+        <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
           <div className="max-w-2xl mx-auto px-6 py-10">
             <div className="flex items-center justify-between mb-6">
-              <div><p className="text-xs text-gray-500 uppercase tracking-widest">Round 1 — Aptitude (15 min)</p><h3 className="text-lg font-bold">{simCompany} Interview</h3></div>
-              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-gray-400"}`}>{formatSimTime(simTimeLeft)}</span>
+              <div><p className="text-xs text-faint uppercase tracking-widest">Round 1 — Aptitude (15 min)</p><h3 className="text-lg font-bold">{simCompany} Interview</h3></div>
+              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-muted"}`}>{formatSimTime(simTimeLeft)}</span>
             </div>
-            <div className="w-full bg-gray-800 h-1.5 rounded-full mb-6"><div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progress}%` }} /></div>
-            <p className="text-xs text-gray-500 mb-1">Q{r1Index + 1}/{APT_QUESTIONS.length} — {q.topic}</p>
-            <p className="text-white font-medium text-base leading-relaxed mb-5">{q.question}</p>
+            <div className="w-full h-1.5 rounded-full mb-6" style={{ background: "var(--border-default)" }}><div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progress}%` }} /></div>
+            <p className="text-xs text-faint mb-1">Q{r1Index + 1}/{APT_QUESTIONS.length} — {q.topic}</p>
+            <p className="text-main font-medium text-base leading-relaxed mb-5">{q.question}</p>
             <div className="space-y-3 mb-6">
               {q.options.map((opt, idx) => (
                 <button key={idx} onClick={() => setR1Answers(prev => ({ ...prev, [r1Index]: idx }))}
-                  className={`w-full rounded-xl p-3.5 text-sm text-left border transition ${r1Answers[r1Index] === idx ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-gray-800 bg-[#111] text-gray-300 hover:border-blue-500/50"}`}>
-                  <span className="font-mono mr-2 text-gray-500">{OPTION_LABELS[idx]}.</span>{opt}
+                  className={`w-full rounded-xl p-3.5 text-sm text-left border transition ${r1Answers[r1Index] === idx ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-theme bg-surface text-muted hover:border-blue-500/50"}`}>
+                  <span className="font-mono mr-2 text-faint">{OPTION_LABELS[idx]}.</span>{opt}
                 </button>
               ))}
             </div>
             <div className="flex gap-3 items-center">
-              {r1Index > 0 && <button onClick={() => setR1Index(i => i - 1)} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
+              {r1Index > 0 && <button onClick={() => setR1Index(i => i - 1)} className="px-4 py-2.5 border border-theme text-muted rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
               {!isLast ? (
-                <button onClick={() => setR1Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Next →</button>
+                <button onClick={() => setR1Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Next →</button>
               ) : (
-                <button onClick={() => { clearInterval(simTimerRef.current!); setR1Submitted(true); setSimPhase("r1"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">Submit Round 1</button>
+                <button onClick={() => { clearInterval(simTimerRef.current!); setR1Submitted(true); setSimPhase("r1"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">Submit Round 1</button>
               )}
             </div>
           </div>
@@ -891,36 +892,36 @@ export default function PYQPage() {
       const selfScore = r2SelfScores[r2Index];
       const revealed = r2Revealed[r2Index];
       return (
-        <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+        <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
           <div className="max-w-2xl mx-auto px-6 py-10">
             <div className="flex items-center justify-between mb-4">
-              <div><p className="text-xs text-gray-500 uppercase tracking-widest">Round 2 — Coding (30 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
-              <span className={`font-mono font-bold text-lg ${simTimeLeft < 300 ? "text-red-400" : "text-gray-400"}`}>{formatSimTime(simTimeLeft)}</span>
+              <div><p className="text-xs text-faint uppercase tracking-widest">Round 2 — Coding (30 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
+              <span className={`font-mono font-bold text-lg ${simTimeLeft < 300 ? "text-red-400" : "text-muted"}`}>{formatSimTime(simTimeLeft)}</span>
             </div>
-            <div className="bg-[#111] border border-gray-800 rounded-xl p-5 mb-4">
-              <div className="flex items-center gap-2 mb-2"><span className="text-xs text-gray-500">Problem {r2Index + 1}/3</span><span className="font-semibold text-white">{cp.title}</span></div>
-              <p className="text-sm text-gray-300 mb-3 leading-relaxed">{cp.problem}</p>
-              <p className="text-xs text-gray-500 mb-2"><span className="text-gray-400">Constraints:</span> {cp.constraints}</p>
+            <div className="bg-surface border border-theme rounded-xl p-5 mb-4">
+              <div className="flex items-center gap-2 mb-2"><span className="text-xs text-faint">Problem {r2Index + 1}/3</span><span className="font-semibold text-main">{cp.title}</span></div>
+              <p className="text-sm text-muted mb-3 leading-relaxed">{cp.problem}</p>
+              <p className="text-xs text-faint mb-2"><span className="text-muted">Constraints:</span> {cp.constraints}</p>
               <div className="bg-[#0d1117] rounded-lg p-3 text-xs font-mono">
-                <p className="text-gray-500 mb-1">Input: <span className="text-green-400">{cp.example_input}</span></p>
-                <p className="text-gray-500">Output: <span className="text-green-400">{cp.example_output}</span></p>
+                <p className="text-faint mb-1">Input: <span className="text-green-400">{cp.example_input}</span></p>
+                <p className="text-faint">Output: <span className="text-green-400">{cp.example_output}</span></p>
               </div>
             </div>
             {!revealed ? (
               <>
-                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-widest">Your approach / pseudocode</label>
+                <label className="block text-xs text-faint mb-2 uppercase tracking-widest">Your approach / pseudocode</label>
                 <textarea
                   value={r2Approaches[r2Index]}
                   onChange={e => { const a = [...r2Approaches]; a[r2Index] = e.target.value; setR2Approaches(a); }}
-                  className="w-full bg-[#0d1117] text-green-400 font-mono border border-gray-700 rounded-lg p-4 h-40 text-sm resize-none focus:outline-none focus:border-green-500"
+                  className="w-full bg-[#0d1117] text-green-400 font-mono border border-theme rounded-lg p-4 h-40 text-sm resize-none focus:outline-none focus:border-green-500"
                   placeholder="Write your approach or pseudocode here..."
                 />
                 <div className="mt-3 mb-4">
-                  <p className="text-xs text-gray-500 mb-2">Self-assess your approach (1 = very unsure, 5 = confident):</p>
+                  <p className="text-xs text-faint mb-2">Self-assess your approach (1 = very unsure, 5 = confident):</p>
                   <div className="flex gap-2">
                     {[1,2,3,4,5].map(n => (
                       <button key={n} onClick={() => { const s = [...r2SelfScores]; s[r2Index] = n; setR2SelfScores(s); }}
-                        className={`w-10 h-10 rounded-lg border text-sm font-bold transition ${r2SelfScores[r2Index] === n ? "bg-blue-600 border-blue-500 text-white" : "bg-[#111] border-gray-700 text-gray-400 hover:border-gray-500"}`}>
+                        className={`w-10 h-10 rounded-lg border text-sm font-bold transition ${r2SelfScores[r2Index] === n ? "bg-blue-600 border-blue-500 text-main" : "bg-surface border-theme text-muted hover:border-gray-500"}`}>
                         {n}
                       </button>
                     ))}
@@ -929,21 +930,21 @@ export default function PYQPage() {
                 <button onClick={() => { const r = [...r2Revealed]; r[r2Index] = true; setR2Revealed(r); }} className="text-sm text-blue-400 hover:text-blue-300 transition">See model answer →</button>
               </>
             ) : (
-              <div className="bg-[#111] border border-gray-800 rounded-xl p-4 mb-4">
-                <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Model Answer</p>
-                <p className="text-sm text-gray-200 leading-relaxed mb-3">{cp.model_answer}</p>
-                <div className="flex gap-4 text-xs text-gray-500">
+              <div className="bg-surface border border-theme rounded-xl p-4 mb-4">
+                <p className="text-xs text-faint uppercase tracking-widest mb-2">Model Answer</p>
+                <p className="text-sm text-muted leading-relaxed mb-3">{cp.model_answer}</p>
+                <div className="flex gap-4 text-xs text-faint">
                   <span>Time: <span className="text-blue-400">{cp.time_complexity}</span></span>
                   <span>Space: <span className="text-blue-400">{cp.space_complexity}</span></span>
                 </div>
               </div>
             )}
             <div className="flex gap-3 mt-4">
-              {r2Index > 0 && <button onClick={() => setR2Index(i => i - 1)} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
+              {r2Index > 0 && <button onClick={() => setR2Index(i => i - 1)} className="px-4 py-2.5 border border-theme text-muted rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
               {r2Index < CODING_PROBLEMS.length - 1 ? (
-                <button onClick={() => setR2Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Next Problem →</button>
+                <button onClick={() => setR2Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Next Problem →</button>
               ) : (
-                <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r2_result"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">Submit Round 2</button>
+                <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r2_result"); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">Submit Round 2</button>
               )}
             </div>
           </div>
@@ -957,36 +958,36 @@ export default function PYQPage() {
       const isLast = r3Index === TECH_QUESTIONS.length - 1;
       if (r3Submitted) {
         return (
-          <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+          <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
             <div className="max-w-2xl mx-auto px-6 py-10">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold">Round 3 — Technical (Review)</h3>
-                <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r3_result"); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm transition">Submit</button>
+                <button onClick={() => { clearInterval(simTimerRef.current!); setSimPhase("r3_result"); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm transition">Submit</button>
               </div>
               <div className="space-y-4">
                 {TECH_QUESTIONS.map((tq, i) => (
-                  <div key={tq.id} className="bg-[#111] border border-gray-800 rounded-xl p-4">
+                  <div key={tq.id} className="bg-surface border border-theme rounded-xl p-4">
                     <div className="flex gap-2 mb-2 flex-wrap">
-                      <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{tq.topic}</span>
+                      <span className="text-[10px] text-faint bg-elevated px-2 py-0.5 rounded">{tq.topic}</span>
                       <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{tq.type === "mcq" ? "MCQ" : "Short Answer"}</span>
                       {tq.type === "mcq" && (
                         <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${r3Answers[i] === tq.correct_index ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>
-                          {r3Answers[i] === tq.correct_index ? "✓ Correct" : "✗ Wrong"}
+                          {r3Answers[i] === tq.correct_index ? <><Check size={10} className="inline mr-0.5" />Correct</> : <><X size={10} className="inline mr-0.5" />Wrong</>}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-white mb-2">{tq.question}</p>
+                    <p className="text-sm text-main mb-2">{tq.question}</p>
                     {tq.type === "mcq" && tq.options && (
                       <div className="space-y-1 mb-2">
                         {tq.options.map((opt, idx) => (
-                          <div key={idx} className={`text-xs px-3 py-1.5 rounded-lg border ${idx === tq.correct_index ? "border-green-500 bg-green-500/10 text-green-300" : r3Answers[i] === idx ? "border-red-500 bg-red-500/10 text-red-300" : "border-gray-800 text-gray-500"}`}>
+                          <div key={idx} className={`text-xs px-3 py-1.5 rounded-lg border ${idx === tq.correct_index ? "border-green-500 bg-green-500/10 text-green-300" : r3Answers[i] === idx ? "border-red-500 bg-red-500/10 text-red-300" : "border-theme text-faint"}`}>
                             <span className="font-mono mr-1">{OPTION_LABELS[idx]}.</span>{opt}
                           </div>
                         ))}
                       </div>
                     )}
                     {tq.type === "open" && (
-                      <div className="text-xs text-gray-400 bg-[#0a0a0a] rounded p-2 mb-2">{r3Answers[i] as string || "(no answer)"}</div>
+                      <div className="text-xs text-muted bg-primary-bg rounded p-2 mb-2">{r3Answers[i] as string || "(no answer)"}</div>
                     )}
                     <p className="text-xs text-blue-400 leading-relaxed">{tq.explanation}</p>
                   </div>
@@ -997,21 +998,21 @@ export default function PYQPage() {
         );
       }
       return (
-        <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+        <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
           <div className="max-w-2xl mx-auto px-6 py-10">
             <div className="flex items-center justify-between mb-4">
-              <div><p className="text-xs text-gray-500 uppercase tracking-widest">Round 3 — Technical (25 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
-              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-gray-400"}`}>{formatSimTime(simTimeLeft)}</span>
+              <div><p className="text-xs text-faint uppercase tracking-widest">Round 3 — Technical (25 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
+              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-muted"}`}>{formatSimTime(simTimeLeft)}</span>
             </div>
-            <div className="w-full bg-gray-800 h-1.5 rounded-full mb-6"><div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(r3Index / TECH_QUESTIONS.length) * 100}%` }} /></div>
-            <p className="text-xs text-gray-500 mb-1">Q{r3Index + 1}/{TECH_QUESTIONS.length} — {q.topic} ({q.type === "mcq" ? "MCQ" : "Short answer"})</p>
-            <p className="text-white font-medium text-base leading-relaxed mb-5">{q.question}</p>
+            <div className="w-full h-1.5 rounded-full mb-6" style={{ background: "var(--border-default)" }}><div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(r3Index / TECH_QUESTIONS.length) * 100}%` }} /></div>
+            <p className="text-xs text-faint mb-1">Q{r3Index + 1}/{TECH_QUESTIONS.length} — {q.topic} ({q.type === "mcq" ? "MCQ" : "Short answer"})</p>
+            <p className="text-main font-medium text-base leading-relaxed mb-5">{q.question}</p>
             {q.type === "mcq" && q.options ? (
               <div className="space-y-3 mb-6">
                 {q.options.map((opt, idx) => (
                   <button key={idx} onClick={() => setR3Answers(prev => ({ ...prev, [r3Index]: idx }))}
-                    className={`w-full rounded-xl p-3.5 text-sm text-left border transition ${r3Answers[r3Index] === idx ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-gray-800 bg-[#111] text-gray-300 hover:border-blue-500/50"}`}>
-                    <span className="font-mono mr-2 text-gray-500">{OPTION_LABELS[idx]}.</span>{opt}
+                    className={`w-full rounded-xl p-3.5 text-sm text-left border transition ${r3Answers[r3Index] === idx ? "border-blue-500 bg-blue-500/10 text-blue-300" : "border-theme bg-surface text-muted hover:border-blue-500/50"}`}>
+                    <span className="font-mono mr-2 text-faint">{OPTION_LABELS[idx]}.</span>{opt}
                   </button>
                 ))}
               </div>
@@ -1019,16 +1020,16 @@ export default function PYQPage() {
               <textarea
                 value={(r3Answers[r3Index] as string) || ""}
                 onChange={e => setR3Answers(prev => ({ ...prev, [r3Index]: e.target.value }))}
-                className="w-full bg-[#0d1117] text-white border border-gray-700 rounded-lg p-4 h-28 text-sm resize-none focus:outline-none focus:border-blue-500 mb-6"
+                className="w-full bg-[#0d1117] text-main border border-theme rounded-lg p-4 h-28 text-sm resize-none focus:outline-none focus:border-blue-500 mb-6"
                 placeholder="Type your answer..."
               />
             )}
             <div className="flex gap-3">
-              {r3Index > 0 && <button onClick={() => setR3Index(i => i - 1)} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
+              {r3Index > 0 && <button onClick={() => setR3Index(i => i - 1)} className="px-4 py-2.5 border border-theme text-muted rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
               {!isLast ? (
-                <button onClick={() => setR3Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition">Next →</button>
+                <button onClick={() => setR3Index(i => i + 1)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-main rounded-xl text-sm font-medium transition">Next →</button>
               ) : (
-                <button onClick={() => { clearInterval(simTimerRef.current!); setR3Submitted(true); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">Submit Round 3</button>
+                <button onClick={() => { clearInterval(simTimerRef.current!); setR3Submitted(true); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">Submit Round 3</button>
               )}
             </div>
           </div>
@@ -1043,38 +1044,38 @@ export default function PYQPage() {
       const tipsOpen = r4TipsOpen[r4Index];
       if (r4Done) {
         return (
-          <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+          <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
             <div className="max-w-2xl mx-auto px-6 py-10 text-center">
               <h2 className="text-2xl font-bold mb-2">HR Round Complete</h2>
-              <p className="text-gray-400 text-sm mb-6">Review your answers and the tips provided for each question.</p>
+              <p className="text-muted text-sm mb-6">Review your answers and the tips provided for each question.</p>
               <div className="space-y-4 text-left mb-8">
                 {HR_QUESTIONS.map((q, i) => (
-                  <div key={q.id} className="bg-[#111] border border-gray-800 rounded-xl p-4">
-                    <p className="text-sm font-medium text-white mb-2">{q.question}</p>
-                    <p className="text-xs text-gray-400 bg-[#0a0a0a] rounded p-2 mb-2">{r4Answers[i] || "(no answer)"}</p>
+                  <div key={q.id} className="bg-surface border border-theme rounded-xl p-4">
+                    <p className="text-sm font-medium text-main mb-2">{q.question}</p>
+                    <p className="text-xs text-muted bg-primary-bg rounded p-2 mb-2">{r4Answers[i] || "(no answer)"}</p>
                     <p className="text-xs text-blue-400 italic">{q.sample_answer}</p>
                   </div>
                 ))}
               </div>
-              <button onClick={() => setSimPhase("r4_result")} className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">Continue →</button>
+              <button onClick={() => setSimPhase("r4_result")} className="px-6 py-3 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">Continue →</button>
             </div>
           </main>
         );
       }
       return (
-        <main className="fixed inset-0 bg-[#0a0a0a] z-50 overflow-auto text-white">
+        <main className="fixed inset-0 bg-primary-bg z-50 overflow-auto text-main">
           <div className="max-w-2xl mx-auto px-6 py-10">
             <div className="flex items-center justify-between mb-4">
-              <div><p className="text-xs text-gray-500 uppercase tracking-widest">Round 4 — HR (20 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
-              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-gray-400"}`}>{formatSimTime(simTimeLeft)}</span>
+              <div><p className="text-xs text-faint uppercase tracking-widest">Round 4 — HR (20 min)</p><h3 className="text-lg font-bold">{simCompany}</h3></div>
+              <span className={`font-mono font-bold text-lg ${simTimeLeft < 120 ? "text-red-400" : "text-muted"}`}>{formatSimTime(simTimeLeft)}</span>
             </div>
-            <div className="w-full bg-gray-800 h-1.5 rounded-full mb-6"><div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${(r4Index / HR_QUESTIONS.length) * 100}%` }} /></div>
-            <p className="text-xs text-gray-500 mb-2">Question {r4Index + 1}/{HR_QUESTIONS.length}</p>
-            <p className="text-white font-medium text-lg leading-relaxed mb-4">{hrQ.question}</p>
+            <div className="w-full h-1.5 rounded-full mb-6" style={{ background: "var(--border-default)" }}><div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${(r4Index / HR_QUESTIONS.length) * 100}%` }} /></div>
+            <p className="text-xs text-faint mb-2">Question {r4Index + 1}/{HR_QUESTIONS.length}</p>
+            <p className="text-main font-medium text-lg leading-relaxed mb-4">{hrQ.question}</p>
             <textarea
               value={r4Answers[r4Index]}
               onChange={e => { const a = [...r4Answers]; a[r4Index] = e.target.value; setR4Answers(a); }}
-              className="w-full bg-[#0d1117] text-white border border-gray-700 rounded-lg p-4 h-28 text-sm resize-none focus:outline-none focus:border-purple-500 mb-4"
+              className="w-full bg-[#0d1117] text-main border border-theme rounded-lg p-4 h-28 text-sm resize-none focus:outline-none focus:border-purple-500 mb-4"
               placeholder="Type your answer..."
             />
             <button onClick={() => { const t = [...r4TipsOpen]; t[r4Index] = !t[r4Index]; setR4TipsOpen(t); }}
@@ -1085,24 +1086,24 @@ export default function PYQPage() {
               <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 mb-4 space-y-3">
                 <div>
                   <p className="text-xs text-purple-400 font-semibold uppercase mb-1">What interviewers look for</p>
-                  <ul className="space-y-0.5">{hrQ.what_look_for.map((w, i) => <li key={i} className="text-xs text-gray-300">• {w}</li>)}</ul>
+                  <ul className="space-y-0.5">{hrQ.what_look_for.map((w, i) => <li key={i} className="text-xs text-muted">• {w}</li>)}</ul>
                 </div>
                 <div>
                   <p className="text-xs text-red-400 font-semibold uppercase mb-1">Red flags to avoid</p>
-                  <ul className="space-y-0.5">{hrQ.red_flags.map((r, i) => <li key={i} className="text-xs text-gray-400">⚠ {r}</li>)}</ul>
+                  <ul className="space-y-0.5">{hrQ.red_flags.map((r, i) => <li key={i} className="text-xs text-muted flex items-start gap-1"><AlertTriangle size={10} className="mt-0.5 shrink-0 text-amber-400" />{r}</li>)}</ul>
                 </div>
                 <div>
                   <p className="text-xs text-green-400 font-semibold uppercase mb-1">Sample strong answer</p>
-                  <p className="text-xs text-gray-400 italic">{hrQ.sample_answer}</p>
+                  <p className="text-xs text-muted italic">{hrQ.sample_answer}</p>
                 </div>
               </div>
             )}
             <div className="flex gap-3">
-              {r4Index > 0 && <button onClick={() => setR4Index(i => i - 1)} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
+              {r4Index > 0 && <button onClick={() => setR4Index(i => i - 1)} className="px-4 py-2.5 border border-theme text-muted rounded-xl text-sm hover:border-gray-500 transition">← Back</button>}
               {!isLast ? (
-                <button onClick={() => setR4Index(i => i + 1)} className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-medium transition">Next →</button>
+                <button onClick={() => setR4Index(i => i + 1)} className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-main rounded-xl text-sm font-medium transition">Next →</button>
               ) : (
-                <button onClick={() => { clearInterval(simTimerRef.current!); setR4Done(true); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition">Complete HR Round</button>
+                <button onClick={() => { clearInterval(simTimerRef.current!); setR4Done(true); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-main rounded-xl text-sm font-medium transition">Complete HR Round</button>
               )}
             </div>
           </div>
@@ -1115,29 +1116,29 @@ export default function PYQPage() {
   const currentRoundData = sourcedData?.rounds?.[activeRound];
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       {/* Quiz Config Modal */}
       {mode === "quiz_config" && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMode("browse")}>
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface border border-theme rounded-2xl p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold mb-6">Quiz Setup</h3>
             <div className="mb-6">
-              <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2">Company</label>
+              <label className="block text-xs text-faint uppercase tracking-widest mb-2">Company</label>
               <div className="relative">
-                <div className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between" onClick={() => setShowQuizDropdown(v => !v)}>
-                  <span className="text-white">{quizCompany}</span>
-                  <span className="text-gray-500 text-xs">▾</span>
+                <div className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between" onClick={() => setShowQuizDropdown(v => !v)}>
+                  <span className="text-main">{quizCompany}</span>
+                  <span className="text-faint text-xs">▾</span>
                 </div>
                 {showQuizDropdown && (
-                  <div className="absolute z-20 top-full mt-1 w-full bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-xl overflow-hidden">
-                    <div className="p-2 border-b border-gray-800">
+                  <div className="absolute z-20 top-full mt-1 w-full bg-elevated border border-theme rounded-lg shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-theme">
                       <input autoFocus type="text" placeholder="Search..." value={quizCompanySearch} onChange={e => setQuizCompanySearch(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 outline-none" />
+                        className="w-full bg-primary-bg border border-theme rounded px-3 py-1.5 text-sm text-main placeholder-gray-600 outline-none" />
                     </div>
                     <ul className="max-h-48 overflow-y-auto">
                       {filteredQuizCompanies.map(c => (
                         <li key={c} onClick={() => { setQuizCompany(c); setQuizCompanySearch(""); setShowQuizDropdown(false); }}
-                          className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-800 transition ${c === quizCompany ? "text-blue-400" : "text-gray-300"}`}>{c}</li>
+                          className={`px-4 py-2 text-sm cursor-pointer hover:bg-elevated transition ${c === quizCompany ? "text-blue-400" : "text-muted"}`}>{c}</li>
                       ))}
                     </ul>
                   </div>
@@ -1148,14 +1149,14 @@ export default function PYQPage() {
               )}
             </div>
             <div className="mb-8">
-              <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2">Mode</label>
+              <label className="block text-xs text-faint uppercase tracking-widest mb-2">Mode</label>
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setQuizTimed(false)} className={`py-4 rounded-xl text-sm font-medium border transition ${!quizTimed ? "bg-blue-600 border-blue-500 text-white" : "bg-[#0a0a0a] border-gray-700 text-gray-400 hover:border-gray-600"}`}>Untimed</button>
-                <button onClick={() => setQuizTimed(true)} className={`py-4 rounded-xl text-sm font-medium border transition ${quizTimed ? "bg-orange-600 border-orange-500 text-white" : "bg-[#0a0a0a] border-gray-700 text-gray-400 hover:border-gray-600"}`}>Timed (60s/q)</button>
+                <button onClick={() => setQuizTimed(false)} className={`py-4 rounded-xl text-sm font-medium border transition ${!quizTimed ? "bg-blue-600 border-blue-500 text-main" : "bg-primary-bg border-theme text-muted hover:border-gray-600"}`}>Untimed</button>
+                <button onClick={() => setQuizTimed(true)} className={`py-4 rounded-xl text-sm font-medium border transition ${quizTimed ? "bg-orange-600 border-orange-500 text-main" : "bg-primary-bg border-theme text-muted hover:border-gray-600"}`}>Timed (60s/q)</button>
               </div>
             </div>
             {quizError && <p className="text-red-400 text-sm mb-4">{quizError}</p>}
-            <button onClick={startQuiz} disabled={loadingQuiz} className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-sm font-medium transition">
+            <button onClick={startQuiz} disabled={loadingQuiz} className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-main rounded-xl text-sm font-medium transition">
               {loadingQuiz ? "Loading quiz..." : "Start Quiz →"}
             </button>
           </div>
@@ -1166,33 +1167,33 @@ export default function PYQPage() {
         <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
           <div>
             <h2 className="text-3xl font-bold mb-1">Interview Prep</h2>
-            <p className="text-gray-400">Sourced questions and topics from real company interviews · PrepInsta, GFG, LeetCode</p>
+            <p className="text-muted">Sourced questions and topics from real company interviews · PrepInsta, GFG, LeetCode</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {bestScores[company] && (
               <p className="text-xs text-blue-400">Best: <span className="font-semibold">{bestScores[company].percentage}%</span></p>
             )}
             <button onClick={() => { setQuizCompany(company); setMode("quiz_config"); }}
-              className="px-5 py-2.5 bg-[#111] border border-gray-700 hover:border-blue-500 text-white text-sm font-medium rounded-xl transition">
+              className="px-5 py-2.5 bg-surface border border-theme hover:border-blue-500 text-main text-sm font-medium rounded-xl transition">
               Start Quiz ▶
             </button>
             <button onClick={() => startSimulation(company)}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition">
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-main text-sm font-medium rounded-xl transition">
               Start Full Interview Simulation →
             </button>
           </div>
         </div>
 
         {/* Company selector */}
-        <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
-          <label className="block text-xs text-gray-500 uppercase tracking-widest mb-3">Select Company</label>
+        <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
+          <label className="block text-xs text-faint uppercase tracking-widest mb-3">Select Company</label>
           <div className="flex flex-wrap gap-2">
             {COMPANIES.map(c => (
               <button
                 key={c}
                 onClick={() => { setCompany(c); setActiveRound("aptitude"); }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
-                  c === company ? "bg-blue-600 border-blue-500 text-white" : "bg-[#0a0a0a] border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300"
+                  c === company ? "bg-blue-600 border-blue-500 text-main" : "bg-primary-bg border-theme text-muted hover:border-gray-600 hover:text-muted"
                 }`}
               >
                 {c}
@@ -1203,7 +1204,7 @@ export default function PYQPage() {
 
         {sourcedLoading && (
           <div className="space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="bg-[#111] border border-gray-800 rounded-2xl p-5 animate-pulse h-16" />)}
+            {[1, 2, 3].map(i => <div key={i} className="bg-surface border border-theme rounded-2xl p-5 animate-pulse h-16" />)}
           </div>
         )}
 
@@ -1215,31 +1216,31 @@ export default function PYQPage() {
         {COMPANY_TIPS[company] && (
           <div className="mb-5">
             <button onClick={() => setShowTips(t => !t)}
-              className="w-full flex items-center justify-between bg-[#111] border border-gray-800 rounded-2xl px-5 py-3 hover:border-gray-700 transition">
-              <span className="text-sm font-medium text-white">Interview Tips for {company}</span>
-              <span className="text-gray-500 text-xs">{showTips ? "▲ Collapse" : "▼ Expand"}</span>
+              className="w-full flex items-center justify-between bg-surface border border-theme rounded-2xl px-5 py-3 hover:border-theme transition">
+              <span className="text-sm font-medium text-main">Interview Tips for {company}</span>
+              <span className="text-faint text-xs">{showTips ? "▲ Collapse" : "▼ Expand"}</span>
             </button>
             {showTips && (
-              <div className="bg-[#111] border border-gray-800 border-t-0 rounded-b-2xl px-5 pb-5 space-y-4">
+              <div className="bg-surface border border-theme border-t-0 rounded-b-2xl px-5 pb-5 space-y-4">
                 <div className="pt-4">
                   <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider mb-2">What they actually look for</p>
-                  <ul className="space-y-1">{COMPANY_TIPS[company].what_they_look_for.map((w, i) => <li key={i} className="text-sm text-gray-300">• {w}</li>)}</ul>
+                  <ul className="space-y-1">{COMPANY_TIPS[company].what_they_look_for.map((w, i) => <li key={i} className="text-sm text-muted">• {w}</li>)}</ul>
                 </div>
                 <div>
                   <p className="text-xs text-red-400 font-semibold uppercase tracking-wider mb-2">Biggest mistakes candidates make</p>
-                  <ul className="space-y-1">{COMPANY_TIPS[company].biggest_mistakes.map((m, i) => <li key={i} className="text-sm text-gray-400">⚠ {m}</li>)}</ul>
+                  <ul className="space-y-1">{COMPANY_TIPS[company].biggest_mistakes.map((m, i) => <li key={i} className="text-sm text-muted flex items-start gap-1"><AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-400" />{m}</li>)}</ul>
                 </div>
                 <div>
                   <p className="text-xs text-yellow-400 font-semibold uppercase tracking-wider mb-2">Day-before checklist</p>
                   <ul className="space-y-1.5">{COMPANY_TIPS[company].day_before_checklist.map((c, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted">
                       <input type="checkbox" className="mt-0.5 accent-yellow-400 shrink-0" />
                       <span>{c}</span>
                     </li>
                   ))}</ul>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg px-4 py-2">
-                  <p className="text-xs text-gray-500"><span className="text-gray-300 font-medium">Dress code & format:</span> {COMPANY_TIPS[company].dress_code}</p>
+                <div className="bg-elevated rounded-lg px-4 py-2">
+                  <p className="text-xs text-faint"><span className="text-muted font-medium">Dress code & format:</span> {COMPANY_TIPS[company].dress_code}</p>
                 </div>
               </div>
             )}
@@ -1259,12 +1260,12 @@ export default function PYQPage() {
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-600 mt-3">Source: {sourcedData.data_source}</p>
+                <p className="text-[10px] text-faint mt-3">Source: {sourcedData.data_source}</p>
               </div>
             )}
 
             {/* Round tabs */}
-            <div className="flex gap-1 mb-5 border-b border-gray-800">
+            <div className="flex gap-1 mb-5 border-b border-theme">
               {ROUNDS.map(r => (
                 <button
                   key={r}
@@ -1272,7 +1273,7 @@ export default function PYQPage() {
                   className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition border-b-2 -mb-px ${
                     activeRound === r
                       ? "border-blue-500 text-blue-400 bg-blue-500/5"
-                      : "border-transparent text-gray-500 hover:text-gray-300"
+                      : "border-transparent text-faint hover:text-muted"
                   }`}
                 >
                   {ROUND_LABELS[r]}
@@ -1284,15 +1285,15 @@ export default function PYQPage() {
               <>
                 {/* Topics */}
                 {currentRoundData.topics && currentRoundData.topics.length > 0 && (
-                  <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-5">
-                    <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Topics to Study</p>
+                  <div className="bg-surface border border-theme rounded-2xl p-5 mb-5">
+                    <p className="text-xs text-faint uppercase tracking-widest mb-3">Topics to Study</p>
                     <div className="flex flex-wrap gap-2 mb-3">
                       {currentRoundData.topics.map(t => (
-                        <span key={t} className="bg-gray-800 text-gray-300 text-xs px-3 py-1.5 rounded-full border border-gray-700">{t}</span>
+                        <span key={t} className="bg-elevated text-muted text-xs px-3 py-1.5 rounded-full border border-theme">{t}</span>
                       ))}
                     </div>
                     {currentRoundData.topics.length === 0 && (
-                      <p className="text-gray-600 text-sm">No formal round for this category.</p>
+                      <p className="text-faint text-sm">No formal round for this category.</p>
                     )}
                   </div>
                 )}
@@ -1301,14 +1302,14 @@ export default function PYQPage() {
                 {currentRoundData.exam_pattern && (
                   <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 mb-5">
                     <p className="text-xs text-blue-400 uppercase tracking-widest mb-1">Exam Format</p>
-                    <p className="text-gray-300 text-sm leading-relaxed">{currentRoundData.exam_pattern}</p>
+                    <p className="text-muted text-sm leading-relaxed">{currentRoundData.exam_pattern}</p>
                   </div>
                 )}
 
                 {/* Questions */}
                 {currentRoundData.questions && currentRoundData.questions.length > 0 ? (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Sample Questions</p>
+                    <p className="text-xs text-faint uppercase tracking-widest mb-3">Sample Questions</p>
                     <div className="space-y-3">
                       {currentRoundData.questions.map((q, i) => (
                         <SourcedQuestionCard key={i} q={q} idx={i} />
@@ -1316,8 +1317,8 @@ export default function PYQPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-[#111] border border-gray-800 rounded-xl p-6 text-center">
-                    <p className="text-gray-500 text-sm">Focus on the topics above — practice on LeetCode / PrepInsta for this round.</p>
+                  <div className="bg-surface border border-theme rounded-xl p-6 text-center">
+                    <p className="text-faint text-sm">Focus on the topics above — practice on LeetCode / PrepInsta for this round.</p>
                   </div>
                 )}
               </>
@@ -1327,17 +1328,17 @@ export default function PYQPage() {
 
         {/* Past Simulations */}
         {pastSimulations.length > 0 && (
-          <div className="mt-8 border-t border-gray-800 pt-6">
-            <button onClick={() => setShowPastSims(v => !v)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition mb-4">
+          <div className="mt-8 border-t border-theme pt-6">
+            <button onClick={() => setShowPastSims(v => !v)} className="flex items-center gap-2 text-sm text-muted hover:text-main transition mb-4">
               {showPastSims ? "▲" : "▼"} Past Simulations ({pastSimulations.length})
             </button>
             {showPastSims && (
               <div className="space-y-3">
                 {pastSimulations.map((sim, i) => (
-                  <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
+                  <div key={i} className="bg-surface border border-theme rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
-                      <p className="font-medium text-white text-sm">{sim.company}</p>
-                      <p className="text-xs text-gray-500">{new Date(sim.date).toLocaleDateString("en-IN")}</p>
+                      <p className="font-medium text-main text-sm">{sim.company}</p>
+                      <p className="text-xs text-faint">{new Date(sim.date).toLocaleDateString("en-IN")}</p>
                     </div>
                     <div className="flex gap-4 text-xs">
                       <span className={`font-medium ${sim.aptitude_score >= 7 ? "text-green-400" : sim.aptitude_score >= 5 ? "text-yellow-400" : "text-red-400"}`}>
@@ -1346,7 +1347,7 @@ export default function PYQPage() {
                       <span className={`font-medium ${sim.technical_score >= 6 ? "text-green-400" : sim.technical_score >= 4 ? "text-yellow-400" : "text-red-400"}`}>
                         Tech: {sim.technical_score}/{sim.technical_total}
                       </span>
-                      <span className="text-green-400">{sim.hr_completed ? "HR ✓" : "HR –"}</span>
+                      <span className="text-green-400 flex items-center gap-0.5">{sim.hr_completed ? <><span>HR</span><Check size={11} /></> : "HR –"}</span>
                     </div>
                   </div>
                 ))}
@@ -1363,9 +1364,9 @@ export default function PYQPage() {
 
 function SourcedQuestionCard({ q, idx }: { q: SourcedQuestion; idx: number }) {
   return (
-    <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+    <div className="bg-surface border border-theme rounded-xl p-5">
       <div className="flex items-start gap-3">
-        <span className="text-gray-500 text-sm font-mono shrink-0 pt-0.5">Q{idx + 1}</span>
+        <span className="text-faint text-sm font-mono shrink-0 pt-0.5">Q{idx + 1}</span>
         <div className="flex-1">
           <div className="flex flex-wrap gap-2 mb-2">
             {q.difficulty && (
@@ -1376,13 +1377,13 @@ function SourcedQuestionCard({ q, idx }: { q: SourcedQuestion; idx: number }) {
               }`}>{q.difficulty}</span>
             )}
             {q.topic && (
-              <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">{q.topic}</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-elevated text-muted border border-theme">{q.topic}</span>
             )}
             {q.verified && (
-              <span className="text-xs px-2 py-0.5 rounded bg-green-900/20 text-green-500 border border-green-700/30">✓ Verified</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-green-900/20 text-green-500 border border-green-700/30 inline-flex items-center gap-0.5"><Check size={10} /> Verified</span>
             )}
           </div>
-          <p className="text-white font-medium leading-relaxed mb-2">{q.question}</p>
+          <p className="text-main font-medium leading-relaxed mb-2">{q.question}</p>
           {q.source_name && (
             <div className="flex items-center gap-2 mt-2">
               {q.source_url ? (
@@ -1391,7 +1392,7 @@ function SourcedQuestionCard({ q, idx }: { q: SourcedQuestion; idx: number }) {
                   Source: {q.source_name}{q.year ? ` · ${q.year}` : ""}
                 </a>
               ) : (
-                <span className="text-[11px] text-gray-600">Source: {q.source_name}{q.year ? ` · ${q.year}` : ""}</span>
+                <span className="text-[11px] text-faint">Source: {q.source_name}{q.year ? ` · ${q.year}` : ""}</span>
               )}
             </div>
           )}

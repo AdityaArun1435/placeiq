@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Flame, Check, X } from "lucide-react";
 import config, { fetchWithTimeout } from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
@@ -13,42 +14,66 @@ type TrendingSkill = {
   free_resource: string;
 };
 
-function categoryBadgeColor(cat: string) {
-  if (cat === "AI/ML") return { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/30", bar: "bg-purple-500" };
-  if (cat === "Cloud") return { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", bar: "bg-blue-500" };
-  if (cat === "DevOps") return { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30", bar: "bg-orange-500" };
-  if (cat === "Data") return { bg: "bg-green-500/15", text: "text-green-400", border: "border-green-500/30", bar: "bg-green-500" };
-  if (cat === "Frontend") return { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30", bar: "bg-cyan-500" };
-  if (cat === "Backend") return { bg: "bg-indigo-500/15", text: "text-indigo-400", border: "border-indigo-500/30", bar: "bg-indigo-500" };
-  if (cat === "Mobile") return { bg: "bg-pink-500/15", text: "text-pink-400", border: "border-pink-500/30", bar: "bg-pink-500" };
-  return { bg: "bg-gray-500/15", text: "text-gray-400", border: "border-gray-500/30", bar: "bg-gray-500" };
-}
-
 function TrendingSkillCard({ skill }: { skill: TrendingSkill }) {
-  const colors = categoryBadgeColor(skill.category);
   return (
-    <div className="bg-[#111] border border-gray-800 rounded-xl p-4 hover:border-blue-500/50 transition flex flex-col gap-3">
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 10,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        transition: "border-color 150ms ease-out",
+      }}
+      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-strong)")}
+      onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-default)")}
+    >
       <div>
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className="font-semibold text-white text-sm leading-tight">{skill.skill_name}</h4>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <h4 style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13, lineHeight: 1.3 }}>{skill.skill_name}</h4>
+          <span style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 9999,
+            fontWeight: 500,
+            background: "var(--accent-blue-muted)",
+            color: "var(--accent-blue)",
+            flexShrink: 0,
+          }}>
             {skill.category}
           </span>
         </div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${colors.bar}`} style={{ width: `${skill.demand_score}%` }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div style={{ flex: 1, height: 3, background: "var(--border-default)", borderRadius: 9999, overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 9999, background: "var(--accent-blue)", width: `${skill.demand_score}%` }} />
           </div>
-          <span className="text-[10px] text-gray-500 w-8 text-right shrink-0">{skill.demand_score}%</span>
+          <span style={{ fontSize: 10, color: "var(--text-tertiary)", width: 28, textAlign: "right", flexShrink: 0 }}>{skill.demand_score}%</span>
         </div>
       </div>
-      <p className="text-xs text-gray-500 leading-relaxed flex-1">{skill.why_it_matters}</p>
+      <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6, flex: 1 }}>{skill.why_it_matters}</p>
       {skill.free_resource && (
         <a
           href={skill.free_resource}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400 rounded-lg px-3 py-1.5 text-center transition font-medium"
+          style={{
+            display: "block",
+            background: "transparent",
+            border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)",
+            borderRadius: 6,
+            padding: "7px 14px",
+            fontSize: 13,
+            textAlign: "center",
+            textDecoration: "none",
+            fontWeight: 500,
+            transition: "color 150ms ease-out, border-color 150ms ease-out",
+            boxSizing: "border-box",
+          }}
+          onMouseEnter={e => { const el = e.currentTarget; el.style.color = "var(--text-primary)"; el.style.borderColor = "var(--border-strong)"; }}
+          onMouseLeave={e => { const el = e.currentTarget; el.style.color = "var(--text-secondary)"; el.style.borderColor = "var(--border-default)"; }}
         >
           Learn Free →
         </a>
@@ -110,7 +135,7 @@ type StoredProfile = {
 const PRIORITY_COLORS = {
   High: { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30" },
   Medium: { bg: "bg-yellow-500/15", text: "text-yellow-400", border: "border-yellow-500/30" },
-  Low: { bg: "bg-gray-500/15", text: "text-gray-400", border: "border-gray-500/20" },
+  Low: { bg: "bg-gray-500/15", text: "text-muted", border: "border-gray-500/20" },
 };
 
 const CATEGORY_ORDER = [
@@ -134,10 +159,10 @@ function DemandBar({ pct }: { pct?: number }) {
   const color = pct >= 40 ? "bg-red-500" : pct >= 20 ? "bg-yellow-500" : "bg-gray-500";
   return (
     <div className="flex items-center gap-2 mt-1">
-      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--border-default)" }}>
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className="text-[10px] text-gray-500 w-8 text-right">{pct}%</span>
+      <span className="text-[10px] text-faint w-8 text-right">{pct}%</span>
     </div>
   );
 }
@@ -155,28 +180,28 @@ function CollapsibleCategory({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-white/8 rounded-xl overflow-hidden">
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-white/4 hover:bg-white/7 transition text-left"
+        className="w-full flex items-center justify-between px-4 py-3 transition text-left bg-elevated hover:bg-[var(--bg-hover)]"
       >
         <div className="flex items-center gap-2">
           <span className={`text-sm font-semibold ${accentColor}`}>{category}</span>
-          <span className="text-xs text-gray-500">{items.length} skill{items.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-faint">{items.length} skill{items.length !== 1 ? "s" : ""}</span>
         </div>
-        <span className="text-gray-500 text-xs">{open ? "▲" : "▼"}</span>
+        <span className="text-faint text-xs">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="divide-y divide-white/5">
+        <div>
           {items.map((item, i) => (
-            <div key={i} className="px-4 py-4">
+            <div key={i} className="px-4 py-4 border-t border-theme">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <p className="font-semibold text-white text-sm">{item.skill}</p>
+                    <p className="font-semibold text-main text-sm">{item.skill}</p>
                     <PriorityBadge priority={item.priority} />
                   </div>
-                  <p className="text-gray-400 text-xs mb-1 leading-relaxed">{item.why_important}</p>
+                  <p className="text-muted text-xs mb-1 leading-relaxed">{item.why_important}</p>
                   <DemandBar pct={item.demand_percentage} />
                   <p className={`text-xs mt-1.5 ${accentColor} opacity-70`}>
                     Time to learn: {item.time_to_learn}
@@ -186,7 +211,7 @@ function CollapsibleCategory({
                   href={item.learning_resource || item.free_resource_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 border border-white/15 hover:border-white/30 text-gray-300 hover:text-white text-xs px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+                  className="shrink-0 border border-theme hover:border-theme text-muted hover:text-main text-xs px-3 py-1.5 rounded-lg transition whitespace-nowrap"
                 >
                   Learn free →
                 </a>
@@ -367,16 +392,16 @@ export default function SkillGap() {
   const allMissingCount = mustSorted.length + goodSorted.length;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
+    <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-4xl mx-auto px-8 py-10">
 
         {/* ── Trending Skills 2025 ────────────────────────────────────────── */}
         <section className="mb-12">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-2xl font-bold">🔥 Trending Skills in 2025</h2>
+            <h2 className="text-2xl font-bold flex items-center gap-2"><Flame size={22} className="text-orange-400" /> Trending Skills in 2025</h2>
             {trendingLoading && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
           </div>
-          <p className="text-gray-500 text-sm mb-6">
+          <p className="text-faint text-sm mb-6">
             Most in-demand technical skills in the Indian + global job market right now — based on real hiring data.
           </p>
           {trendingSkills.length > 0 ? (
@@ -386,22 +411,22 @@ export default function SkillGap() {
               ))}
             </div>
           ) : !trendingLoading ? (
-            <div className="text-center py-8 text-gray-600 text-sm">Could not load trending skills. Make sure the backend is running.</div>
+            <div className="text-center py-8 text-faint text-sm">Could not load trending skills. Make sure the backend is running.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1,2,3,4,5,6].map(i => (
-                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-4 animate-pulse h-36" />
+                <div key={i} className="bg-surface border border-theme rounded-xl p-4 animate-pulse h-36" />
               ))}
             </div>
           )}
         </section>
 
-        <div className="border-t border-gray-800 mb-10" />
+        <div className="border-t border-theme mb-10" />
 
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-3xl font-bold">Skill Gap Engine</h2>
-            <p className="text-gray-400 mt-2">
+            <p className="text-muted mt-2">
               Analysing job postings to find what skills are in demand for your target role.
               {profile?.targetRole && (
                 <span className="text-blue-400"> Targeting: {profile.targetRole}</span>
@@ -411,7 +436,7 @@ export default function SkillGap() {
           {result && !loading && (
             <button
               onClick={reAnalyse}
-              className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white px-4 py-2 rounded-lg text-sm transition"
+              className="shrink-0 border border-theme text-muted hover:border-gray-500 hover:text-main px-4 py-2 rounded-lg text-sm transition"
             >
               Re-analyse
             </button>
@@ -420,11 +445,11 @@ export default function SkillGap() {
 
         {profileChecked && !profile && !loading && (
           <div className="mt-10 bg-blue-600/10 border border-blue-500/30 rounded-2xl p-8 text-center">
-            <p className="text-gray-300 mb-2">Complete your profile first to get personalised skill gap analysis.</p>
-            <p className="text-gray-500 text-sm mb-6">Redirecting to onboarding in a moment…</p>
+            <p className="text-muted mb-2">Complete your profile first to get personalised skill gap analysis.</p>
+            <p className="text-faint text-sm mb-6">Redirecting to onboarding in a moment…</p>
             <button
               onClick={() => router.push("/onboarding")}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition"
+              className="bg-blue-600 hover:bg-blue-500 text-main px-6 py-3 rounded-lg font-medium transition"
             >
               Complete Profile
             </button>
@@ -434,14 +459,14 @@ export default function SkillGap() {
         {loading && (
           <div className="mt-24 flex flex-col items-center">
             <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-6" />
-            <p className="text-gray-400 text-sm">Analysing job postings...</p>
+            <p className="text-muted text-sm">Analysing job postings...</p>
           </div>
         )}
 
         {error && !loading && (
           <div className="mt-6 bg-red-950/40 border border-red-500/25 rounded-xl p-5">
             <p className="text-red-400 text-sm">{error}</p>
-            <button onClick={reAnalyse} className="mt-3 text-xs text-red-300 hover:text-white underline transition">
+            <button onClick={reAnalyse} className="mt-3 text-xs text-red-300 hover:text-main underline transition">
               Try again
             </button>
           </div>
@@ -457,25 +482,25 @@ export default function SkillGap() {
                   ? "bg-green-500/15 border-green-500/30 text-green-400"
                   : "bg-red-500/15 border-red-500/30 text-red-400"
               }`}>
-                {result.service_company_ready ? "✓" : "✗"} Service Company Ready
+                {result.service_company_ready ? <Check size={14} className="inline" /> : <X size={14} className="inline" />} Service Company Ready
               </span>
               <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${
                 result.product_company_ready
                   ? "bg-green-500/15 border-green-500/30 text-green-400"
                   : "bg-red-500/15 border-red-500/30 text-red-400"
               }`}>
-                {result.product_company_ready ? "✓" : "✗"} Product Company Ready
+                {result.product_company_ready ? <Check size={14} className="inline" /> : <X size={14} className="inline" />} Product Company Ready
               </span>
               {result.match_percentage != null && (
-                <span className="ml-auto text-sm text-gray-400">
-                  <span className="text-white font-semibold">{result.match_percentage}%</span> skill match
-                  {allMissingCount > 0 && <span className="text-gray-600"> · {allMissingCount} gaps found</span>}
+                <span className="ml-auto text-sm text-muted">
+                  <span className="text-main font-semibold">{result.match_percentage}%</span> skill match
+                  {allMissingCount > 0 && <span className="text-faint"> · {allMissingCount} gaps found</span>}
                 </span>
               )}
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 text-xs text-gray-500">
+            <div className="flex gap-4 text-xs text-faint">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> High priority (≥40% demand)
               </span>
@@ -491,7 +516,7 @@ export default function SkillGap() {
             {mustSorted.length > 0 && (
               <section>
                 <h3 className="text-lg font-semibold text-red-400 mb-1">Must Have — Get These First</h3>
-                <p className="text-gray-500 text-sm mb-4">Non-negotiable skills missing from your profile for this role.</p>
+                <p className="text-faint text-sm mb-4">Non-negotiable skills missing from your profile for this role.</p>
                 <div className="space-y-2">
                   {CATEGORY_ORDER.filter(cat => groupByCategory(mustSorted)[cat]).map((cat, i) => (
                     <CollapsibleCategory
@@ -519,7 +544,7 @@ export default function SkillGap() {
             {goodSorted.length > 0 && (
               <section>
                 <h3 className="text-lg font-semibold text-yellow-400 mb-1">Good to Have — Get an Edge</h3>
-                <p className="text-gray-500 text-sm mb-4">Not mandatory but will significantly improve your chances.</p>
+                <p className="text-faint text-sm mb-4">Not mandatory but will significantly improve your chances.</p>
                 <div className="space-y-2">
                   {CATEGORY_ORDER.filter(cat => groupByCategory(goodSorted)[cat]).map((cat, i) => (
                     <CollapsibleCategory
@@ -546,27 +571,28 @@ export default function SkillGap() {
             {result.skills_to_improve.length > 0 && (
               <section>
                 <h3 className="text-lg font-semibold text-blue-400 mb-1">Skills to Strengthen</h3>
-                <p className="text-gray-500 text-sm mb-4">You have these listed but likely need to deepen them.</p>
+                <p className="text-faint text-sm mb-4">You have these listed but likely need to deepen them.</p>
                 <div className="space-y-3">
                   {result.skills_to_improve.map((item, i) => (
-                    <div key={i} className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-5">
+                    <div key={i} className="rounded-xl p-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold text-white">{item.skill}</p>
+                            <p className="font-semibold text-main">{item.skill}</p>
                             {item.category && (
                               <span className="text-[10px] text-blue-400/70 bg-blue-500/10 px-2 py-0.5 rounded-full">
                                 {item.category}
                               </span>
                             )}
                           </div>
-                          <p className="text-gray-400 text-sm leading-relaxed">{item.what_to_focus_on}</p>
+                          <p className="text-muted text-sm leading-relaxed">{item.what_to_focus_on}</p>
                         </div>
                         <a
                           href={item.learning_resource || item.free_resource_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="shrink-0 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-xs px-3 py-1.5 rounded-lg transition"
+                          className="shrink-0 text-xs rounded-lg transition"
+                          style={{ background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 14px", fontSize: 13 }}
                         >
                           Learn free →
                         </a>
@@ -581,41 +607,41 @@ export default function SkillGap() {
             {mustSorted.length === 0 && goodSorted.length === 0 && (
               <div className="bg-green-950/30 border border-green-500/25 rounded-2xl p-6 text-center">
                 <p className="text-green-400 font-semibold text-lg mb-1">Strong profile for this role</p>
-                <p className="text-gray-400 text-sm">No critical skill gaps detected. Focus on deepening what you already have.</p>
+                <p className="text-muted text-sm">No critical skill gaps detected. Focus on deepening what you already have.</p>
               </div>
             )}
 
             {/* Verdict */}
-            <div className="bg-[#111] border border-gray-700 rounded-2xl p-6">
-              <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Market Verdict</p>
-              <p className="text-gray-200 leading-relaxed font-medium">{result.verdict}</p>
+            <div className="bg-surface border border-theme rounded-2xl p-6">
+              <p className="text-xs text-faint uppercase tracking-widest mb-3">Market Verdict</p>
+              <p className="text-muted leading-relaxed font-medium">{result.verdict}</p>
             </div>
 
             {/* Data attribution */}
             <div className="space-y-1 pb-2">
               {result.total_roles_analysed && result.total_roles_analysed > 0 ? (
-                <p className="text-xs text-gray-600 text-center">
+                <p className="text-xs text-faint text-center">
                   Based on{" "}
-                  <span className="text-gray-500">{result.total_roles_analysed.toLocaleString()}</span>{" "}
+                  <span className="text-faint">{result.total_roles_analysed.toLocaleString()}</span>{" "}
                   job postings for{" "}
-                  <span className="text-gray-500">{profile?.targetRole || "your target role"}</span>
+                  <span className="text-faint">{profile?.targetRole || "your target role"}</span>
                   {result.data_source ? ` · ${result.data_source}` : ""}
                 </p>
               ) : null}
               {result.college_info && result.college_info.sources_count > 0 ? (
-                <p className="text-xs text-gray-600 text-center">
+                <p className="text-xs text-faint text-center">
                   Calibrated for{" "}
-                  <span className="text-gray-500">{result.college_info.college_name}</span>{" "}
+                  <span className="text-faint">{result.college_info.college_name}</span>{" "}
                   ({result.college_info.college_tier}) · {result.college_info.sources_count} data source{result.college_info.sources_count !== 1 ? "s" : ""} · 2024
                 </p>
               ) : profile?.college ? (
-                <p className="text-xs text-gray-600 text-center">
+                <p className="text-xs text-faint text-center">
                   Calibrated for{" "}
-                  <span className="text-gray-500">{profile.college}</span>{" "}
+                  <span className="text-faint">{profile.college}</span>{" "}
                   ({profile.collegeTier})
                 </p>
               ) : null}
-              <p className="text-xs text-gray-600 text-center">
+              <p className="text-xs text-faint text-center">
                 {result.skill_demand_last_updated
                   ? `Skill demand data last updated: ${new Date(result.skill_demand_last_updated).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} — refreshes daily`
                   : "Skill demand data refreshes daily"}
