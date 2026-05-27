@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
-  Mail, Users, ClipboardList, TrendingUp, FileText, FileSearch,
-  BookOpen, BarChart2, Database, School, Link2,
+  Users, ClipboardList, TrendingUp, FileText, FileSearch,
+  BookOpen, BarChart2, Database, School,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import config from '@/lib/config'
@@ -145,25 +145,11 @@ const FEATURE_GROUPS: FeatureGroup[] = [
           "Find live internships from multiple sources. Get an AI strategy tailored to your college tier and profile.",
       },
       {
-        path: "/coldemail",
-        name: "Cold Email",
-        Icon: Mail,
-        description:
-          "Generate personalised cold emails to recruiters and hiring managers at companies not doing campus drives. AI writes the email based on your profile — you just send it.",
-      },
-      {
         path: "/referral",
         name: "Referral Radar",
         Icon: Users,
         description:
           "Find alumni from your college working at top companies. Submit your own to help others.",
-      },
-      {
-        path: "/linkedin",
-        name: "LinkedIn Optimiser",
-        Icon: Link2,
-        description:
-          "Optimise your LinkedIn profile for placement. Get AI suggestions on your headline, about section, and keywords.",
       },
     ],
   },
