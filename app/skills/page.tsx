@@ -5,6 +5,58 @@ import { useRouter } from "next/navigation";
 import config, { fetchWithTimeout } from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
+type TrendingSkill = {
+  skill_name: string;
+  category: string;
+  demand_score: number;
+  why_it_matters: string;
+  free_resource: string;
+};
+
+function categoryBadgeColor(cat: string) {
+  if (cat === "AI/ML") return { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/30", bar: "bg-purple-500" };
+  if (cat === "Cloud") return { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", bar: "bg-blue-500" };
+  if (cat === "DevOps") return { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30", bar: "bg-orange-500" };
+  if (cat === "Data") return { bg: "bg-green-500/15", text: "text-green-400", border: "border-green-500/30", bar: "bg-green-500" };
+  if (cat === "Frontend") return { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30", bar: "bg-cyan-500" };
+  if (cat === "Backend") return { bg: "bg-indigo-500/15", text: "text-indigo-400", border: "border-indigo-500/30", bar: "bg-indigo-500" };
+  if (cat === "Mobile") return { bg: "bg-pink-500/15", text: "text-pink-400", border: "border-pink-500/30", bar: "bg-pink-500" };
+  return { bg: "bg-gray-500/15", text: "text-gray-400", border: "border-gray-500/30", bar: "bg-gray-500" };
+}
+
+function TrendingSkillCard({ skill }: { skill: TrendingSkill }) {
+  const colors = categoryBadgeColor(skill.category);
+  return (
+    <div className="bg-[#111] border border-gray-800 rounded-xl p-4 hover:border-blue-500/50 transition flex flex-col gap-3">
+      <div>
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h4 className="font-semibold text-white text-sm leading-tight">{skill.skill_name}</h4>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
+            {skill.category}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${colors.bar}`} style={{ width: `${skill.demand_score}%` }} />
+          </div>
+          <span className="text-[10px] text-gray-500 w-8 text-right shrink-0">{skill.demand_score}%</span>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 leading-relaxed flex-1">{skill.why_it_matters}</p>
+      {skill.free_resource && (
+        <a
+          href={skill.free_resource}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400 rounded-lg px-3 py-1.5 text-center transition font-medium"
+        >
+          Learn Free →
+        </a>
+      )}
+    </div>
+  );
+}
+
 type SkillItem = {
   skill: string;
   why_important: string;
@@ -178,6 +230,9 @@ export default function SkillGap() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [trendingSkills, setTrendingSkills] = useState<TrendingSkill[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
@@ -212,6 +267,31 @@ export default function SkillGap() {
       analyse(profile);
     }
   }, [profile]);
+
+  useEffect(() => {
+    const cached = localStorage.getItem("placeiq_trending_skills");
+    if (cached) {
+      try {
+        const { skills, ts } = JSON.parse(cached);
+        const ageHours = (Date.now() - ts) / 3600000;
+        if (ageHours < 48 && skills?.length) {
+          setTrendingSkills(skills);
+          return;
+        }
+      } catch {}
+    }
+    setTrendingLoading(true);
+    fetch(`${config.apiUrl}/api/skills/trending`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.skills?.length) {
+          setTrendingSkills(data.skills);
+          try { localStorage.setItem("placeiq_trending_skills", JSON.stringify({ skills: data.skills, ts: Date.now() })); } catch {}
+        }
+      })
+      .catch(() => {})
+      .finally(() => setTrendingLoading(false));
+  }, []);
 
   const analyse = async (p: StoredProfile) => {
     try {
@@ -289,6 +369,35 @@ export default function SkillGap() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <div className="max-w-4xl mx-auto px-8 py-10">
+
+        {/* ── Trending Skills 2025 ────────────────────────────────────────── */}
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-2xl font-bold">🔥 Trending Skills in 2025</h2>
+            {trendingLoading && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
+          </div>
+          <p className="text-gray-500 text-sm mb-6">
+            Most in-demand technical skills in the Indian + global job market right now — based on real hiring data.
+          </p>
+          {trendingSkills.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {trendingSkills.map((skill, i) => (
+                <TrendingSkillCard key={i} skill={skill} />
+              ))}
+            </div>
+          ) : !trendingLoading ? (
+            <div className="text-center py-8 text-gray-600 text-sm">Could not load trending skills. Make sure the backend is running.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-4 animate-pulse h-36" />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div className="border-t border-gray-800 mb-10" />
+
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-3xl font-bold">Skill Gap Engine</h2>

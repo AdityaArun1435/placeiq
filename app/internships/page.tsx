@@ -28,6 +28,11 @@ const KNOWN_COMPANIES = new Set([
   "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "cred", "meesho", "zepto",
   "ola", "paytm", "groww", "zerodha", "dream11", "freshworks", "zoho", "postman",
   "tcs", "infosys", "wipro", "hcl", "cognizant", "capgemini", "accenture", "ibm", "deloitte",
+  "samsung", "sony", "lg", "bosch", "siemens", "honeywell", "jp morgan", "goldman sachs",
+  "morgan stanley", "barclays", "hsbc", "citi", "paypal", "shopify", "twilio",
+  "ltimindtree", "tech mahindra", "persistent", "mphasis", "hexaware", "kyndryl",
+  "dxc", "genpact", "isro", "drdo", "ongc", "iocl", "ntpc", "bhel", "hal",
+  "ather energy", "ola electric", "cars24", "delhivery", "browserstack",
 ]);
 
 function computeInternshipScore(job: { title: string; description: string; company: string; salary: string; location: string }, profile: { targetRole: string; branch: string; skills: string[] }): number {
@@ -78,6 +83,9 @@ type Internship = {
   hiring_status: string | null;
   source: "Adzuna" | "Remotive" | "Arbeitnow" | "AI Generated";
   tags?: string[];
+  known?: boolean;
+  paid?: boolean;
+  quality_score?: number;
 };
 
 type SourceCounts = { Adzuna?: number; Remotive?: number; Arbeitnow?: number; "AI Generated"?: number; [key: string]: number | undefined };
@@ -383,6 +391,7 @@ export default function Internships() {
   const [filterLocation, setFilterLocation] = useState("");
   const [filterStipend, setFilterStipend] = useState<"Any" | "Paid" | "Unpaid">("Any");
   const [filterPosted, setFilterPosted] = useState<"Any" | "7" | "30">("Any");
+  const [filterVerifiedOnly, setFilterVerifiedOnly] = useState(false);
 
   // AI strategy state
   const [strategy, setStrategy] = useState<AIStrategy | null>(null);
@@ -583,6 +592,7 @@ export default function Internships() {
       if (filterStipend === "Unpaid" && j.salary) return false;
       if (filterPosted === "7" && (j.days_ago === null || j.days_ago > 7)) return false;
       if (filterPosted === "30" && (j.days_ago === null || j.days_ago > 30)) return false;
+      if (filterVerifiedOnly && !j.known && !KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())) return false;
       return true;
     });
 
@@ -654,7 +664,7 @@ export default function Internships() {
             )}
             {/* Filter bar */}
             <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 mb-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1.5 block">Role</label>
                   <input
@@ -698,6 +708,15 @@ export default function Internships() {
                   </select>
                 </div>
               </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+                <div
+                  onClick={() => setFilterVerifiedOnly(v => !v)}
+                  className={`w-9 h-5 rounded-full relative transition-colors ${filterVerifiedOnly ? "bg-green-600" : "bg-gray-700"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${filterVerifiedOnly ? "translate-x-4" : "translate-x-0.5"}`} />
+                </div>
+                <span className="text-sm text-gray-400">Verified companies only</span>
+              </label>
             </div>
 
             {listingsLoading && (
@@ -723,6 +742,11 @@ export default function Internships() {
                     {(sourceCounts.Adzuna ?? 0) > 0 && ` — ${sourceCounts.Adzuna} from Adzuna`}
                     {(sourceCounts.Arbeitnow ?? 0) > 0 && ` — ${sourceCounts.Arbeitnow} from Arbeitnow`}
                   </p>
+                  {filteredInternships.filter(j => j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())).length > 0 && (
+                    <span className="text-[11px] text-green-400">
+                      ✓ {filteredInternships.filter(j => j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())).length} from verified companies
+                    </span>
+                  )}
                 </div>
                 {(sourceCounts["AI Generated"] ?? 0) > 0 && (
                   <p className="text-gray-500 text-xs mb-4">
@@ -734,23 +758,36 @@ export default function Internships() {
                     No internships match your filters. Try broadening your search.
                   </div>
                 ) : (() => {
-                  const topMatches = filteredInternships.slice(0, 10).filter(j => j.relevanceScore > 0);
+                  const topMatches = filteredInternships.slice(0, 10).filter(j => j.relevanceScore > 0 || (j.known || KNOWN_COMPANIES.has((j.company || "").toLowerCase().trim())));
                   const rest = filteredInternships.slice(topMatches.length);
+
+                  const isKnown = (job: typeof filteredInternships[0]) =>
+                    job.known || KNOWN_COMPANIES.has((job.company || "").toLowerCase().trim());
+                  const isPaid = (job: typeof filteredInternships[0]) =>
+                    job.paid || !!(job.salary && job.salary.trim());
 
                   const renderCard = (job: typeof filteredInternships[0], isRecommended = false) => {
                     const id = job.id || job.redirect_url;
                     const isExpanded = expandedDescs.has(id);
                     const cleanDesc = stripHtml(job.description || "");
                     const showToggle = cleanDesc.length > 180;
+                    const verified = isKnown(job);
+                    const paid = isPaid(job);
                     return (
-                      <div key={id} className={`bg-[#111] border rounded-2xl p-5 hover:border-gray-700 transition ${isRecommended ? "border-blue-700/40 border-l-4 border-l-blue-500" : "border-gray-800"}`}>
+                      <div key={id} className={`bg-[#111] border rounded-2xl p-5 hover:border-gray-700 transition ${isRecommended ? "border-blue-700/40 border-l-4 border-l-blue-500" : verified ? "border-green-800/30" : "border-gray-800"}`}>
                         <div className="flex items-start justify-between gap-4 mb-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-0.5">
                               {isRecommended && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0">Recommended</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0">⭐ Top Pick</span>
                               )}
                               <h3 className="font-semibold text-white truncate">{job.title}</h3>
+                              {verified && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium shrink-0">✓ Verified</span>
+                              )}
+                              {paid && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium shrink-0">Paid</span>
+                              )}
                               {job.source && (
                                 <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${sourceBadge(job.source)}`}>
                                   {job.source}

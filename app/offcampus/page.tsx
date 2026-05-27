@@ -24,17 +24,10 @@ type Job = {
   hiring_status: string | null;
   days_ago: number | null;
   source?: string;
+  known?: boolean;
+  international?: boolean;
+  quality_score?: number;
 };
-
-const TIER1_NAMES = new Set([
-  "google", "amazon", "microsoft", "meta", "apple", "netflix", "uber", "airbnb",
-  "stripe", "atlassian", "salesforce", "adobe", "oracle", "sap", "intel", "qualcomm", "nvidia",
-  "flipkart", "swiggy", "zomato", "phonepe", "razorpay", "cred", "meesho", "zepto", "ola",
-  "paytm", "groww", "zerodha", "dream11", "freshworks", "zoho", "postman",
-  "tcs", "infosys", "wipro", "hcl", "tech mahindra", "cognizant", "capgemini", "accenture", "ibm", "deloitte",
-]);
-
-function isTier1(company: string) { return TIER1_NAMES.has(company.toLowerCase().trim()); }
 
 function stripHtml(html: string): string {
   if (!html) return "";
@@ -74,7 +67,8 @@ function matchTextColor(score: number) {
 function sourceBadgeStyle(source: string) {
   if (source === "Remotive")   return "bg-green-500/10 text-green-400 border-green-500/20";
   if (source === "Arbeitnow")  return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-  if (source === "The Muse")   return "bg-purple-500/10 text-purple-400 border-purple-500/20";
+  if (source === "The Muse")   return "bg-pink-500/10 text-pink-400 border-pink-500/20";
+  if (source === "Jobicy")     return "bg-teal-500/10 text-teal-400 border-teal-500/20";
   return "bg-blue-500/10 text-blue-400 border-blue-500/20"; // Adzuna
 }
 
@@ -105,7 +99,7 @@ function computeRelevanceScore(job: Job, profile: Profile, minSalaryVal: number)
     if (desc.includes(skill.toLowerCase()) || title.includes(skill.toLowerCase())) score += 1;
   }
 
-  if (isTier1(job.company)) score += 2;
+  if (job.known) score += 2;
 
   if (minSalaryVal > 0) {
     const match = job.salary.match(/[\d.]+/);
@@ -126,15 +120,18 @@ export default function OffCampus() {
   const [location, setLocation] = useState("");
   const [minSalary, setMinSalary] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
+  const [verifiedCount, setVerifiedCount] = useState(0);
+  const [bySource, setBySource] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
 
   const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set());
-  const [showIrrelevant, setShowIrrelevant] = useState(false);
+  const [showUnverified, setShowUnverified] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -165,7 +162,7 @@ export default function OffCampus() {
     setError("");
     setSearched(true);
     setExpandedDescs(new Set());
-    setShowIrrelevant(false);
+    setShowUnverified(false);
     try {
       const res = await fetch(`${config.apiUrl}/api/offcampus/jobs`, {
         method: "POST",
@@ -190,6 +187,8 @@ export default function OffCampus() {
       }
       setJobs(list);
       setTotal(data.total || list.length);
+      setVerifiedCount(data.verified_count || 0);
+      setBySource(data.by_source || {});
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Search failed");
       setJobs([]);
@@ -200,16 +199,14 @@ export default function OffCampus() {
 
   if (status === "loading") return <LoadingScreen />;
 
-  // Compute relevance scores and split
   const minSalaryVal = minSalary ? parseFloat(minSalary) : 0;
   const scoredJobs = profile
     ? jobs.map(j => ({ ...j, relevanceScore: computeRelevanceScore(j, profile, minSalaryVal) }))
     : jobs.map(j => ({ ...j, relevanceScore: j.match_score > 0 ? 1 : 0 }));
 
-  scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore || (isTier1(b.company) ? 1 : 0) - (isTier1(a.company) ? 1 : 0));
-
-  const relevantJobs = scoredJobs.filter(j => j.relevanceScore > 0);
-  const irrelevantJobs = scoredJobs.filter(j => j.relevanceScore === 0);
+  const filtered = verifiedOnly ? scoredJobs.filter(j => j.known) : scoredJobs;
+  const highScore = filtered.filter(j => (j.quality_score ?? 0) >= 3);
+  const lowScore = filtered.filter(j => (j.quality_score ?? 0) < 3);
 
   function renderJobCard(job: typeof scoredJobs[0]) {
     const cleanDesc = stripHtml(job.description || "");
@@ -217,13 +214,16 @@ export default function OffCampus() {
     const showDescToggle = cleanDesc.length > 180;
 
     return (
-      <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${isTier1(job.company) ? "border-blue-800/50" : "border-gray-800"}`}>
+      <div key={job.id} className={`bg-[#111] border rounded-2xl p-6 hover:border-gray-700 transition ${job.known ? "border-blue-800/50" : "border-gray-800"}`}>
         <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h3 className="font-semibold text-white">{job.title}</h3>
-              {isTier1(job.company) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium">Tier 1</span>
+              {job.known && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 font-medium">✓ Verified</span>
+              )}
+              {job.international && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 font-medium">International</span>
               )}
               {job.source && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sourceBadgeStyle(job.source)}`}>{job.source}</span>
@@ -271,7 +271,6 @@ export default function OffCampus() {
           </div>
         </div>
 
-        {/* Description */}
         <div className="mb-4">
           {!cleanDesc || cleanDesc.length < 20 ? (
             <p className="text-xs text-gray-600 italic">No description available</p>
@@ -317,12 +316,14 @@ export default function OffCampus() {
     );
   }
 
+  const sourceNames = Object.keys(bySource);
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <div className="max-w-5xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Off Campus Jobs</h2>
         <p className="text-gray-400 mb-8">
-          Live jobs from Adzuna · Arbeitnow · Remotive · The Muse · Sorted by relevance to your profile
+          Live jobs from Adzuna · Remotive · Arbeitnow · The Muse · Jobicy — sorted by company quality & relevance
           {profile?.skills?.length ? ` (${profile.skills.length} skills)` : ""}
         </p>
 
@@ -363,15 +364,26 @@ export default function OffCampus() {
             </div>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <div
-                onClick={() => setRemoteOnly(r => !r)}
-                className={`w-9 h-5 rounded-full relative transition-colors ${remoteOnly ? "bg-blue-600" : "bg-gray-700"}`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remoteOnly ? "translate-x-4" : "translate-x-0.5"}`} />
-              </div>
-              <span className="text-sm text-gray-400">Remote only</span>
-            </label>
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div
+                  onClick={() => setRemoteOnly(r => !r)}
+                  className={`w-9 h-5 rounded-full relative transition-colors ${remoteOnly ? "bg-blue-600" : "bg-gray-700"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remoteOnly ? "translate-x-4" : "translate-x-0.5"}`} />
+                </div>
+                <span className="text-sm text-gray-400">Remote only</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div
+                  onClick={() => setVerifiedOnly(v => !v)}
+                  className={`w-9 h-5 rounded-full relative transition-colors ${verifiedOnly ? "bg-green-600" : "bg-gray-700"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${verifiedOnly ? "translate-x-4" : "translate-x-0.5"}`} />
+                </div>
+                <span className="text-sm text-gray-400">Verified companies only</span>
+              </label>
+            </div>
             <button
               onClick={search}
               disabled={loading || !role.trim()}
@@ -410,26 +422,40 @@ export default function OffCampus() {
 
         {!loading && jobs.length > 0 && (
           <>
-            <p className="text-sm text-gray-500 mb-4">
-              Showing <span className="text-white">{relevantJobs.length}</span> matched results
-              {irrelevantJobs.length > 0 && <span> · {irrelevantJobs.length} low-relevance hidden</span>}
-              {" "}· sorted by relevance to your profile
-            </p>
-            <div className="space-y-4">
-              {relevantJobs.map(job => renderJobCard(job))}
+            {/* Stats bar */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <p className="text-sm text-gray-400">
+                <span className="text-white font-semibold">{filtered.length}</span> jobs found
+                {verifiedCount > 0 && (
+                  <> · <span className="text-green-400 font-medium">{verifiedCount} from verified companies</span></>
+                )}
+              </p>
+              {sourceNames.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {sourceNames.map(src => (
+                    <span key={src} className={`text-[10px] px-2 py-0.5 rounded border font-medium ${sourceBadgeStyle(src)}`}>
+                      {src}: {bySource[src]}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {irrelevantJobs.length > 0 && (
+            <div className="space-y-4">
+              {highScore.map(job => renderJobCard(job))}
+            </div>
+
+            {lowScore.length > 0 && (
               <div className="mt-6">
                 <button
-                  onClick={() => setShowIrrelevant(v => !v)}
+                  onClick={() => setShowUnverified(v => !v)}
                   className="w-full text-sm text-gray-600 hover:text-gray-400 border border-gray-800 hover:border-gray-700 py-3 rounded-xl transition"
                 >
-                  {showIrrelevant ? "Hide" : `Show all ${irrelevantJobs.length} remaining results`}
+                  {showUnverified ? "Hide" : `${lowScore.length} more listings (unverified / low-score) — click to expand`}
                 </button>
-                {showIrrelevant && (
+                {showUnverified && (
                   <div className="space-y-4 mt-4">
-                    {irrelevantJobs.map(job => renderJobCard(job))}
+                    {lowScore.map(job => renderJobCard(job))}
                   </div>
                 )}
               </div>
@@ -441,7 +467,7 @@ export default function OffCampus() {
           <div className="bg-[#111] border border-gray-800 rounded-2xl p-12 text-center">
             <p className="text-2xl mb-3">🔍</p>
             <p className="text-gray-400 mb-2">Search for off-campus jobs</p>
-            <p className="text-gray-600 text-sm">Results from Adzuna, Remotive, Arbeitnow, and The Muse — sorted by relevance to your {profile?.skills?.length || 0} skills.</p>
+            <p className="text-gray-600 text-sm">Results from Adzuna, Remotive, Arbeitnow, The Muse & Jobicy — sorted by company quality and relevance to your profile.</p>
           </div>
         )}
       </div>

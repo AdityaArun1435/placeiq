@@ -3198,6 +3198,101 @@ async def skills_gap(payload: SkillsGapIn):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_SKILLS_TRENDING_CACHE: dict = {}
+_SKILLS_TRENDING_TTL_HOURS = 48
+
+_HARDCODED_AI_SKILLS = [
+    {"skill_name": "RAG (Retrieval Augmented Generation)", "category": "AI/ML", "demand_score": 92,
+     "why_it_matters": "RAG is the #1 technique companies use to build production LLM apps that answer from real company data.",
+     "free_resource": "https://www.youtube.com/watch?v=sVcwVQRHIc8"},
+    {"skill_name": "LLM Fine-tuning", "category": "AI/ML", "demand_score": 88,
+     "why_it_matters": "Companies need engineers who can adapt open-source models (Llama, Mistral) to their specific domains.",
+     "free_resource": "https://www.youtube.com/watch?v=eC6Hd1hFvos"},
+    {"skill_name": "Prompt Engineering", "category": "AI/ML", "demand_score": 85,
+     "why_it_matters": "Every AI product team needs engineers who can design reliable, structured prompts for production systems.",
+     "free_resource": "https://www.deeplearning.ai/short-courses/chatgpt-prompt-engineering-for-developers/"},
+    {"skill_name": "LangChain / LlamaIndex", "category": "AI/ML", "demand_score": 87,
+     "why_it_matters": "These frameworks are the backbone of most production AI agent and RAG pipelines in 2025.",
+     "free_resource": "https://python.langchain.com/docs/tutorials/"},
+    {"skill_name": "Vector Databases (Pinecone/Weaviate/Chroma)", "category": "AI/ML", "demand_score": 83,
+     "why_it_matters": "Semantic search and RAG pipelines require vector stores — every AI startup is hiring for this.",
+     "free_resource": "https://www.youtube.com/watch?v=klTvEwg3oJ4"},
+    {"skill_name": "HuggingFace Transformers", "category": "AI/ML", "demand_score": 90,
+     "why_it_matters": "The de-facto standard library for working with any pre-trained model — used in virtually every AI team.",
+     "free_resource": "https://huggingface.co/learn/nlp-course"},
+    {"skill_name": "Diffusion Models", "category": "AI/ML", "demand_score": 78,
+     "why_it_matters": "Image and video generation is a rapidly growing product category hiring ML engineers.",
+     "free_resource": "https://www.youtube.com/watch?v=fbLgFrlTnGU"},
+    {"skill_name": "Multimodal AI", "category": "AI/ML", "demand_score": 82,
+     "why_it_matters": "GPT-4o and Gemini have made multimodal (text+image+audio) the new baseline for AI products.",
+     "free_resource": "https://huggingface.co/learn/nlp-course/chapter9/1"},
+    {"skill_name": "AI Agents & Agentic Workflows", "category": "AI/ML", "demand_score": 89,
+     "why_it_matters": "Every company wants autonomous AI agents — CrewAI, AutoGen, LangGraph are hot hiring areas.",
+     "free_resource": "https://www.deeplearning.ai/short-courses/ai-agents-in-langgraph/"},
+    {"skill_name": "MLOps & MLflow", "category": "AI/ML", "demand_score": 84,
+     "why_it_matters": "Production ML requires experiment tracking, model registry, and deployment pipelines.",
+     "free_resource": "https://www.youtube.com/watch?v=859OxXrt_TI"},
+    {"skill_name": "Embeddings & Semantic Search", "category": "AI/ML", "demand_score": 81,
+     "why_it_matters": "Used in search, recommendations, and RAG — core skill for any AI/ML role in 2025.",
+     "free_resource": "https://www.youtube.com/watch?v=ySus5ZS0b94"},
+    {"skill_name": "RLHF & Model Alignment", "category": "AI/ML", "demand_score": 75,
+     "why_it_matters": "Anthropic, OpenAI, and Google are hiring heavily for alignment — also needed at AI startups.",
+     "free_resource": "https://huggingface.co/blog/rlhf"},
+    {"skill_name": "Quantization (GGUF/AWQ/GPTQ)", "category": "AI/ML", "demand_score": 72,
+     "why_it_matters": "Running LLMs on edge devices and reducing inference costs requires quantization expertise.",
+     "free_resource": "https://huggingface.co/docs/transformers/main/en/quantization/overview"},
+    {"skill_name": "Feature Stores & Data Pipelines", "category": "AI/ML", "demand_score": 76,
+     "why_it_matters": "ML at scale requires feature engineering pipelines — Feast, Tecton, and custom solutions.",
+     "free_resource": "https://www.youtube.com/watch?v=6CcIkYCvTSk"},
+]
+
+
+@app.get("/api/skills/trending")
+async def skills_trending():
+    global _SKILLS_TRENDING_CACHE
+    now = datetime.now(timezone.utc)
+
+    if _SKILLS_TRENDING_CACHE.get("data") and _SKILLS_TRENDING_CACHE.get("ts"):
+        age_hours = (now - _SKILLS_TRENDING_CACHE["ts"]).total_seconds() / 3600
+        if age_hours < _SKILLS_TRENDING_TTL_HOURS:
+            return {"skills": _SKILLS_TRENDING_CACHE["data"], "cached": True}
+
+    ai_skills = list(_HARDCODED_AI_SKILLS)
+
+    if _groq is not None:
+        try:
+            prompt = (
+                "You are a senior tech recruiter in India in 2025. Based on job postings from Naukri, LinkedIn, "
+                "and recent AI newsletters from Anthropic, OpenAI, Google DeepMind, NVIDIA, and Hugging Face, "
+                "list the top 20 most in-demand technical skills for Indian freshers and early-career engineers right now. "
+                "Focus on skills that are actually being hired for. For each skill return a JSON object with: "
+                "skill_name, category (one of: AI/ML, Cloud, DevOps, Data, Frontend, Backend, Mobile, Core CS), "
+                "demand_score (1-100), why_it_matters (1 sentence), free_resource (real URL to a free resource). "
+                "Return only a valid JSON array, no markdown, no explanation."
+            )
+            completion = _groq.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5,
+                max_tokens=3000,
+            )
+            raw = completion.choices[0].message.content or ""
+            raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`")
+            match = re.search(r'\[.*\]', raw, re.DOTALL)
+            if match:
+                groq_skills = json.loads(match.group())
+                ai_skill_names_lower = {s["skill_name"].lower() for s in ai_skills}
+                for s in groq_skills:
+                    if isinstance(s, dict) and s.get("skill_name") and s["skill_name"].lower() not in ai_skill_names_lower:
+                        ai_skills.append(s)
+        except Exception as e:
+            print(f"[SkillsTrending] Groq error: {e}")
+
+    ai_skills = ai_skills[:30]
+    _SKILLS_TRENDING_CACHE = {"data": ai_skills, "ts": now}
+    return {"skills": ai_skills, "cached": False}
+
+
 @app.post("/api/companies/match")
 async def companies_match(payload: CompanyMatchIn):
     """
@@ -4332,9 +4427,98 @@ _TIER1_COMPANIES = {
     "capgemini", "accenture", "ibm", "deloitte",
 }
 
+_KNOWN_COMPANIES_SET = {
+    # Big Tech / FAANG+
+    "google", "microsoft", "amazon", "meta", "apple", "netflix", "adobe", "salesforce",
+    "ibm", "oracle", "sap", "cisco", "intel", "qualcomm", "nvidia",
+    # Consulting / Finance / Global
+    "infosys", "tcs", "wipro", "hcl", "cognizant", "accenture", "deloitte", "ey",
+    "kpmg", "pwc", "mckinsey", "bcg", "bain", "goldman sachs", "morgan stanley",
+    "jp morgan", "barclays", "hsbc", "deutsche bank", "citi", "paypal", "stripe",
+    # Indian Fintech / Consumer
+    "razorpay", "paytm", "phonepe", "cred", "zepto", "blinkit", "swiggy", "zomato",
+    "flipkart", "myntra", "nykaa", "meesho", "oyo", "makemytrip",
+    # Indian EdTech / Health
+    "byju's", "unacademy", "upgrad", "vedantu", "coindcx", "coinswitch",
+    "groww", "zerodha", "angel one", "policybazaar", "lenskart", "urbancompany",
+    "bigbasket", "dunzo", "rapido", "ola", "uber",
+    # TATA / Mahindra / L&T / Bosch
+    "tata digital", "mahindra", "l&t", "bosch", "siemens", "honeywell", "abb",
+    "schneider", "hitachi", "capgemini", "cgi", "mphasis", "hexaware", "mindtree",
+    "ltimindtree", "tech mahindra", "persistent", "zensar", "niit technologies",
+    "mastech", "kyndryl", "dxc", "conduent", "genpact", "syntel",
+    "harman", "bosch global software", "continental", "daimler", "bmw", "ford",
+    # Electronics / Japan / Global
+    "samsung", "sony", "lg", "panasonic", "toshiba", "fujitsu", "ntt", "rakuten",
+    # SaaS / PLG
+    "shopify", "atlassian", "canva", "twilio", "zoom", "slack", "notion", "figma",
+    "dropbox", "hubspot", "zendesk", "freshworks", "zoho", "browserstack", "postman",
+    "clevertap", "moengage", "leadsquared", "sprinklr", "druva", "icertis",
+    "persistent systems", "nagarro", "birlasoft",
+    # Logistics / Mobility / EV
+    "cars24", "cardekho", "porter", "blackbuck", "rivigo", "delhivery",
+    "ecom express", "blue dart", "fedex india", "dhl india", "maersk",
+    "ather energy", "ola electric", "hero electric",
+    # Energy / PSU / Defense
+    "shell", "bp", "total", "exxonmobil", "halliburton", "schlumberger",
+    "vedanta", "jsw", "tata steel", "sail", "ongc", "iocl", "bpcl", "hpcl",
+    "ntpc", "bhel", "hal", "isro", "drdo",
+    # More Indian/Global Tech
+    "infoedge", "naukri", "quikr", "housing", "99acres",
+}
+
+_INDIA_METROS = {"india", "bangalore", "bengaluru", "mumbai", "delhi", "chennai",
+                 "hyderabad", "pune", "kolkata", "ahmedabad", "noida", "gurgaon",
+                 "gurugram", "remote"}
+
 
 def _is_tier1(company_name: str) -> bool:
     return company_name.lower().strip() in _TIER1_COMPANIES
+
+
+def _is_known_company(company_name: str) -> bool:
+    name = company_name.lower().strip()
+    if name in _KNOWN_COMPANIES_SET:
+        return True
+    # fuzzy: check if any known name is a substring of the company (>=80% coverage)
+    for known in _KNOWN_COMPANIES_SET:
+        if len(known) >= 4 and (known in name or name in known):
+            return True
+    return False
+
+
+def _score_job_listing(job: dict, target_role: str = "", days_ago: int | None = None) -> int:
+    score = 0
+    company_name = (job.get("company") or "").lower().strip()
+    location = (job.get("location") or "").lower()
+    title = (job.get("title") or "").lower()
+    is_international = job.get("international", False)
+
+    if _is_known_company(company_name):
+        score += 5
+        job["known"] = True
+    else:
+        job["known"] = False
+
+    for metro in _INDIA_METROS:
+        if metro in location:
+            score += 3
+            break
+
+    if any(w in location for w in ["remote", "hybrid"]):
+        score += 1
+
+    d = days_ago if days_ago is not None else job.get("days_ago")
+    if d is not None:
+        if d <= 14:
+            score += 2
+        elif d <= 30:
+            score += 1
+
+    if target_role and target_role.lower() in title:
+        score += 2
+
+    return score
 
 
 class OffCampusJobsIn(BaseModel):
@@ -4371,13 +4555,18 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
     if cached:
         try:
             cached_data = json.loads(cached)
+            cached_data["cached"] = True
             user_skills_lower = [s.lower() for s in payload.skills]
             total_skills = max(len(user_skills_lower), 1)
             for job in cached_data.get("jobs", []):
                 desc = ((job.get("description") or "") + " " + (job.get("title") or "")).lower()
                 matched = sum(1 for s in user_skills_lower if s in desc)
                 job["match_score"] = min(100, int((matched / total_skills) * 100)) if user_skills_lower else 50
-            cached_data["jobs"].sort(key=lambda x: (0 if _is_tier1(x.get("company", "")) else 1, -(x.get("days_ago") or 999), -x["match_score"]))
+                if "quality_score" not in job:
+                    job["quality_score"] = _score_job_listing(job, payload.target_role, job.get("days_ago"))
+            cached_data["jobs"].sort(key=lambda x: (-x.get("quality_score", 0), -(x.get("days_ago") or 999) * -1, -x["match_score"]))
+            if "verified_count" not in cached_data:
+                cached_data["verified_count"] = sum(1 for j in cached_data["jobs"] if j.get("known", False))
             return cached_data
         except Exception:
             pass
@@ -4519,6 +4708,107 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
     except Exception as e:
         print(f"[OffCampus] The Muse error: {e}")
 
+    # Source 5: Adzuna UK (international)
+    if app_id and app_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"https://api.adzuna.com/v1/api/jobs/gb/search/1",
+                    params={
+                        "app_id": app_id, "app_key": app_key,
+                        "results_per_page": 20, "what": payload.target_role,
+                        "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for job in data.get("results", []):
+                    salary_min = job.get("salary_min")
+                    salary_max = job.get("salary_max")
+                    salary_str = ""
+                    if salary_min and salary_max and salary_min > 0:
+                        salary_str = f"£{round(salary_min/1000,0):.0f}k–{round(salary_max/1000,0):.0f}k"
+                    created_raw = job.get("created", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(created_raw)
+                    jobs.append({
+                        "id": f"adzuna-gb-{job.get('id','')}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company", {}).get("display_name", "Unknown"),
+                        "location": job.get("location", {}).get("display_name", "United Kingdom"),
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": salary_str, "apply_link": job.get("redirect_url", ""),
+                        "created": created_raw, "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val, "source": "Adzuna",
+                        "match_score": 50, "international": True,
+                    })
+        except Exception as e:
+            print(f"[OffCampus] Adzuna GB error: {e}")
+
+    # Source 6: Adzuna US (international)
+    if app_id and app_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"https://api.adzuna.com/v1/api/jobs/us/search/1",
+                    params={
+                        "app_id": app_id, "app_key": app_key,
+                        "results_per_page": 10, "what": payload.target_role,
+                        "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for job in data.get("results", []):
+                    salary_min = job.get("salary_min")
+                    salary_max = job.get("salary_max")
+                    salary_str = ""
+                    if salary_min and salary_max and salary_min > 0:
+                        salary_str = f"${round(salary_min/1000,0):.0f}k–{round(salary_max/1000,0):.0f}k"
+                    created_raw = job.get("created", "")
+                    days_ago_val, hiring_status_val = _parse_offcampus_days_ago(created_raw)
+                    jobs.append({
+                        "id": f"adzuna-us-{job.get('id','')}",
+                        "title": job.get("title", ""),
+                        "company": job.get("company", {}).get("display_name", "Unknown"),
+                        "location": job.get("location", {}).get("display_name", "United States"),
+                        "description": (job.get("description", "") or "")[:350],
+                        "salary": salary_str, "apply_link": job.get("redirect_url", ""),
+                        "created": created_raw, "days_ago": days_ago_val,
+                        "hiring_status": hiring_status_val, "source": "Adzuna",
+                        "match_score": 50, "international": True,
+                    })
+        except Exception as e:
+            print(f"[OffCampus] Adzuna US error: {e}")
+
+    # Source 7: Jobicy (India engineering & data-science)
+    for geo, industry in [("india", "engineering"), ("india", "data-science")]:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://jobicy.com/api/v2/remote-jobs",
+                    params={"count": 30, "geo": geo, "industry": industry},
+                )
+                if resp.status_code == 200:
+                    jcy_data = resp.json()
+                    for job in (jcy_data.get("jobs") or []):
+                        title = job.get("jobTitle", "")
+                        company = job.get("companyName", "Unknown")
+                        pub_date = job.get("pubDate", "")
+                        days_ago_val, hiring_status_val = _parse_offcampus_days_ago(pub_date)
+                        jobs.append({
+                            "id": f"jobicy-{abs(hash(title + company))}",
+                            "title": title,
+                            "company": company,
+                            "location": job.get("jobGeo", "India"),
+                            "description": (job.get("jobExcerpt", "") or "")[:350],
+                            "salary": "", "apply_link": job.get("url", ""),
+                            "created": pub_date, "days_ago": days_ago_val,
+                            "hiring_status": hiring_status_val, "source": "Jobicy",
+                            "match_score": 50,
+                        })
+        except Exception as e:
+            print(f"[OffCampus] Jobicy error ({industry}): {e}")
+
     if not jobs:
         raise HTTPException(status_code=503, detail="No job sources available. Configure ADZUNA_APP_ID and ADZUNA_APP_KEY in .env")
 
@@ -4532,20 +4822,32 @@ async def offcampus_jobs(payload: OffCampusJobsIn):
             deduped.append(job)
     jobs = deduped
 
-    # Compute match scores
+    # Compute match scores + company quality score
     for job in jobs:
         desc = ((job.get("description") or "") + " " + (job.get("title") or "")).lower()
         matched = sum(1 for s in user_skills_lower if s in desc)
         job["match_score"] = min(100, int((matched / total_skills) * 100)) if user_skills_lower else 50
+        job["quality_score"] = _score_job_listing(job, payload.target_role, job.get("days_ago"))
 
-    # Sort: tier 1 companies first → newest → match score
-    jobs.sort(key=lambda x: (
-        0 if _is_tier1(x.get("company", "")) else 1,
-        -(x.get("days_ago") or 999),
-        -x["match_score"],
-    ))
+    # Sort by quality_score desc, then newest, then match_score
+    jobs.sort(key=lambda x: (-x.get("quality_score", 0), -(x.get("days_ago") or 999) * -1, -x["match_score"]))
+    jobs = jobs[:80]
 
-    result = {"jobs": jobs, "total": len(jobs), "page": payload.page}
+    by_source: dict[str, int] = {}
+    for job in jobs:
+        src = job.get("source", "Unknown")
+        by_source[src] = by_source.get(src, 0) + 1
+
+    verified_count = sum(1 for j in jobs if j.get("known", False))
+
+    result = {
+        "jobs": jobs,
+        "total": len(jobs),
+        "page": payload.page,
+        "by_source": by_source,
+        "verified_count": verified_count,
+        "cached": False,
+    }
     _cache_set("offcampus_cache", cache_key, json.dumps(result))
     return result
 
@@ -5542,16 +5844,33 @@ async def internships_list(skills: str = ""):
 
     result = []
     for job in raw_jobs:
+        j = dict(job)
         if user_skills_lower:
-            text = (job.get("description", "") + " " + job.get("title", "") + " " + job.get("company", "")).lower()
+            text = (j.get("description", "") + " " + j.get("title", "") + " " + j.get("company", "")).lower()
             matched = sum(1 for s in user_skills_lower if s in text)
             match_score = min(100, int((matched / total_skills) * 100))
         else:
             match_score = 50
-        result.append({**job, "match_score": match_score})
+        j["match_score"] = match_score
+        # Company quality scoring
+        j["known"] = _is_known_company(j.get("company", ""))
+        j["paid"] = bool(j.get("salary") and str(j.get("salary", "")).strip())
+        quality = _score_job_listing(j, "", j.get("days_ago"))
+        if j["paid"]:
+            quality += 2
+        j["quality_score"] = quality
+        result.append(j)
 
-    result.sort(key=lambda x: x["match_score"], reverse=True)
-    return {"jobs": result, "total": len(result), "by_source": by_source}
+    result.sort(key=lambda x: (
+        0 if (x.get("paid") and x.get("known")) else
+        1 if (x.get("paid") and not x.get("known")) else
+        2 if (not x.get("paid") and x.get("known")) else 3,
+        -x.get("quality_score", 0),
+        -x["match_score"],
+    ))
+
+    verified_count = sum(1 for j in result if j.get("known", False))
+    return {"jobs": result, "total": len(result), "by_source": by_source, "verified_count": verified_count}
 
 
 class InternshipsMatchIn(BaseModel):
