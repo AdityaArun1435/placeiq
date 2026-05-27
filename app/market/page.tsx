@@ -341,7 +341,7 @@ export default function MarketPage() {
                             cy="45%"
                             outerRadius={160}
                             label={({ percent }) =>
-                              `${(percent * 100).toFixed(0)}%`
+                              `${((percent ?? 0) * 100).toFixed(0)}%`
                             }
                             labelLine={true}
                           >
@@ -352,7 +352,7 @@ export default function MarketPage() {
                           <Tooltip
                             contentStyle={{ background: "#1a1a1a", border: "1px solid #374151", borderRadius: 8 }}
                             labelStyle={{ color: "#fff" }}
-                            formatter={(value: number, name: string) => [`${value} companies`, name]}
+                            formatter={(value, name) => [`${value} companies`, name]}
                           />
                           <Legend
                             wrapperStyle={{ fontSize: 12, color: "#9ca3af", paddingTop: 16 }}
