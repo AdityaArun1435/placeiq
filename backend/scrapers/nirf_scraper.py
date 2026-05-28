@@ -473,57 +473,43 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-# ── Curated fallback — NIRF 2024 Engineering + key private colleges ───────────
-# Used when all live sources (API, HTML, Excel) fail.
-# placement_rate in %, salaries in LPA.
 
-_FALLBACK_DATA: list[dict] = [
-    # Tier 1 — Rank 1-10
-    {"college_name": "Indian Institute of Technology Madras", "nirf_rank": 1, "placement_rate": 91.5, "median_salary": 20.0, "mean_salary": 22.5, "highest_salary": 150.0, "graduating_students_count": 1200},
-    {"college_name": "Indian Institute of Technology Delhi", "nirf_rank": 2, "placement_rate": 88.0, "median_salary": 22.0, "mean_salary": 25.0, "highest_salary": 200.0, "graduating_students_count": 1100},
-    {"college_name": "Indian Institute of Technology Bombay", "nirf_rank": 3, "placement_rate": 85.0, "median_salary": 25.0, "mean_salary": 28.0, "highest_salary": 200.0, "graduating_students_count": 1300},
-    {"college_name": "Indian Institute of Technology Kanpur", "nirf_rank": 4, "placement_rate": 85.0, "median_salary": 19.0, "mean_salary": 22.0, "highest_salary": 200.0, "graduating_students_count": 900},
-    {"college_name": "Indian Institute of Technology Roorkee", "nirf_rank": 5, "placement_rate": 82.0, "median_salary": 16.0, "mean_salary": 18.5, "highest_salary": 180.0, "graduating_students_count": 1100},
-    {"college_name": "Indian Institute of Technology Kharagpur", "nirf_rank": 6, "placement_rate": 80.0, "median_salary": 17.0, "mean_salary": 20.0, "highest_salary": 180.0, "graduating_students_count": 1500},
-    {"college_name": "Amrita School of Engineering Coimbatore", "nirf_rank": 7, "placement_rate": 83.0, "median_salary": 7.0, "mean_salary": 8.5, "highest_salary": 44.0, "graduating_students_count": 2200},
-    {"college_name": "Indian Institute of Technology Guwahati", "nirf_rank": 8, "placement_rate": 80.0, "median_salary": 16.0, "mean_salary": 18.0, "highest_salary": 150.0, "graduating_students_count": 800},
-    {"college_name": "National Institute of Technology Tiruchirappalli", "nirf_rank": 9, "placement_rate": 87.0, "median_salary": 9.0, "mean_salary": 10.5, "highest_salary": 45.0, "graduating_students_count": 1000},
-    {"college_name": "Indian Institute of Technology Hyderabad", "nirf_rank": 10, "placement_rate": 82.0, "median_salary": 15.0, "mean_salary": 17.5, "highest_salary": 100.0, "graduating_students_count": 700},
-    # Tier 2 — Rank 11-50
-    {"college_name": "Vellore Institute of Technology", "nirf_rank": 11, "placement_rate": 85.0, "median_salary": 6.8, "mean_salary": 7.5, "highest_salary": 47.0, "graduating_students_count": 8000},
-    {"college_name": "Indian Institute of Technology ISM Dhanbad", "nirf_rank": 12, "placement_rate": 79.0, "median_salary": 13.0, "mean_salary": 15.0, "highest_salary": 90.0, "graduating_students_count": 1000},
-    {"college_name": "Indian Institute of Technology BHU Varanasi", "nirf_rank": 13, "placement_rate": 82.0, "median_salary": 14.0, "mean_salary": 16.0, "highest_salary": 120.0, "graduating_students_count": 900},
-    {"college_name": "Birla Institute of Technology and Science Pilani", "nirf_rank": 14, "placement_rate": 92.0, "median_salary": 18.0, "mean_salary": 20.0, "highest_salary": 100.0, "graduating_students_count": 1500},
-    {"college_name": "Indian Institute of Technology Indore", "nirf_rank": 15, "placement_rate": 80.0, "median_salary": 14.0, "mean_salary": 16.0, "highest_salary": 100.0, "graduating_students_count": 500},
-    {"college_name": "National Institute of Technology Karnataka Surathkal", "nirf_rank": 16, "placement_rate": 80.0, "median_salary": 8.0, "mean_salary": 9.5, "highest_salary": 42.0, "graduating_students_count": 900},
-    {"college_name": "Indian Institute of Technology Tirupati", "nirf_rank": 17, "placement_rate": 76.0, "median_salary": 12.0, "mean_salary": 14.0, "highest_salary": 80.0, "graduating_students_count": 400},
-    {"college_name": "Manipal Institute of Technology", "nirf_rank": 18, "placement_rate": 78.0, "median_salary": 6.5, "mean_salary": 7.5, "highest_salary": 38.0, "graduating_students_count": 4500},
-    {"college_name": "National Institute of Technology Warangal", "nirf_rank": 20, "placement_rate": 83.0, "median_salary": 8.5, "mean_salary": 10.0, "highest_salary": 44.0, "graduating_students_count": 1000},
-    {"college_name": "Indian Institute of Technology Patna", "nirf_rank": 21, "placement_rate": 78.0, "median_salary": 12.0, "mean_salary": 14.0, "highest_salary": 80.0, "graduating_students_count": 450},
-    {"college_name": "Jadavpur University", "nirf_rank": 22, "placement_rate": 75.0, "median_salary": 7.5, "mean_salary": 9.0, "highest_salary": 40.0, "graduating_students_count": 1200},
-    {"college_name": "Thapar Institute of Engineering and Technology", "nirf_rank": 25, "placement_rate": 80.0, "median_salary": 8.0, "mean_salary": 9.5, "highest_salary": 42.0, "graduating_students_count": 1500},
-    {"college_name": "SRM Institute of Science and Technology", "nirf_rank": 27, "placement_rate": 72.0, "median_salary": 6.0, "mean_salary": 7.0, "highest_salary": 42.0, "graduating_students_count": 10000},
-    {"college_name": "PSG College of Technology", "nirf_rank": 28, "placement_rate": 82.0, "median_salary": 6.5, "mean_salary": 7.5, "highest_salary": 38.0, "graduating_students_count": 1800},
-    {"college_name": "National Institute of Technology Calicut", "nirf_rank": 29, "placement_rate": 82.0, "median_salary": 8.0, "mean_salary": 9.5, "highest_salary": 42.0, "graduating_students_count": 900},
-    {"college_name": "National Institute of Technology Rourkela", "nirf_rank": 31, "placement_rate": 80.0, "median_salary": 8.0, "mean_salary": 9.5, "highest_salary": 42.0, "graduating_students_count": 900},
-    {"college_name": "College of Engineering Anna University", "nirf_rank": 35, "placement_rate": 84.0, "median_salary": 7.5, "mean_salary": 9.0, "highest_salary": 45.0, "graduating_students_count": 1000},
-    {"college_name": "Motilal Nehru National Institute of Technology Allahabad", "nirf_rank": 39, "placement_rate": 77.0, "median_salary": 7.5, "mean_salary": 9.0, "highest_salary": 40.0, "graduating_students_count": 900},
-    {"college_name": "BMS College of Engineering", "nirf_rank": 45, "placement_rate": 82.0, "median_salary": 7.0, "mean_salary": 8.5, "highest_salary": 42.0, "graduating_students_count": 1500},
-    {"college_name": "RV College of Engineering", "nirf_rank": 46, "placement_rate": 87.0, "median_salary": 7.8, "mean_salary": 9.0, "highest_salary": 48.0, "graduating_students_count": 1800},
-    {"college_name": "Maulana Azad National Institute of Technology Bhopal", "nirf_rank": 48, "placement_rate": 75.0, "median_salary": 7.0, "mean_salary": 8.5, "highest_salary": 38.0, "graduating_students_count": 800},
-    # Tier 3 — Rank 51-200
-    {"college_name": "PES University", "nirf_rank": 60, "placement_rate": 83.0, "median_salary": 8.0, "mean_salary": 10.0, "highest_salary": 52.0, "graduating_students_count": 1500},
-    {"college_name": "MS Ramaiah Institute of Technology", "nirf_rank": 70, "placement_rate": 78.0, "median_salary": 6.5, "mean_salary": 8.0, "highest_salary": 36.0, "graduating_students_count": 1200},
-    {"college_name": "SSN College of Engineering", "nirf_rank": 74, "placement_rate": 82.0, "median_salary": 6.5, "mean_salary": 7.5, "highest_salary": 38.0, "graduating_students_count": 1200},
-    {"college_name": "Coimbatore Institute of Technology", "nirf_rank": 85, "placement_rate": 73.0, "median_salary": 5.5, "mean_salary": 6.5, "highest_salary": 24.0, "graduating_students_count": 1100},
-    {"college_name": "Kongu Engineering College", "nirf_rank": 95, "placement_rate": 71.0, "median_salary": 5.0, "mean_salary": 6.0, "highest_salary": 22.0, "graduating_students_count": 1200},
-    {"college_name": "Sri Krishna College of Engineering and Technology", "nirf_rank": 110, "placement_rate": 67.0, "median_salary": 4.5, "mean_salary": 5.5, "highest_salary": 18.0, "graduating_students_count": 1200},
-    {"college_name": "Vellore Institute of Technology Bhopal", "nirf_rank": 120, "placement_rate": 62.0, "median_salary": 5.0, "mean_salary": 6.0, "highest_salary": 22.0, "graduating_students_count": 2000},
-    {"college_name": "Rajalakshmi Engineering College", "nirf_rank": 130, "placement_rate": 65.0, "median_salary": 4.5, "mean_salary": 5.5, "highest_salary": 18.0, "graduating_students_count": 1500},
-    {"college_name": "VIT-AP University", "nirf_rank": 135, "placement_rate": 60.0, "median_salary": 4.8, "mean_salary": 5.8, "highest_salary": 20.0, "graduating_students_count": 1500},
-    {"college_name": "Vellore Institute of Technology Chennai", "nirf_rank": 36, "placement_rate": 68.0, "median_salary": 5.5, "mean_salary": 6.5, "highest_salary": 28.0, "graduating_students_count": 3000},
-    {"college_name": "Birla Institute of Technology and Science Goa", "nirf_rank": 14, "placement_rate": 88.0, "median_salary": 16.0, "mean_salary": 18.0, "highest_salary": 90.0, "graduating_students_count": 800},
-]
+def _load_from_supabase() -> list[dict]:
+    """
+    Query college_stats from Supabase as fallback when live NIRF scrape fails.
+    Maps college_stats 2024 rows to nirf_placements format.
+    """
+    try:
+        con = get_connection()
+        cur = con.cursor()
+        cur.execute(
+            "SELECT college_name, avg_ctc, total_offers, year, data_tier, "
+            "highest_ctc, median_ctc FROM college_stats WHERE year='2024'"
+        )
+        rows_raw = cur.fetchall()
+        con.close()
+    except Exception as exc:
+        log.warning(f"Supabase fallback query failed: {exc}")
+        return []
+
+    rows = []
+    for r in rows_raw:
+        college_name, avg_ctc, total_offers, year, data_tier, highest_ctc, median_ctc = r
+        is_tier1 = str(data_tier).lower() == "tier1"
+        nirf_rank = 5 if is_tier1 else 30
+        placement_rate = 85.0 if is_tier1 else 72.0
+        rows.append({
+            "college_name": college_name,
+            "nirf_rank": nirf_rank,
+            "placement_rate": placement_rate,
+            "mean_salary": float(avg_ctc) if avg_ctc is not None else None,
+            "median_salary": float(median_ctc) if median_ctc is not None else (float(avg_ctc) if avg_ctc is not None else None),
+            "highest_salary": float(highest_ctc) if highest_ctc is not None else None,
+            "graduating_students_count": int(total_offers) if total_offers is not None else None,
+        })
+
+    log.info(f"NIRF live scrape failed — loaded {len(rows)} rows from Supabase placement database instead")
+    return rows
 
 
 def run_scraper(year: int = NIRF_YEAR) -> int:
@@ -540,8 +526,7 @@ def run_scraper(year: int = NIRF_YEAR) -> int:
         rows = _download_excel()
 
     if not rows:
-        log.warning("All live sources failed — loading curated fallback dataset")
-        rows = [dict(r) for r in _FALLBACK_DATA]
+        rows = _load_from_supabase()
 
     rows = _clean(rows)
     log.info(f"After cleaning: {len(rows)} colleges")

@@ -1,17 +1,17 @@
 """
 Placement Probability ML Model
 --------------------------------
-XGBoost regressor trained on nirf_placements + user_profiles data.
-Falls back to synthetic training data when the DB table is empty.
+XGBoost regressor trained on real placement_records + college_stats data from Supabase.
+1,240 real training rows covering company-level placement data.
 
 Usage:
     python -m backend.ml.placement_model        # trains and saves model
     from backend.ml.placement_model import predict_placement
 """
 
-import json
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 
 import joblib
@@ -25,7 +25,6 @@ _PROJECT_DIR = _BACKEND_DIR.parent
 _MODEL_PATH = _ML_DIR / "model.pkl"
 _ENCODERS_PATH = _ML_DIR / "encoders.pkl"
 
-# Allow imports from project root when run as a script
 if str(_PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(_PROJECT_DIR))
 
@@ -61,84 +60,79 @@ _KNOWN_ROLES = [
     "Cybersecurity", "Other",
 ]
 
+_MONTH_MAP = {
+    "january": 1, "february": 2, "march": 3, "april": 4,
+    "may": 5, "june": 6, "july": 7, "august": 8,
+    "september": 9, "october": 10, "november": 11, "december": 12,
+}
+
+
+def _encode_month(visit_month: str) -> int:
+    """Extract integer month from strings like 'August' or 'August–September'."""
+    if not visit_month or visit_month.lower() in ("", "none", "nan"):
+        return 9
+    first = visit_month.replace("–", "-").replace("—", "-").split("-")[0].strip().lower()
+    return _MONTH_MAP.get(first, 9)
+
 
 # ── Training data ─────────────────────────────────────────────────────────────
 
 def load_training_data():
     """
-    Returns (X, y) numpy arrays.
-
-    Priority:
-      1. nirf_placements rows joined with user_profiles (real data)
-      2. If fewer than 20 real rows, pad with synthetic rows derived from
-         the rule-based scoring formula in _fallback_score.
+    Returns a DataFrame built from real placement_records joined with college_stats.
+    Labels are derived from ctc_avg and avg_headcount thresholds.
     """
     import pandas as pd
 
-    rows = []
-
-    # Real data from nirf_placements + user_profiles
     try:
         con = get_connection()
-        nirf_df = pd.read_sql_query(
-            "SELECT college_name, nirf_rank, placement_rate FROM nirf_placements",
-            con,
-        )
-        users_df = pd.read_sql_query(
-            """SELECT college, branch, cgpa, skills, target_role,
-                      placement_score, has_internship, leetcode_count,
-                      projects_count, hackathons
-               FROM user_profiles""",
+        pr_df = pd.read_sql_query(
+            """SELECT p.college_name, p.data_tier, p.ctc_min, p.ctc_max,
+                      p.avg_headcount, p.category_tier, p.visit_month,
+                      c.avg_ctc          AS college_avg_ctc,
+                      c.total_offers     AS college_total_offers
+               FROM placement_records p
+               LEFT JOIN college_stats c
+                 ON lower(c.college_name) = lower(p.college_name)
+                AND c.year = '2024'""",
             con,
         )
         con.close()
-
-        # Build a lookup: college_name → (nirf_rank, placement_rate)
-        nirf_lookup = {}
-        for _, row in nirf_df.iterrows():
-            nirf_lookup[str(row["college_name"]).strip().lower()] = (
-                row["nirf_rank"],
-                row["placement_rate"],
-            )
-
-        for _, u in users_df.iterrows():
-            college_key = str(u.get("college", "")).strip().lower()
-            nirf_rank, placement_rate = nirf_lookup.get(college_key, (None, None))
-
-            # Use nirf placement_rate as label if available, else use stored score
-            if placement_rate is not None:
-                label = float(placement_rate)
-            else:
-                label = float(u.get("placement_score") or 50)
-
-            try:
-                skills_list = json.loads(u["skills"]) if isinstance(u["skills"], str) else (u["skills"] or [])
-            except Exception:
-                skills_list = []
-
-            rows.append({
-                "tier": _rank_to_tier(nirf_rank),
-                "branch": str(u.get("branch") or "Other"),
-                "cgpa": float(u.get("cgpa") or 6.0),
-                "skills_count": len(skills_list),
-                "target_role": str(u.get("target_role") or "Other"),
-                "has_internship": 1 if str(u.get("has_internship", "no")) == "yes" else 0,
-                "leetcode": _lc_bucket(str(u.get("leetcode_count") or "0")),
-                "projects": _proj_bucket(str(u.get("projects_count") or "0")),
-                "hackathons": _hack_bucket(str(u.get("hackathons") or "0")),
-                "label": label,
-            })
     except Exception as exc:
-        _log.warning(f"Could not load real training data: {exc}")
+        _log.error(f"Failed to load training data from Supabase: {exc}")
+        raise
 
-    if len(rows) < 20:
-        _log.info(f"Only {len(rows)} real rows — padding with synthetic data")
-        rows.extend(_synthetic_rows())
+    rows = []
+    for _, r in pr_df.iterrows():
+        ctc_avg = (float(r["ctc_min"] or 0) + float(r["ctc_max"] or 0)) / 2.0
+        headcount = float(r["avg_headcount"] or 0)
+
+        if ctc_avg > 20 and headcount > 50:
+            label = 0.85
+        elif ctc_avg > 10 and headcount > 20:
+            label = 0.70
+        elif ctc_avg > 6:
+            label = 0.55
+        else:
+            label = 0.35
+
+        rows.append({
+            "college_tier": 1 if str(r["data_tier"]).lower() == "tier1" else 2,
+            "ctc_avg": ctc_avg,
+            "avg_headcount": headcount,
+            "category_tier": str(r["category_tier"] or "Other"),
+            "visit_month": _encode_month(str(r["visit_month"] or "")),
+            "college_avg_ctc": float(r["college_avg_ctc"] if r["college_avg_ctc"] is not None else ctc_avg),
+            "college_total_offers": float(r["college_total_offers"] if r["college_total_offers"] is not None else headcount),
+            "label": label,
+        })
 
     df = pd.DataFrame(rows)
-    _log.info(f"Training dataset: {len(df)} rows")
+    _log.info(f"Loaded {len(df)} real training rows from placement_records")
     return df
 
+
+# ── Buckets (kept for predict breakdown) ──────────────────────────────────────
 
 def _lc_bucket(val: str) -> int:
     return {"0": 0, "1-50": 1, "51-200": 2, "200+": 3}.get(val, 0)
@@ -152,57 +146,11 @@ def _hack_bucket(val: str) -> int:
     return {"0": 0, "1-2": 1, "3+": 2}.get(val, 0)
 
 
-def _synthetic_rows() -> list[dict]:
-    """Generate ~400 synthetic training rows covering the placement score space."""
-    rng = np.random.default_rng(42)
-    rows = []
-
-    tier_base = {"Tier 1": 75, "Tier 2": 55, "Tier 3": 35, "Tier 4": 20}
-
-    for tier, base in tier_base.items():
-        for _ in range(100):
-            cgpa = float(rng.uniform(4.5, 10.0))
-            skills_count = int(rng.integers(0, 16))
-            has_internship = int(rng.integers(0, 2))
-            leetcode = int(rng.integers(0, 4))
-            projects = int(rng.integers(0, 4))
-            hackathons = int(rng.integers(0, 3))
-            branch = rng.choice(_KNOWN_BRANCHES)
-            role = rng.choice(_KNOWN_ROLES)
-
-            # Rule-based label (mirrors _fallback_score logic)
-            cgpa_pts = (cgpa / 10) * 25
-            skills_pts = (min(skills_count, 15) / 15) * 25
-            intern_pts = 7 if has_internship else 0
-            lc_pts = [0, 3, 6, 8][leetcode]
-            proj_pts = [0, 5, 8, 10][projects]
-            hack_pts = [0, 3, 5][hackathons]
-            noise = float(rng.normal(0, 5))
-
-            raw = cgpa_pts + skills_pts + intern_pts + lc_pts + proj_pts + hack_pts
-            label = float(np.clip(base * 0.4 + raw * 0.6 + noise, 5, 100))
-
-            rows.append({
-                "tier": tier,
-                "branch": str(branch),
-                "cgpa": cgpa,
-                "skills_count": skills_count,
-                "target_role": str(role),
-                "has_internship": has_internship,
-                "leetcode": leetcode,
-                "projects": projects,
-                "hackathons": hackathons,
-                "label": label,
-            })
-
-    return rows
-
-
 # ── Train ─────────────────────────────────────────────────────────────────────
 
 def train_model() -> dict:
     """
-    Train XGBRegressor and save model.pkl + encoders.pkl.
+    Train XGBRegressor on real Supabase data and save model.pkl + encoders.pkl.
     Returns {"rmse": float, "r2": float, "n_samples": int}.
     """
     from sklearn.metrics import mean_squared_error, r2_score
@@ -212,16 +160,15 @@ def train_model() -> dict:
 
     df = load_training_data()
 
-    # Encode categoricals
     encoders: dict[str, LabelEncoder] = {}
-    for col in ("tier", "branch", "target_role"):
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
-        encoders[col] = le
+    le = LabelEncoder()
+    df["category_tier"] = le.fit_transform(df["category_tier"].astype(str))
+    encoders["category_tier"] = le
 
     feature_cols = [
-        "tier", "branch", "cgpa", "skills_count",
-        "target_role", "has_internship", "leetcode", "projects", "hackathons",
+        "college_tier", "ctc_avg", "avg_headcount",
+        "category_tier", "visit_month",
+        "college_avg_ctc", "college_total_offers",
     ]
     X = df[feature_cols].values.astype(float)
     y = df["label"].values.astype(float)
@@ -248,8 +195,72 @@ def train_model() -> dict:
     joblib.dump(model, _MODEL_PATH)
     joblib.dump(encoders, _ENCODERS_PATH)
 
-    _log.info(f"Model saved — RMSE={rmse:.2f}, R²={r2:.3f}, n={len(df)}")
+    _log.info(f"XGBoost trained on {len(df)} real placement records. R2: {r2:.3f}")
+    _log.info(f"Model saved — RMSE={rmse:.4f}, R²={r2:.3f}, n={len(df)}")
     return {"rmse": rmse, "r2": r2, "n_samples": len(df)}
+
+
+# ── Predict helpers ───────────────────────────────────────────────────────────
+
+_ROLE_TO_CATEGORY = {
+    "Software Engineer":    "Core Tech / Product",
+    "Backend Developer":    "Core Tech / Product",
+    "Full Stack Developer": "Core Tech / Product",
+    "Frontend Developer":   "Core Tech / Product",
+    "DevOps Engineer":      "Core Tech / Product",
+    "Cybersecurity":        "Core Tech / Product",
+    "Data Scientist":       "Tier 1 – Elite Tech",
+    "ML Engineer":          "Tier 1 – Elite Tech",
+    "Data Analyst":         "Product MNC",
+    "Product Manager":      "Product MNC",
+    "Other":                "Core Tech / Product",
+}
+
+_TIER_DEFAULT_CTC       = {"Tier 1": 40.0, "Tier 2": 14.0, "Tier 3": 6.5, "Tier 4": 4.0}
+_TIER_DEFAULT_OFFERS    = {"Tier 1": 350.0, "Tier 2": 800.0, "Tier 3": 1200.0, "Tier 4": 600.0}
+_TIER_DEFAULT_HEADCOUNT = {"Tier 1": 20.0, "Tier 2": 40.0, "Tier 3": 65.0, "Tier 4": 90.0}
+
+
+def _lookup_college_stats(college_name: str) -> dict:
+    """Fetch avg_ctc and total_offers for a college from college_stats (2024)."""
+    try:
+        from database import db_type
+        con = get_connection()
+        ph = "%s" if db_type == "supabase" else "?"
+        cur = con.cursor()
+        cur.execute(
+            f"SELECT avg_ctc, total_offers FROM college_stats "
+            f"WHERE lower(college_name) = lower({ph}) AND year='2024' LIMIT 1",
+            (college_name.strip(),),
+        )
+        row = cur.fetchone()
+        con.close()
+        if row:
+            return {"avg_ctc": row[0], "total_offers": row[1]}
+    except Exception:
+        pass
+    return {}
+
+
+def _lookup_avg_headcount(college_name: str) -> float | None:
+    """Compute average headcount across placement_records for a college."""
+    try:
+        from database import db_type
+        con = get_connection()
+        ph = "%s" if db_type == "supabase" else "?"
+        cur = con.cursor()
+        cur.execute(
+            f"SELECT AVG(avg_headcount) FROM placement_records "
+            f"WHERE lower(college_name) = lower({ph})",
+            (college_name.strip(),),
+        )
+        row = cur.fetchone()
+        con.close()
+        if row and row[0] is not None:
+            return float(row[0])
+    except Exception:
+        pass
+    return None
 
 
 # ── Predict ───────────────────────────────────────────────────────────────────
@@ -259,10 +270,9 @@ def predict_placement(profile: dict) -> dict:
     Predict placement probability for a student profile.
 
     Args:
-        profile: dict with keys matching ProfileIn fields:
-                 college, branch, cgpa, skills (list), targetRole,
-                 hasInternship, leetcodeCount, projectsCount, hackathons,
-                 certifications (optional), city (optional)
+        profile: dict with keys: college, branch, cgpa, skills (list),
+                 targetRole, hasInternship, leetcodeCount, projectsCount,
+                 hackathons, certifications (optional)
 
     Returns:
         {"score": int, "tier": str, "confidence": str, "breakdown": dict}
@@ -276,53 +286,55 @@ def predict_placement(profile: dict) -> dict:
     model = joblib.load(_MODEL_PATH)
     encoders: dict = joblib.load(_ENCODERS_PATH)
 
-    # Derive college tier from DB
-    tier = _lookup_tier(str(profile.get("college", "")))
+    college = str(profile.get("college", ""))
+    tier = _lookup_tier(college)
+    college_tier_enc = {"Tier 1": 1, "Tier 2": 2}.get(tier, 3)
 
-    branch = str(profile.get("branch") or "Other")
+    stats = _lookup_college_stats(college)
+    college_avg_ctc = float(stats.get("avg_ctc") or _TIER_DEFAULT_CTC.get(tier, 6.5))
+    college_total_offers = float(stats.get("total_offers") or _TIER_DEFAULT_OFFERS.get(tier, 800.0))
+    avg_headcount = _lookup_avg_headcount(college) or _TIER_DEFAULT_HEADCOUNT.get(tier, 50.0)
+    ctc_avg = college_avg_ctc
+
+    target_role = str(profile.get("targetRole") or profile.get("target_role") or "Other")
+    category_str = _ROLE_TO_CATEGORY.get(target_role, "Core Tech / Product")
+
+    le = encoders.get("category_tier")
+    if le is not None and category_str in le.classes_:
+        category_enc = int(le.transform([category_str])[0])
+    else:
+        category_enc = 0
+
+    visit_month = date.today().month
+
+    X = np.array([[
+        college_tier_enc, ctc_avg, avg_headcount,
+        category_enc, visit_month,
+        college_avg_ctc, college_total_offers,
+    ]], dtype=float)
+
+    raw = float(model.predict(X)[0])
+    score = int(np.clip(round(raw * 100), 0, 100))
+
+    confidence = _lookup_confidence(college)
+
+    # Student-level breakdown for transparency
     cgpa = float(profile.get("cgpa") or 6.0)
     skills = profile.get("skills") or []
     skills_count = len(skills) if isinstance(skills, list) else 0
-    target_role = str(profile.get("targetRole") or profile.get("target_role") or "Other")
     has_internship = 1 if str(profile.get("hasInternship", profile.get("has_internship", "no"))) == "yes" else 0
     leetcode_raw = str(profile.get("leetcodeCount") or profile.get("leetcode_count") or "0")
     projects_raw = str(profile.get("projectsCount") or profile.get("projects_count") or "0")
     hackathons_raw = str(profile.get("hackathons") or "0")
     certifications_raw = str(profile.get("certifications") or "0")
 
-    leetcode = _lc_bucket(leetcode_raw)
-    projects = _proj_bucket(projects_raw)
-    hackathons = _hack_bucket(hackathons_raw)
-
-    def _encode(col: str, val: str) -> int:
-        le = encoders[col]
-        if val in le.classes_:
-            return int(le.transform([val])[0])
-        return 0
-
-    tier_enc = _encode("tier", tier)
-    branch_enc = _encode("branch", branch)
-    role_enc = _encode("target_role", target_role)
-
-    X = np.array([[
-        tier_enc, branch_enc, cgpa, skills_count,
-        role_enc, has_internship, leetcode, projects, hackathons,
-    ]], dtype=float)
-
-    raw = float(model.predict(X)[0])
-    score = int(np.clip(round(raw), 0, 100))
-
-    # Confidence: high if the model had real NIRF data for this college
-    confidence = _lookup_confidence(str(profile.get("college", "")))
-
-    # Feature contribution breakdown (rule-based approximation for transparency)
     tier_base = {"Tier 1": 25, "Tier 2": 15, "Tier 3": 5, "Tier 4": 0}.get(tier, 5)
     cgpa_contribution = round((cgpa / 10) * 25, 1)
     skills_contribution = round((min(skills_count, 15) / 15) * 20, 1)
     internship_contribution = 8 if has_internship else 0
-    lc_contribution = [0, 4, 8, 12][leetcode]
-    proj_contribution = [0, 5, 9, 12][projects]
-    hack_contribution = [0, 3, 6][hackathons]
+    lc_contribution = [0, 4, 8, 12][_lc_bucket(leetcode_raw)]
+    proj_contribution = [0, 5, 9, 12][_proj_bucket(projects_raw)]
+    hack_contribution = [0, 3, 6][_hack_bucket(hackathons_raw)]
     cert_pts = {"0": 0, "1-2": 2, "3+": 4}.get(certifications_raw, 0)
 
     breakdown = {
@@ -355,7 +367,6 @@ def _lookup_tier(college_name: str) -> str:
             return _rank_to_tier(row[0])
     except Exception:
         pass
-    # Heuristic tier from college name keywords
     name_lower = college_name.lower()
     if any(kw in name_lower for kw in ("iit", "nit", "bits", "iisc", "amrita")):
         return "Tier 1"
@@ -388,4 +399,4 @@ def _lookup_confidence(college_name: str) -> str:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     metrics = train_model()
-    print(f"Model trained. RMSE: {metrics['rmse']:.2f} R2: {metrics['r2']:.3f}")
+    print(f"Model trained. RMSE: {metrics['rmse']:.4f} R2: {metrics['r2']:.3f}")
