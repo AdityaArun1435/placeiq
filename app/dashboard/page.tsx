@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
   Users, ClipboardList, TrendingUp, FileText, FileSearch,
-  BookOpen, BarChart2, Database, School, Mail,
+  BookOpen, BarChart2, Database, School,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import config from "@/lib/config";
@@ -19,6 +19,7 @@ type Profile = {
   targetRole: string;
   college: string;
   branch: string;
+  year: string;
   cgpa: number;
   projectsCount: string;
   hasInternship: string;
@@ -109,7 +110,6 @@ const FEATURE_GROUPS: FeatureGroup[] = [
       { path: "/oncampus", name: "On Campus Drives", Icon: GraduationCap, description: "Companies likely to visit your college this season with probability scores." },
       { path: "/internships", name: "Internships", Icon: Briefcase, description: "Live internships with an AI strategy tailored to your college tier and profile." },
       { path: "/referral", name: "Referral Radar", Icon: Users, description: "Find alumni from your college working at top companies." },
-      { path: "/coldemail", name: "Cold Email", Icon: Mail, description: "Generate personalised cold emails to recruiters and hiring managers." },
     ],
   },
   {
@@ -143,6 +143,12 @@ const SOURCE_LINKS: Record<string, string> = {
   Shiksha: "https://www.shiksha.com",
   Careers360: "https://engineering.careers360.com",
 };
+
+function getGraduationYear(yearOfStudy: string): number {
+  const current = new Date().getFullYear();
+  const map: Record<string, number> = { "1st": 3, "2nd": 2, "3rd": 1, "4th": 0 };
+  return current + (map[yearOfStudy] ?? 1);
+}
 
 function getHourGreeting() {
   const h = new Date().getHours();
@@ -455,7 +461,7 @@ export default function Dashboard() {
     return () => cancelAnimationFrame(timer);
   }, []);
 
-  const displayScore = liveScore?.score ?? profile?.placementScore;
+  const displayScore = liveScore?.nirf_stats?.score_breakdown?.final_score ?? liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
   const tierStyle = displayTier ? TIER_STYLES[displayTier] : null;
   const daysToSeason = getDaysToSeason();
@@ -538,7 +544,7 @@ export default function Dashboard() {
             </h1>
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
               {profile
-                ? `${profile.college} · ${profile.branch} · ${new Date().getFullYear() + 1}`
+                ? `${profile.college} · ${profile.branch} · ${getGraduationYear(profile.year ?? "")}`
                 : "Complete your profile to get your placement score"}
             </p>
 
@@ -588,6 +594,12 @@ export default function Dashboard() {
                 >
                   {displayTier}
                 </span>
+              )}
+              {!scoreLoading && liveScore && (liveScore.nirf_stats?.placement_rate != null || liveScore.combined_base != null) && (
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4, fontFamily: "var(--font-sans)" }}>
+                  {profile?.college?.split(" ").slice(0, 2).join(" ")} avg:{" "}
+                  {liveScore.nirf_stats?.placement_rate ?? liveScore.combined_base}% placed
+                </div>
               )}
             </div>
 

@@ -404,10 +404,12 @@ export default function Internships() {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
   const [filterRole, setFilterRole] = useState("");
+  const [filterSearch, setFilterSearch] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterStipend, setFilterStipend] = useState<"Any" | "Paid" | "Unpaid">("Any");
   const [filterPosted, setFilterPosted] = useState<"Any" | "7" | "30">("Any");
   const [filterVerifiedOnly, setFilterVerifiedOnly] = useState(false);
+  const [filterRemoteOnly, setFilterRemoteOnly] = useState(false);
 
   // AI strategy state
   const [strategy, setStrategy] = useState<AIStrategy | null>(null);
@@ -604,7 +606,12 @@ export default function Internships() {
     const filtered = internships.filter(j => {
       if (!isTechInternship(j.title, j.description || '')) return false;
       if (filterRole && !j.title.toLowerCase().includes(filterRole.toLowerCase())) return false;
+      if (filterSearch) {
+        const q = filterSearch.toLowerCase();
+        if (!j.title.toLowerCase().includes(q) && !j.company.toLowerCase().includes(q)) return false;
+      }
       if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
+      if (filterRemoteOnly && !j.location.toLowerCase().includes("remote")) return false;
       if (filterStipend === "Paid" && !j.salary) return false;
       if (filterStipend === "Unpaid" && j.salary) return false;
       if (filterPosted === "7" && (j.days_ago === null || j.days_ago > 7)) return false;
@@ -681,6 +688,37 @@ export default function Internships() {
             )}
             {/* Filter bar */}
             <div className="bg-surface border border-theme rounded-2xl p-5 mb-6">
+              {/* Search bar */}
+              <div className="mb-4">
+                <label className="text-xs text-muted mb-1.5 block">Search by company or role</label>
+                <input
+                  value={filterSearch}
+                  onChange={e => setFilterSearch(e.target.value)}
+                  placeholder="e.g. Google, Software Engineer, React..."
+                  className="w-full bg-primary-bg border border-theme rounded-lg px-3 py-2 text-sm text-main placeholder-gray-600 focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+              {/* Quick toggles */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {([
+                  { label: "All", active: !filterVerifiedOnly && !filterRemoteOnly && filterStipend === "Any", onClick: () => { setFilterVerifiedOnly(false); setFilterRemoteOnly(false); setFilterStipend("Any"); } },
+                  { label: "Verified Only", active: filterVerifiedOnly, onClick: () => setFilterVerifiedOnly(v => !v) },
+                  { label: "Paid Only", active: filterStipend === "Paid", onClick: () => setFilterStipend(v => v === "Paid" ? "Any" : "Paid") },
+                  { label: "Remote Only", active: filterRemoteOnly, onClick: () => setFilterRemoteOnly(v => !v) },
+                ] as const).map(btn => (
+                  <button
+                    key={btn.label}
+                    onClick={btn.onClick}
+                    className={`px-3 py-1.5 text-xs rounded-full border font-medium transition ${
+                      btn.active
+                        ? "bg-blue-500/20 border-blue-500/40 text-blue-400"
+                        : "bg-primary-bg border-theme text-muted hover:border-gray-500 hover:text-main"
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div>
                   <label className="text-xs text-muted mb-1.5 block">Role</label>
@@ -725,15 +763,6 @@ export default function Internships() {
                   </select>
                 </div>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
-                <div
-                  onClick={() => setFilterVerifiedOnly(v => !v)}
-                  className={`w-9 h-5 rounded-full relative transition-colors ${filterVerifiedOnly ? "bg-green-600" : "bg-gray-700"}`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${filterVerifiedOnly ? "translate-x-4" : "translate-x-0.5"}`} />
-                </div>
-                <span className="text-sm text-muted">Verified companies only</span>
-              </label>
             </div>
 
             {listingsLoading && (
@@ -751,6 +780,11 @@ export default function Internships() {
 
             {!listingsLoading && !listingsError && (
               <>
+                {internships.length > 0 && internships.length < 20 && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-2.5 mb-4 text-xs text-yellow-400">
+                    Showing {internships.length} live listings — check back tomorrow for more
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-3 mb-1">
                   <p className="text-muted text-sm">
                     {filteredInternships.length} internship{filteredInternships.length !== 1 ? "s" : ""} found
