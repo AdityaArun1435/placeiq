@@ -1,5 +1,7 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://placeiq-backend-e7ik.onrender.com';
+
 const config = {
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  apiUrl: API_URL,
 }
 export default config
 
@@ -23,8 +25,7 @@ export async function fetchWithTimeout(
 
 export function startKeepAlive() {
   if (typeof window === 'undefined') return;
-  const ping = () =>
-    fetch(`${config.apiUrl}/health`, { cache: 'no-store' }).catch(() => {});
+  const ping = () => fetch(`${API_URL}/health`).catch(() => {});
   ping();
   setInterval(ping, 14 * 60 * 1000);
 }
