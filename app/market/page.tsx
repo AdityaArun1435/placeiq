@@ -74,16 +74,16 @@ const TIER_COLORS: Record<string, string> = {
   "Tier 1 Elite": "#F59E0B",
   "Super Dream": "#8B5CF6",
   "Core Tech": "#3B82F6",
-  "Bulk": "#6B7280",
+  "Bulk IT": "#6B7280",
   "Consulting": "#06B6D4",
-  "FinTech": "#10B981",
-  "Government / PSU": "#EF4444",
+  "FinTech / BFSI": "#10B981",
+  "Govt / PSU": "#EF4444",
   "Other": "#374151",
 };
 
 function groupTier(tier: string): string {
   const t = tier.toLowerCase();
-  if (t.includes("tier 1") || t.includes("tier1")) return "Tier 1 Elite";
+  if (t.includes("tier 1") || t.includes("tier1") || t.includes("elite")) return "Tier 1 Elite";
   if (t.includes("super dream")) return "Super Dream";
   if (
     t.includes("core") ||
@@ -93,10 +93,10 @@ function groupTier(tier: string): string {
     t.includes("product - indian") ||
     t.includes("differential")
   ) return "Core Tech";
-  if (t.includes("bulk") || t.includes("day 1") || t.includes("day 2") || t.includes("level 5")) return "Bulk";
+  if (t.includes("bulk") || t.includes("day 1") || t.includes("day 2") || t.includes("level 5")) return "Bulk IT";
   if (t.includes("consulting") || t.includes("deloitte") || t.includes("analytics")) return "Consulting";
-  if (t.includes("fintech") || t.includes("finance") || t.includes("quant") || t.includes("hft") || t.includes("banking")) return "FinTech";
-  if (t.includes("government") || t.includes("psu")) return "Government / PSU";
+  if (t.includes("fintech") || t.includes("finance") || t.includes("quant") || t.includes("hft") || t.includes("banking") || t.includes("bfsi")) return "FinTech / BFSI";
+  if (t.includes("government") || t.includes("psu")) return "Govt / PSU";
   return "Other";
 }
 
