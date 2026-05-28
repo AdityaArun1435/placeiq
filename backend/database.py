@@ -8,6 +8,9 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 load_dotenv()
 
+direct = os.getenv("DIRECT_DATABASE_URL", "NOT_SET")
+print(f"[DB DEBUG] DIRECT_DATABASE_URL = {direct[:40] if direct != 'NOT_SET' else 'NOT SET'}")
+
 _SQLITE_PATH = Path(__file__).parent / "placeiq.db"
 _DB_URL = os.getenv("DATABASE_URL", "")
 _DIRECT_URL = os.getenv("DIRECT_DATABASE_URL", "")
