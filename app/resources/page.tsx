@@ -13,7 +13,7 @@ const SECTIONS: Section[] = [
     title: "DSA & Competitive Programming",
     icon: Zap,
     resources: [
-      { label: "Striver's A2Z DSA Sheet", url: "https://takeuforward.org/strivers-a2z-dsa-course/", desc: "450+ problems, structured by topic — the gold standard for Indian placement prep" },
+      { label: "Striver's A2Z DSA Sheet", url: "https://takeuforward.org/strivers-a2z-dsa-course/strivers-a2z-dsa-course-sheet-2/", desc: "450+ problems, structured by topic — the gold standard for Indian placement prep" },
       { label: "NeetCode 150", url: "https://neetcode.io/", desc: "Curated 150 LeetCode problems with video explanations — ideal for product company prep" },
       { label: "LeetCode Company-wise Tags", url: "https://leetcode.com/problemset/", desc: "Filter by company to practice exactly what TCS, Infosys, Amazon, etc. actually ask" },
       { label: "GeeksForGeeks DSA", url: "https://www.geeksforgeeks.org/data-structures/", desc: "Comprehensive coverage of arrays, trees, graphs, DP with Indian company examples" },
@@ -25,7 +25,7 @@ const SECTIONS: Section[] = [
     icon: Play,
     resources: [
       { label: "Striver (TakeUForward)", url: "https://www.youtube.com/@takeUforward", desc: "Best DSA + system design channel for Indian placements — follows A2Z sheet exactly" },
-      { label: "Kunal Kushwaha", url: "https://www.youtube.com/@KunalKushwawa", desc: "Java DSA + open source bootcamp — excellent for beginners building a strong foundation" },
+      { label: "Kunal Kushwaha", url: "https://www.youtube.com/@KunalKushwaha", desc: "Java DSA + open source bootcamp — excellent for beginners building a strong foundation" },
       { label: "Abdul Bari", url: "https://www.youtube.com/@abdul_bari", desc: "Classic algorithms explained with deep theory — essential for understanding time complexity" },
       { label: "Apna College", url: "https://www.youtube.com/@ApnaCollegeOfficial", desc: "Full DSA course in C++ and Java tailored for Indian college students" },
       { label: "Code with Harry", url: "https://www.youtube.com/@CodeWithHarry", desc: "Beginner-friendly Python, web dev, and CS tutorials in Hindi" },
@@ -38,7 +38,7 @@ const SECTIONS: Section[] = [
     resources: [
       { label: "CS50 by Harvard", url: "https://cs50.harvard.edu/x/", desc: "The best free CS course on earth — covers C, Python, SQL, web dev from scratch" },
       { label: "NPTEL Programming Courses", url: "https://nptel.ac.in/course.html", desc: "IIT-taught courses with certification — respected by Indian companies for Data Science, AI" },
-      { label: "freeCodeCamp", url: "https://www.freecodecamp.org/", desc: "Full web development path: HTML/CSS/JS → React → Node.js completely free with projects" },
+      { label: "freeCodeCamp", url: "https://www.freecodecamp.org/learn", desc: "Full web development path: HTML/CSS/JS → React → Node.js completely free with projects" },
       { label: "Coursera (Audit Free)", url: "https://www.coursera.org/", desc: "Audit Stanford, Google, IBM courses free — click 'Audit' when enrolling to skip payment" },
       { label: "MIT OpenCourseWare", url: "https://ocw.mit.edu/", desc: "MIT lecture notes, problem sets, exams for algorithms, systems, AI — completely free" },
       { label: "The Missing Semester (MIT)", url: "https://missing.csail.mit.edu/", desc: "Git, shell, Linux tools — critical missing skills that college never teaches" },
@@ -70,7 +70,7 @@ const SECTIONS: Section[] = [
     icon: Settings2,
     resources: [
       { label: "System Design Primer (GitHub)", url: "https://github.com/donnemartin/system-design-primer", desc: "The definitive free system design guide — essential for Razorpay, Swiggy, Flipkart interviews" },
-      { label: "High Scalability", url: "http://highscalability.com/", desc: "Real architecture case studies from Twitter, Uber, Amazon — great for senior role prep" },
+      { label: "High Scalability", url: "https://highscalability.com/", desc: "Real architecture case studies from Twitter, Uber, Amazon — great for senior role prep" },
       { label: "Gaurav Sen (YouTube)", url: "https://www.youtube.com/@gkcs", desc: "Best system design YouTube channel for Indian product company interviews" },
     ],
   },
