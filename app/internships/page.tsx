@@ -36,6 +36,21 @@ const KNOWN_COMPANIES = new Set([
   "ather energy", "ola electric", "cars24", "delhivery", "browserstack",
 ]);
 
+const CS_KEYWORDS = [
+  'software','developer','engineer','frontend','backend','fullstack','full stack',
+  'react','node','python','java','javascript','typescript','data science','data analyst',
+  'machine learning','ml','ai ','artificial intelligence','deep learning','nlp',
+  'devops','cloud','aws','azure','gcp','android','ios','mobile','web','api','database',
+  'cyber','security','embedded','computer science','information technology','coding',
+  'programming','blockchain','gen ai','generative','llm','ux','ui/ux','qa','testing',
+  'automation','robotics','iot',
+];
+
+function isTechInternship(title: string, description: string): boolean {
+  const text = (title + ' ' + (description || '')).toLowerCase();
+  return CS_KEYWORDS.some(kw => text.includes(kw));
+}
+
 function computeInternshipScore(job: { title: string; description: string; company: string; salary: string; location: string }, profile: { targetRole: string; branch: string; skills: string[] }): number {
   let score = 0;
   const title = (job.title || "").toLowerCase();
@@ -587,6 +602,7 @@ export default function Internships() {
 
   const filteredInternships = useMemo(() => {
     const filtered = internships.filter(j => {
+      if (!isTechInternship(j.title, j.description || '')) return false;
       if (filterRole && !j.title.toLowerCase().includes(filterRole.toLowerCase())) return false;
       if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
       if (filterStipend === "Paid" && !j.salary) return false;

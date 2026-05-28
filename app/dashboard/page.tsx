@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
   Users, ClipboardList, TrendingUp, FileText, FileSearch,
-  BookOpen, BarChart2, Database, School,
+  BookOpen, BarChart2, Database, School, Mail,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import config from "@/lib/config";
@@ -109,6 +109,7 @@ const FEATURE_GROUPS: FeatureGroup[] = [
       { path: "/oncampus", name: "On Campus Drives", Icon: GraduationCap, description: "Companies likely to visit your college this season with probability scores." },
       { path: "/internships", name: "Internships", Icon: Briefcase, description: "Live internships with an AI strategy tailored to your college tier and profile." },
       { path: "/referral", name: "Referral Radar", Icon: Users, description: "Find alumni from your college working at top companies." },
+      { path: "/coldemail", name: "Cold Email", Icon: Mail, description: "Generate personalised cold emails to recruiters and hiring managers." },
     ],
   },
   {

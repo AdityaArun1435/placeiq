@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import {
@@ -212,8 +213,19 @@ function ReviewForm() {
 }
 
 export default function LandingPage() {
+  const { status } = useSession();
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/dashboard");
+  }, [status, router]);
+
+  if (status === "loading" || status === "authenticated") return (
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   const EASE = [0.23, 1, 0.32, 1] as [number, number, number, number];
 

@@ -2842,7 +2842,7 @@ def placement_colleges():
 
 @app.get("/api/placement/stats/{college_name}")
 def placement_stats(college_name: str):
-    """All college_stats rows for the given college."""
+    """College stats: college_stats table first, fallback to placement_records aggregation."""
     from urllib.parse import unquote
     college_name = unquote(college_name)
     with _pdb_conn() as conn:
@@ -2850,7 +2850,25 @@ def placement_stats(college_name: str):
             "SELECT * FROM college_stats WHERE college_name = ? ORDER BY year",
             (college_name,),
         ).fetchall()
-    return [dict(r) for r in rows]
+        if rows:
+            return [dict(r) for r in rows]
+        agg = conn.execute("""
+            SELECT
+                college_name,
+                year AS year,
+                COUNT(DISTINCT company_name) AS total_companies,
+                MAX(ctc_max) AS highest_ctc,
+                MIN(CASE WHEN ctc_min > 0 THEN ctc_min END) AS lowest_ctc,
+                ROUND(AVG((COALESCE(ctc_min,0)+COALESCE(ctc_max,ctc_min,0))/2.0), 2) AS avg_ctc,
+                NULL AS median_ctc,
+                CAST(SUM(COALESCE(avg_headcount,0)) AS INTEGER) AS total_offers,
+                MAX(COALESCE(data_tier,'tier2')) AS data_tier
+            FROM placement_records
+            WHERE college_name = ?
+            GROUP BY year
+            ORDER BY year
+        """, (college_name,)).fetchall()
+    return [dict(r) for r in agg]
 
 
 @app.get("/api/placement/companies/{college_name}")
