@@ -2660,8 +2660,13 @@ def placement_probability(payload: ProfileIn):
         resp["sources_count"] = all_stats.get("sources_count", 0)
         resp["all_sources"] = all_stats.get("all_sources", [])
 
-    # Include nirf_stats as nested object (with score_breakdown) for frontend compatibility
+    # Include nirf_stats as nested object (with score_breakdown) for frontend compatibility.
+    # ALSO override resp["score"] with the deterministic final_score so the ring and breakdown
+    # always show the same number — the ML score is discarded in favour of the NIRF formula.
     if nirf_stats_with_breakdown:
+        deterministic_final = (nirf_stats_with_breakdown.get("score_breakdown") or {}).get("final_score")
+        if deterministic_final is not None:
+            resp["score"] = deterministic_final
         resp["nirf_stats"] = nirf_stats_with_breakdown
     elif nirf_stats and nirf_stats.get("matched"):
         resp["nirf_stats"] = nirf_stats
@@ -5606,6 +5611,22 @@ def _hiring_status(days_ago: int | None) -> str:
     return "May Be Closed"
 
 
+_STALE_LISTING_PHRASES = {
+    "closed", "expired", "no longer accepting", "position filled",
+    "not accepting", "vacancy closed", "application closed",
+}
+
+
+def _is_expired_listing(job: dict) -> bool:
+    days_ago = job.get("days_ago")
+    if days_ago is not None and days_ago > 60:
+        return True
+    title = (job.get("title") or "").lower()
+    desc = (job.get("description") or "").lower()
+    combined = title + " " + desc
+    return any(phrase in combined for phrase in _STALE_LISTING_PHRASES)
+
+
 _NON_CS_INTERN_TITLE_WORDS = {
     "mba", "marketing", "sales", "hr", "human resources", "finance", "accounts",
     "content writing", "social media", "business development", "operations manager",
@@ -6041,6 +6062,8 @@ async def internships_list(skills: str = ""):
 
     result = []
     for job in raw_jobs:
+        if _is_expired_listing(job):
+            continue
         j = dict(job)
         if user_skills_lower:
             text = (j.get("description", "") + " " + j.get("title", "") + " " + j.get("company", "")).lower()
@@ -6053,11 +6076,14 @@ async def internships_list(skills: str = ""):
         j["quality_score"] = quality
         result.append(j)
 
+    # Sort: paid+known first, then by quality descending, then by recency (newest first),
+    # then by match_score. Listings with no date sort after dated ones within the same tier.
     result.sort(key=lambda x: (
         0 if (x.get("paid") and x.get("known")) else
         1 if (x.get("paid") and not x.get("known")) else
         2 if (not x.get("paid") and x.get("known")) else 3,
         -x.get("quality_score", 0),
+        x.get("days_ago") if x.get("days_ago") is not None else 999,
         -x["match_score"],
     ))
 

@@ -6,6 +6,17 @@ import { Check, Star } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
 
+function formatDaysAgo(days: number | null): string {
+  if (days === null || days === undefined) return "Date unknown";
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "1 week ago";
+  if (days < 21) return "2 weeks ago";
+  if (days < 30) return "3 weeks ago";
+  return `${days} days ago`;
+}
+
 function stripHtml(html: string): string {
   if (!html) return "";
   let text = html
@@ -846,14 +857,10 @@ export default function Internships() {
                               )}
                             </div>
                             <p className="text-muted text-sm mt-0.5">{job.company} · {job.location}</p>
+                            <p className="text-faint text-xs mt-0.5">Posted: {formatDaysAgo(job.days_ago)}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">
                             {hiringBadge(job.hiring_status)}
-                            {job.days_ago !== null && (
-                              <span className="text-xs text-faint">
-                                {job.days_ago === 0 ? "Today" : job.days_ago === 1 ? "Yesterday" : `${job.days_ago}d ago`}
-                              </span>
-                            )}
                           </div>
                         </div>
 
