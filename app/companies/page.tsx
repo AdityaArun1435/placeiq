@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import config, { fetchWithTimeout } from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import StarButton from '@/components/StarButton'
 
 type Company = {
   name: string;
@@ -87,7 +88,7 @@ function MatchBar({ score }: { score: number }) {
   );
 }
 
-function CompanyCard({ company }: { company: Company }) {
+function CompanyCard({ company, collegeName }: { company: Company; collegeName?: string }) {
   const isValidUrl = company.apply_link?.startsWith("http");
   return (
     <div className="bg-surface border border-theme hover:border-theme rounded-2xl p-5 flex flex-col gap-3 transition">
@@ -151,24 +152,27 @@ function CompanyCard({ company }: { company: Company }) {
         <p className="text-xs leading-relaxed" style={{ color: '#ef4444' }}>- {company.biggest_gap}</p>
       </div>
 
-      {/* Apply */}
-      {isValidUrl ? (
-        <a
-          href={company.apply_link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-apply mt-auto"
-        >
-          Apply →
-        </a>
-      ) : (
-        <button
-          disabled
-          className="mt-auto block w-full text-center bg-elevated border border-theme text-faint text-sm py-2.5 rounded-xl cursor-not-allowed"
-        >
-          Apply
-        </button>
-      )}
+      {/* Apply + Star */}
+      <div className="flex items-center gap-2 mt-auto">
+        <StarButton companyName={company.name} collegeName={collegeName} size="md" />
+        {isValidUrl ? (
+          <a
+            href={company.apply_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-apply flex-1"
+          >
+            Apply →
+          </a>
+        ) : (
+          <button
+            disabled
+            className="flex-1 text-center bg-elevated border border-theme text-faint text-sm py-2.5 rounded-xl cursor-not-allowed"
+          >
+            Apply
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -497,7 +501,7 @@ export default function Companies() {
             {displayed.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {displayed.map((company, i) => (
-                  <CompanyCard key={`${company.name}-${i}`} company={company} />
+                  <CompanyCard key={`${company.name}-${i}`} company={company} collegeName={profile?.college} />
                 ))}
               </div>
             ) : (

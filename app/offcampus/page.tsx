@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Check, Search } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import StarButton from '@/components/StarButton'
 
 type Profile = {
   targetRole: string;
@@ -302,16 +303,19 @@ export default function OffCampus() {
               </span>
             ))}
           </div>
-          {job.apply_link && (
-            <a
-              href={job.apply_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-blue-600 hover:bg-blue-500 text-main text-xs px-4 py-2 rounded-lg transition font-medium"
-            >
-              Apply Now →
-            </a>
-          )}
+          <div className="flex items-center gap-2">
+            <StarButton companyName={job.company} collegeName={profile?.college} size="sm" />
+            {job.apply_link && (
+              <a
+                href={job.apply_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 hover:bg-blue-500 text-main text-xs px-4 py-2 rounded-lg transition font-medium"
+              >
+                Apply Now →
+              </a>
+            )}
+          </div>
         </div>
       </div>
     );

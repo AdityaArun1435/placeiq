@@ -19,6 +19,7 @@ const NAV_LINKS = [
   { label: "Resume", path: "/resume" },
   { label: "PYQ", path: "/pyq" },
   { label: "Referral", path: "/referral" },
+  { label: "Starred", path: "/starred" },
   { label: "Progress", path: "/progress" },
   { label: "Resources", path: "/resources" },
   { label: "Company Directory", path: "/company-directory" },

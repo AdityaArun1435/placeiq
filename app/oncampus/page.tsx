@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import StarButton from '@/components/StarButton'
 
 type Profile = {
   college: string;
@@ -642,6 +643,9 @@ export default function OnCampus() {
                                       </div>
                                       <span className={`font-bold text-sm ${probColor(displayProb)}`}>{displayProb}%</span>
                                     </div>
+                                  </div>
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <StarButton companyName={co.name} collegeName={profile?.college} size="sm" />
                                   </div>
                                   <span className="text-faint text-sm">{expandedIdx === idx ? "▲" : "▼"}</span>
                                 </div>

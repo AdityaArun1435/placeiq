@@ -34,6 +34,9 @@ Base.metadata.create_all(bind=engine)
 
 def _migrate():
     inspector = inspect(engine)
+    _is_pg = engine.dialect.name == "postgresql"
+    _pk = "SERIAL PRIMARY KEY" if _is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
     if "user_profiles" not in inspector.get_table_names():
         return
     existing = {col["name"] for col in inspector.get_columns("user_profiles")}
@@ -56,9 +59,9 @@ def _migrate():
 
     # placement_sources table (multi-source college data)
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS placement_sources (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {_pk},
                 college_name TEXT NOT NULL,
                 source_name TEXT NOT NULL,
                 placement_rate REAL,
@@ -74,9 +77,9 @@ def _migrate():
 
     # market_insights table (scraped news articles)
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS market_insights (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {_pk},
                 title TEXT NOT NULL,
                 summary TEXT,
                 source_name TEXT,
@@ -160,9 +163,9 @@ def _migrate():
 
     # campus_placements table — real placement drive records per college per year
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS campus_placements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {_pk},
                 college_name TEXT NOT NULL,
                 company_name TEXT NOT NULL,
                 visit_date TEXT,
@@ -182,9 +185,9 @@ def _migrate():
 
     # pyq_questions table — sourced (not AI-generated) interview questions
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS pyq_questions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {_pk},
                 company TEXT NOT NULL,
                 round_type TEXT NOT NULL,
                 question_text TEXT NOT NULL,
@@ -236,6 +239,20 @@ def _migrate():
             CREATE TABLE IF NOT EXISTS seed_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            )
+        """))
+
+    # starred_companies table — user-starred companies for tracking
+    with engine.begin() as conn:
+        _ts_default = "DEFAULT NOW()" if _is_pg else "DEFAULT CURRENT_TIMESTAMP"
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS starred_companies (
+                id {_pk},
+                user_email TEXT NOT NULL,
+                company_name TEXT NOT NULL,
+                college_name TEXT,
+                starred_at TIMESTAMP {_ts_default},
+                UNIQUE(user_email, company_name)
             )
         """))
 
@@ -297,16 +314,25 @@ def _seed_campus_placements():
         ("SRM KTR", "Diageo India", "2025-11-27", "Graduate Engineering Trainee", "Super Dream", 14.0, 14.0, 14.0, 60.0, 900, 2, "2025-26"),
         ("SRM KTR", "Electronic Arts", "2026-03-04", "SE Intern", "Marquee", 20.88, 20.88, 20.88, 75.0, 201, 1, "2025-26"),
     ]
+    _pg = engine.dialect.name == "postgresql"
+    _ins_campus = (
+        "INSERT INTO campus_placements"
+        " (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,"
+        "  eligibility_percent, students_applied, students_selected, academic_year, source)"
+        " VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,"
+        "         :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)"
+        + (" ON CONFLICT DO NOTHING" if _pg else "")
+    ) if _pg else (
+        "INSERT OR IGNORE INTO campus_placements"
+        " (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,"
+        "  eligibility_percent, students_applied, students_selected, academic_year, source)"
+        " VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,"
+        "         :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)"
+    )
     try:
         with engine.begin() as conn:
             for r in records:
-                conn.execute(text("""
-                    INSERT OR IGNORE INTO campus_placements
-                    (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,
-                     eligibility_percent, students_applied, students_selected, academic_year, source)
-                    VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,
-                            :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)
-                """), {
+                conn.execute(text(_ins_campus), {
                     "college_name": r[0], "company_name": r[1], "visit_date": r[2],
                     "role": r[3], "category": r[4], "ctc": r[5], "ctc_min": r[6], "ctc_max": r[7],
                     "eligibility_percent": r[8], "students_applied": r[9], "students_selected": r[10],
@@ -1164,14 +1190,20 @@ def _seed_pyq_questions():
     questions.extend(_get_capgemini_questions())
     questions.extend(_get_hcl_questions())
     questions.extend(_get_techmahindra_questions())
+    _pyq_sql = (
+        "INSERT INTO pyq_questions"
+        " (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)"
+        " VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)"
+        " ON CONFLICT DO NOTHING"
+    ) if engine.dialect.name == "postgresql" else (
+        "INSERT OR IGNORE INTO pyq_questions"
+        " (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)"
+        " VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)"
+    )
     try:
         with engine.begin() as conn:
             for q in questions:
-                conn.execute(text("""
-                    INSERT OR IGNORE INTO pyq_questions
-                    (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)
-                    VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)
-                """), {
+                conn.execute(text(_pyq_sql), {
                     "company": q[0], "round_type": q[1], "question_text": q[2], "difficulty": q[3],
                     "topic": q[4], "source_url": q[5], "source_name": q[6], "year": q[7], "verified": q[8],
                 })
@@ -1212,14 +1244,20 @@ def _seed_college_overrides():
         ("IIIT Hyderabad", 95.0, 18.0, 120.0, "Tier 1", ""),
         ("IIIT Bangalore", 92.0, 16.0, 100.0, "Tier 1", ""),
     ]
+    _ovr_sql = (
+        "INSERT INTO college_overrides"
+        " (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)"
+        " VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)"
+        " ON CONFLICT DO NOTHING"
+    ) if engine.dialect.name == "postgresql" else (
+        "INSERT OR IGNORE INTO college_overrides"
+        " (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)"
+        " VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)"
+    )
     try:
         with engine.begin() as conn:
             for o in overrides:
-                conn.execute(text("""
-                    INSERT OR IGNORE INTO college_overrides
-                    (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)
-                    VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)
-                """), {
+                conn.execute(text(_ovr_sql), {
                     "college_name": o[0], "placement_rate": o[1], "median_salary": o[2],
                     "highest_salary": o[3], "college_tier": o[4], "notes": o[5],
                 })
@@ -2770,17 +2808,52 @@ _PDB = Path(__file__).parent / "placeiq.db"
 
 
 def _pdb_conn():
-    import sqlite3 as _sq
-    conn = _sq.connect(_PDB)
-    conn.row_factory = _sq.Row
-    return conn
+    """Return a connection that normalises psycopg2 and sqlite3 into the same API.
+
+    Callers may use:
+      with _pdb_conn() as conn:
+          rows = conn.execute("SELECT ... WHERE x = ?", (val,)).fetchall()
+          row["column_name"]   # dict-style access works for both dialects
+          dict(row)            # also works for both
+    The wrapper transparently converts ? → %s for PostgreSQL.
+    """
+    from database import get_connection as _gc, db_type as _dt
+    _raw = _gc()
+    if _dt == "supabase":
+        import psycopg2.extras as _pge
+
+        class _PgWrap:
+            def __init__(self, c):
+                self._c = c
+                self._cur = c.cursor(cursor_factory=_pge.RealDictCursor)
+
+            def execute(self, sql, params=()):
+                self._cur.execute(sql.replace("?", "%s"), params or ())
+                return self._cur
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, *_):
+                if not exc_type:
+                    self._c.commit()
+                else:
+                    self._c.rollback()
+                self._c.close()
+
+        return _PgWrap(_raw)
+    else:
+        import sqlite3 as _sq
+        _raw.row_factory = _sq.Row
+        return _raw
 
 
 def _ensure_role_cache_table():
+    _pk = "SERIAL PRIMARY KEY" if engine.dialect.name == "postgresql" else "INTEGER PRIMARY KEY"
     with _pdb_conn() as conn:
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS role_trends_cache (
-                id INTEGER PRIMARY KEY,
+                id {_pk},
                 data_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
@@ -4156,10 +4229,7 @@ async def oncampus_predict(payload: OnCampusIn):
     # Fetch real placement DB data for this college
     _real_db_context = ""
     try:
-        import sqlite3 as _sq3
-        _pdb_path = Path(__file__).parent / "placeiq.db"
-        with _sq3.connect(_pdb_path) as _c:
-            _c.row_factory = _sq3.Row
+        with _pdb_conn() as _c:
             _sf = _c.execute(
                 "SELECT * FROM college_stats WHERE college_name = ? ORDER BY year DESC LIMIT 1",
                 (payload.college,),
@@ -6938,3 +7008,62 @@ async def coding_stats(leetcode: str = "", codechef: str = "", codeforces: str =
         result["codeforces"] = await get_stats("codeforces", codeforces, _fetch_codeforces_stats)
 
     return result
+
+
+# ── Starred Companies ─────────────────────────────────────────────────────────
+
+class StarredAddIn(BaseModel):
+    user_email: str
+    company_name: str
+    college_name: str | None = None
+
+
+class StarredRemoveIn(BaseModel):
+    user_email: str
+    company_name: str
+
+
+@app.post("/api/starred/add")
+async def starred_add(body: StarredAddIn):
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO starred_companies (user_email, company_name, college_name) VALUES (:email, :company, :college)"),
+                {"email": body.user_email, "company": body.company_name, "college": body.college_name},
+            )
+        return {"status": "starred"}
+    except Exception as e:
+        err = str(e).lower()
+        if "unique" in err or "duplicate" in err:
+            return {"status": "already_starred"}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/starred/remove")
+async def starred_remove(body: StarredRemoveIn):
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM starred_companies WHERE user_email = :email AND company_name = :company"),
+            {"email": body.user_email, "company": body.company_name},
+        )
+    return {"status": "removed"}
+
+
+@app.get("/api/starred/list")
+async def starred_list(email: str):
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT company_name, college_name, starred_at FROM starred_companies WHERE user_email = :email ORDER BY starred_at DESC"),
+            {"email": email},
+        ).fetchall()
+    return {"starred": [{"company_name": r[0], "college_name": r[1], "starred_at": str(r[2])} for r in rows]}
+
+
+@app.get("/api/starred/check")
+async def starred_check(email: str, company: str):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT 1 FROM starred_companies WHERE user_email = :email AND company_name = :company LIMIT 1"),
+            {"email": email, "company": company},
+        ).fetchone()
+    return {"starred": row is not None}

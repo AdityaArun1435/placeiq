@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Star } from "lucide-react";
 import config from '@/lib/config'
 import LoadingScreen from '@/components/LoadingScreen'
+import StarButton from '@/components/StarButton'
 
 type Company = {
   name: string;
@@ -273,6 +274,7 @@ export default function CompanyDirectoryPage() {
 
                   {/* Action buttons */}
                   <div className="flex gap-2 flex-wrap mt-auto">
+                    <StarButton companyName={co.name} size="sm" />
                     <a
                       href={`https://www.linkedin.com/company/${co.linkedin}/`}
                       target="_blank"
