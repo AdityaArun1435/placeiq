@@ -12,6 +12,9 @@ _SQLITE_PATH = Path(__file__).parent / "placeiq.db"
 _DB_URL = os.getenv("DATABASE_URL", "")
 _DIRECT_URL = os.getenv("DIRECT_DATABASE_URL", "")
 
+print(f"[DB] DATABASE_URL starts with:        {_DB_URL[:30] if _DB_URL else 'NOT SET'}")
+print(f"[DB] DIRECT_DATABASE_URL starts with: {_DIRECT_URL[:30] if _DIRECT_URL else 'NOT SET'}")
+
 # ── Determine active database ─────────────────────────────────────────────────
 
 def _try_connect(url: str) -> bool:
