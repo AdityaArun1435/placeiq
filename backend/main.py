@@ -1987,11 +1987,36 @@ limiter = Limiter(key_func=get_remote_address)
 
 @app.post("/api/admin/seed-pyq")
 async def seed_pyq_endpoint():
+    if not is_supabase():
+        return {"error": "not in supabase mode"}
+    _sb = get_supabase()
+    questions = []
+    questions.extend(_get_tcs_questions())
+    questions.extend(_get_infosys_questions())
+    questions.extend(_get_wipro_questions())
+    questions.extend(_get_cognizant_questions())
+    questions.extend(_get_accenture_questions())
+    questions.extend(_get_amazon_questions())
+    questions.extend(_get_microsoft_questions())
+    questions.extend(_get_google_questions())
+    questions.extend(_get_zoho_questions())
+    questions.extend(_get_freshworks_questions())
+    questions.extend(_get_goldman_questions())
+    questions.extend(_get_deloitte_questions())
+    questions.extend(_get_capgemini_questions())
+    questions.extend(_get_hcl_questions())
+    questions.extend(_get_techmahindra_questions())
+    rows = [
+        {"company": q[0], "round_type": q[1], "question_text": q[2], "difficulty": q[3],
+         "topic": q[4], "source_url": q[5], "source_name": q[6], "year": q[7], "verified": q[8]}
+        for q in questions
+    ]
     try:
-        _seed_pyq_questions()
-        return {"status": "done"}
+        result = _sb.table("pyq_questions").upsert(rows, on_conflict="company,round_type,question_text").execute()
+        after = _sb.table("pyq_questions").select("id", count="exact").execute()
+        return {"status": "done", "rows_prepared": len(rows), "rows_in_table": after.count}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "type": type(e).__name__}
 
 _scheduler = AsyncIOScheduler()
 
