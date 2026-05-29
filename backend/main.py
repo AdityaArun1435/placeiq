@@ -1236,15 +1236,6 @@ def _seed_pyq_questions():
         print(f"[Seed] pyq_questions error: {e}")
 
 
-@app.post("/api/admin/seed-pyq")
-async def seed_pyq_endpoint():
-    try:
-        _seed_pyq_questions()
-        return {"status": "done"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
 # ── Seed: College Overrides (researched realistic values) ────────────────────
 
 def _seed_college_overrides():
@@ -1992,6 +1983,15 @@ def _load_market_cache() -> dict | None:
 app = FastAPI(title="PlaceIQ API")
 
 limiter = Limiter(key_func=get_remote_address)
+
+
+@app.post("/api/admin/seed-pyq")
+async def seed_pyq_endpoint():
+    try:
+        _seed_pyq_questions()
+        return {"status": "done"}
+    except Exception as e:
+        return {"error": str(e)}
 
 _scheduler = AsyncIOScheduler()
 
