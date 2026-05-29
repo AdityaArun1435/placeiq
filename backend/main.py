@@ -1236,6 +1236,15 @@ def _seed_pyq_questions():
         print(f"[Seed] pyq_questions error: {e}")
 
 
+@app.post("/api/admin/seed-pyq")
+async def seed_pyq_endpoint():
+    try:
+        _seed_pyq_questions()
+        return {"status": "done"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Seed: College Overrides (researched realistic values) ────────────────────
 
 def _seed_college_overrides():
