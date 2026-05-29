@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from database import Base, engine, get_db
+from database import Base, engine, get_db, get_supabase, is_supabase
 from models import UserProfile, ProfileIn, ProfileOut, SkillsGapIn, CompanyMatchIn, RoadmapIn, RoadmapChatIn, Alumni
 from utils.college_lookup import get_college_stats, get_college_tier, get_all_college_stats
 
@@ -33,6 +33,9 @@ Base.metadata.create_all(bind=engine)
 
 
 def _migrate():
+    if is_supabase():
+        print("[DB] Supabase active — skipping DDL migration (tables already exist in Supabase)")
+        return
     inspector = inspect(engine)
     _is_pg = engine.dialect.name == "postgresql"
     _pk = "SERIAL PRIMARY KEY" if _is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -314,22 +317,31 @@ def _seed_campus_placements():
         ("SRM KTR", "Diageo India", "2025-11-27", "Graduate Engineering Trainee", "Super Dream", 14.0, 14.0, 14.0, 60.0, 900, 2, "2025-26"),
         ("SRM KTR", "Electronic Arts", "2026-03-04", "SE Intern", "Marquee", 20.88, 20.88, 20.88, 75.0, 201, 1, "2025-26"),
     ]
-    _pg = engine.dialect.name == "postgresql"
-    _ins_campus = (
-        "INSERT INTO campus_placements"
-        " (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,"
-        "  eligibility_percent, students_applied, students_selected, academic_year, source)"
-        " VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,"
-        "         :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)"
-        + (" ON CONFLICT DO NOTHING" if _pg else "")
-    ) if _pg else (
-        "INSERT OR IGNORE INTO campus_placements"
-        " (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,"
-        "  eligibility_percent, students_applied, students_selected, academic_year, source)"
-        " VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,"
-        "         :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)"
-    )
+    if is_supabase():
+        _sb = get_supabase()
+        try:
+            rows_to_upsert = [
+                {
+                    "college_name": r[0], "company_name": r[1], "visit_date": r[2],
+                    "role": r[3], "category": r[4], "ctc": r[5], "ctc_min": r[6], "ctc_max": r[7],
+                    "eligibility_percent": r[8], "students_applied": r[9], "students_selected": r[10],
+                    "academic_year": r[11], "source": "SRM KTR Placement Cell",
+                }
+                for r in records
+            ]
+            _sb.table("campus_placements").upsert(rows_to_upsert, on_conflict="college_name,company_name,academic_year,role").execute()
+            print(f"[Seed] campus_placements: upserted {len(rows_to_upsert)} rows via Supabase")
+        except Exception as e:
+            print(f"[Seed] campus_placements Supabase error: {e}")
+        return
     try:
+        _ins_campus = (
+            "INSERT OR IGNORE INTO campus_placements"
+            " (college_name, company_name, visit_date, role, category, ctc, ctc_min, ctc_max,"
+            "  eligibility_percent, students_applied, students_selected, academic_year, source)"
+            " VALUES (:college_name, :company_name, :visit_date, :role, :category, :ctc, :ctc_min, :ctc_max,"
+            "         :eligibility_percent, :students_applied, :students_selected, :academic_year, :source)"
+        )
         with engine.begin() as conn:
             for r in records:
                 conn.execute(text(_ins_campus), {
@@ -1190,17 +1202,27 @@ def _seed_pyq_questions():
     questions.extend(_get_capgemini_questions())
     questions.extend(_get_hcl_questions())
     questions.extend(_get_techmahindra_questions())
-    _pyq_sql = (
-        "INSERT INTO pyq_questions"
-        " (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)"
-        " VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)"
-        " ON CONFLICT DO NOTHING"
-    ) if engine.dialect.name == "postgresql" else (
-        "INSERT OR IGNORE INTO pyq_questions"
-        " (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)"
-        " VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)"
-    )
+    if is_supabase():
+        _sb = get_supabase()
+        try:
+            rows_to_upsert = [
+                {
+                    "company": q[0], "round_type": q[1], "question_text": q[2], "difficulty": q[3],
+                    "topic": q[4], "source_url": q[5], "source_name": q[6], "year": q[7], "verified": q[8],
+                }
+                for q in questions
+            ]
+            _sb.table("pyq_questions").upsert(rows_to_upsert, on_conflict="company,round_type,question_text").execute()
+            print(f"[Seed] pyq_questions: upserted {len(rows_to_upsert)} rows via Supabase")
+        except Exception as e:
+            print(f"[Seed] pyq_questions Supabase error: {e}")
+        return
     try:
+        _pyq_sql = (
+            "INSERT OR IGNORE INTO pyq_questions"
+            " (company, round_type, question_text, difficulty, topic, source_url, source_name, year, verified)"
+            " VALUES (:company, :round_type, :question_text, :difficulty, :topic, :source_url, :source_name, :year, :verified)"
+        )
         with engine.begin() as conn:
             for q in questions:
                 conn.execute(text(_pyq_sql), {
@@ -1244,17 +1266,27 @@ def _seed_college_overrides():
         ("IIIT Hyderabad", 95.0, 18.0, 120.0, "Tier 1", ""),
         ("IIIT Bangalore", 92.0, 16.0, 100.0, "Tier 1", ""),
     ]
-    _ovr_sql = (
-        "INSERT INTO college_overrides"
-        " (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)"
-        " VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)"
-        " ON CONFLICT DO NOTHING"
-    ) if engine.dialect.name == "postgresql" else (
-        "INSERT OR IGNORE INTO college_overrides"
-        " (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)"
-        " VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)"
-    )
+    if is_supabase():
+        _sb = get_supabase()
+        try:
+            rows_to_upsert = [
+                {
+                    "college_name": o[0], "placement_rate": o[1], "median_salary": o[2],
+                    "highest_salary": o[3], "college_tier": o[4], "notes": o[5],
+                }
+                for o in overrides
+            ]
+            _sb.table("college_overrides").upsert(rows_to_upsert, on_conflict="college_name").execute()
+            print(f"[Seed] college_overrides: upserted {len(rows_to_upsert)} rows via Supabase")
+        except Exception as e:
+            print(f"[Seed] college_overrides Supabase error: {e}")
+        return
     try:
+        _ovr_sql = (
+            "INSERT OR IGNORE INTO college_overrides"
+            " (college_name, placement_rate, median_salary, highest_salary, college_tier, notes)"
+            " VALUES (:college_name, :placement_rate, :median_salary, :highest_salary, :college_tier, :notes)"
+        )
         with engine.begin() as conn:
             for o in overrides:
                 conn.execute(text(_ovr_sql), {
@@ -1272,6 +1304,19 @@ _seed_college_overrides()
 
 def _cache_get(table: str, key: str, ttl_hours: int) -> str | None:
     """Return cached content if it exists and is within TTL, else None."""
+    if is_supabase():
+        try:
+            _sb = get_supabase()
+            rows = _sb.table(table).select("content,created_at").eq("cache_key", key).limit(1).execute().data
+            if rows:
+                ts = datetime.fromisoformat(rows[0]["created_at"])
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - ts <= timedelta(hours=ttl_hours):
+                    return rows[0]["content"]
+        except Exception as e:
+            print(f"[Cache] get error ({table}): {e}")
+        return None
     try:
         with engine.connect() as conn:
             row = conn.execute(
@@ -1291,6 +1336,16 @@ def _cache_get(table: str, key: str, ttl_hours: int) -> str | None:
 
 def _cache_set(table: str, key: str, content: str):
     """Upsert content into cache table."""
+    if is_supabase():
+        try:
+            _sb = get_supabase()
+            _sb.table(table).upsert(
+                {"cache_key": key, "content": content, "created_at": datetime.now(timezone.utc).isoformat()},
+                on_conflict="cache_key",
+            ).execute()
+        except Exception as e:
+            print(f"[Cache] set error ({table}): {e}")
+        return
     try:
         with engine.begin() as conn:
             conn.execute(
@@ -1307,6 +1362,27 @@ def _cache_set(table: str, key: str, content: str):
 
 def _cache_stat(endpoint: str, hit: bool):
     """Increment cache hit/miss stats."""
+    if is_supabase():
+        try:
+            _sb = get_supabase()
+            existing = _sb.table("ai_cache_stats").select("endpoint").eq("endpoint", endpoint).limit(1).execute().data
+            if not existing:
+                _sb.table("ai_cache_stats").insert({
+                    "endpoint": endpoint, "cache_hits": 0, "cache_misses": 0,
+                    "groq_calls_saved": 0, "last_reset": datetime.now(timezone.utc).isoformat(),
+                }).execute()
+            if hit:
+                _sb.table("ai_cache_stats").update({
+                    "cache_hits": existing[0].get("cache_hits", 0) + 1 if existing else 1,
+                    "groq_calls_saved": existing[0].get("groq_calls_saved", 0) + 1 if existing else 1,
+                }).eq("endpoint", endpoint).execute()
+            else:
+                _sb.table("ai_cache_stats").update({
+                    "cache_misses": existing[0].get("cache_misses", 0) + 1 if existing else 1,
+                }).eq("endpoint", endpoint).execute()
+        except Exception as e:
+            print(f"[Cache] stat error: {e}")
+        return
     try:
         with engine.begin() as conn:
             conn.execute(text("""
@@ -1952,65 +2028,37 @@ def _seed_placement_sources_sync():
 
 
 def _ensure_skill_demand_tables():
-    """Create job_listings, skill_demand, and model_metadata tables if absent."""
-    from database import get_connection, db_type
+    """Create job_listings, skill_demand, and model_metadata tables if absent (SQLite only)."""
+    from database import get_connection
     try:
         con = get_connection()
         cur = con.cursor()
-        if db_type == "supabase":
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS job_listings (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT,
-                    description TEXT,
-                    role TEXT,
-                    fetched_at TEXT
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS skill_demand (
-                    skill_name TEXT,
-                    role TEXT,
-                    demand_count INTEGER,
-                    demand_percentage REAL,
-                    total_listings_analysed INTEGER,
-                    last_updated TEXT,
-                    PRIMARY KEY (skill_name, role)
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS model_metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
-        else:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS job_listings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT,
-                    description TEXT,
-                    role TEXT,
-                    fetched_at TEXT
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS skill_demand (
-                    skill_name TEXT,
-                    role TEXT,
-                    demand_count INTEGER,
-                    demand_percentage REAL,
-                    total_listings_analysed INTEGER,
-                    last_updated TEXT,
-                    PRIMARY KEY (skill_name, role)
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS model_metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS job_listings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                description TEXT,
+                role TEXT,
+                fetched_at TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS skill_demand (
+                skill_name TEXT,
+                role TEXT,
+                demand_count INTEGER,
+                demand_percentage REAL,
+                total_listings_analysed INTEGER,
+                last_updated TEXT,
+                PRIMARY KEY (skill_name, role)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS model_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
         con.commit()
         con.close()
         print("[Skills] skill_demand / job_listings / model_metadata tables ready")
@@ -2022,7 +2070,7 @@ async def extract_and_store_skill_demand():
     """Daily job: fetch job listings per role, extract skill frequencies, persist to skill_demand."""
     from collections import Counter as _Counter
     from ml.skill_extractor import extract_skills_from_text
-    from database import get_connection, db_type
+    from database import get_connection
 
     print("[Skills] Starting daily skill extraction...")
 
@@ -2059,12 +2107,8 @@ async def extract_and_store_skill_demand():
         con = get_connection()
         cur = con.cursor()
         cutoff = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-        if db_type == "supabase":
-            cur.execute("DELETE FROM job_listings WHERE fetched_at < %s", (cutoff,))
-            ins = "INSERT INTO job_listings (title, description, role, fetched_at) VALUES (%s, %s, %s, %s)"
-        else:
-            cur.execute("DELETE FROM job_listings WHERE fetched_at < ?", (cutoff,))
-            ins = "INSERT INTO job_listings (title, description, role, fetched_at) VALUES (?, ?, ?, ?)"
+        cur.execute("DELETE FROM job_listings WHERE fetched_at < ?", (cutoff,))
+        ins = "INSERT INTO job_listings (title, description, role, fetched_at) VALUES (?, ?, ?, ?)"
         for role, jobs in jobs_by_role.items():
             for job in jobs:
                 cur.execute(ins, (job.get("title", ""), job.get("description", ""), role, fetched_at))
@@ -2092,28 +2136,16 @@ async def extract_and_store_skill_demand():
             pct = round(count / role_total * 100, 1) if role_total > 0 else 0.0
             skill_demand_rows.append((skill, role, count, pct, role_total, now_str))
 
-    # Persist to skill_demand table
+    # Persist to skill_demand table (SQLite)
     try:
         con = get_connection()
         cur = con.cursor()
-        if db_type == "supabase":
-            for row in skill_demand_rows:
-                cur.execute("""
-                    INSERT INTO skill_demand (skill_name, role, demand_count, demand_percentage, total_listings_analysed, last_updated)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (skill_name, role) DO UPDATE SET
-                        demand_count = EXCLUDED.demand_count,
-                        demand_percentage = EXCLUDED.demand_percentage,
-                        total_listings_analysed = EXCLUDED.total_listings_analysed,
-                        last_updated = EXCLUDED.last_updated
-                """, row)
-        else:
-            for row in skill_demand_rows:
-                cur.execute("""
-                    INSERT OR REPLACE INTO skill_demand
-                        (skill_name, role, demand_count, demand_percentage, total_listings_analysed, last_updated)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, row)
+        for row in skill_demand_rows:
+            cur.execute("""
+                INSERT OR REPLACE INTO skill_demand
+                    (skill_name, role, demand_count, demand_percentage, total_listings_analysed, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, row)
         con.commit()
         con.close()
     except Exception as exc:
@@ -2128,7 +2160,7 @@ async def extract_and_store_skill_demand():
 
 async def monthly_model_retrain():
     """Monthly job: retrain XGBoost model on accumulated data and log metrics."""
-    from database import get_connection, db_type
+    from database import get_connection
     print("[ML] Starting monthly model retrain...")
     try:
         from ml.placement_model import train_model
@@ -2136,16 +2168,10 @@ async def monthly_model_retrain():
         retrain_date = datetime.now(timezone.utc).isoformat()
         con = get_connection()
         cur = con.cursor()
-        if db_type == "supabase":
-            cur.execute("""
-                INSERT INTO model_metadata (key, value) VALUES (%s, %s)
-                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-            """, ("model_last_retrained", retrain_date))
-        else:
-            cur.execute(
-                "INSERT OR REPLACE INTO model_metadata (key, value) VALUES (?, ?)",
-                ("model_last_retrained", retrain_date),
-            )
+        cur.execute(
+            "INSERT OR REPLACE INTO model_metadata (key, value) VALUES (?, ?)",
+            ("model_last_retrained", retrain_date),
+        )
         con.commit()
         con.close()
         print(f"[ML] Monthly model retrain complete. New RMSE: {metrics['rmse']:.2f} R2: {metrics['r2']:.3f}")
@@ -2284,6 +2310,21 @@ def parse_groq_json(raw: str) -> dict:
 
 def _get_college_override(college_name: str) -> dict | None:
     """Check college_overrides table for researched realistic stats."""
+    if is_supabase():
+        try:
+            _sb = get_supabase()
+            rows = _sb.table("college_overrides").select(
+                "placement_rate,median_salary,highest_salary,college_tier,notes"
+            ).eq("college_name", college_name).limit(1).execute().data
+            if rows:
+                r = rows[0]
+                return {
+                    "placement_rate": r["placement_rate"], "median_salary": r["median_salary"],
+                    "highest_salary": r["highest_salary"], "college_tier": r["college_tier"], "notes": r["notes"],
+                }
+        except Exception:
+            pass
+        return None
     try:
         with engine.connect() as conn:
             row = conn.execute(
@@ -2546,9 +2587,61 @@ def _to_out(p: UserProfile) -> ProfileOut:
     )
 
 
+def _dict_to_profile_out(d: dict) -> ProfileOut:
+    skills = d.get("skills") or []
+    if isinstance(skills, str):
+        skills = json.loads(skills)
+    return ProfileOut(
+        email=d.get("email", ""),
+        college=d.get("college", ""),
+        branch=d.get("branch", ""),
+        year=d.get("year", ""),
+        cgpa=d.get("cgpa", 0.0),
+        skills=skills,
+        targetRole=d.get("target_role", ""),
+        placementScore=d.get("placement_score", 0),
+        scoreReasoning=d.get("score_reasoning") or "",
+        collegeTier=d.get("college_tier") or "",
+        projectsCount=d.get("projects_count") or "0",
+        hasInternship=d.get("has_internship") or "no",
+        internshipMonths=d.get("internship_months") or "",
+        hackathons=d.get("hackathons") or "0",
+        leetcodeCount=d.get("leetcode_count") or "0",
+        openSource=d.get("open_source") or "no",
+        certifications=d.get("certifications") or "0",
+        githubActive=d.get("github_active") or "no",
+    )
+
+
 @app.post("/api/user/profile", response_model=ProfileOut)
 def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
     score, reasoning, college_tier = groq_score(payload)
+
+    if is_supabase():
+        _sb = get_supabase()
+        data = {
+            "email": payload.email,
+            "college": payload.college,
+            "branch": payload.branch,
+            "year": payload.year,
+            "cgpa": payload.cgpa,
+            "skills": payload.skills,
+            "target_role": payload.targetRole,
+            "placement_score": score,
+            "score_reasoning": reasoning,
+            "college_tier": college_tier,
+            "projects_count": payload.projectsCount,
+            "has_internship": payload.hasInternship,
+            "internship_months": payload.internshipMonths,
+            "hackathons": payload.hackathons,
+            "leetcode_count": payload.leetcodeCount,
+            "open_source": payload.openSource,
+            "certifications": payload.certifications,
+            "github_active": payload.githubActive,
+        }
+        result = _sb.table("user_profiles").upsert(data, on_conflict="email").execute()
+        row = result.data[0] if result.data else data
+        return _dict_to_profile_out(row)
 
     existing = db.query(UserProfile).filter(UserProfile.email == payload.email).first()
     if existing:
@@ -2601,6 +2694,12 @@ def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
 
 @app.get("/api/user/profile/{email}", response_model=ProfileOut)
 def get_profile(email: str, db: Session = Depends(get_db)):
+    if is_supabase():
+        _sb = get_supabase()
+        rows = _sb.table("user_profiles").select("*").eq("email", email).limit(1).execute().data
+        if not rows:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        return _dict_to_profile_out(rows[0])
     profile = db.query(UserProfile).filter(UserProfile.email == email).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -2719,31 +2818,60 @@ def get_placement_score_live(email: str, db: Session = Depends(get_db)):
     Also returns all available placement sources for the college.
     Use this on the dashboard to always show the current score, never the cached one.
     """
-    profile = db.query(UserProfile).filter(UserProfile.email == email).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    payload = ProfileIn(
-        email=profile.email,
-        college=profile.college,
-        branch=profile.branch,
-        year=profile.year,
-        cgpa=profile.cgpa,
-        skills=profile.skills,
-        targetRole=profile.target_role,
-        projectsCount=profile.projects_count or "0",
-        hasInternship=profile.has_internship or "no",
-        internshipMonths=profile.internship_months or "",
-        hackathons=profile.hackathons or "0",
-        leetcodeCount=profile.leetcode_count or "0",
-        openSource=profile.open_source or "no",
-        certifications=profile.certifications or "0",
-        githubActive=profile.github_active or "no",
-    )
+    if is_supabase():
+        _sb = get_supabase()
+        rows = _sb.table("user_profiles").select("*").eq("email", email).limit(1).execute().data
+        if not rows:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        p = rows[0]
+        skills = p.get("skills") or []
+        if isinstance(skills, str):
+            skills = json.loads(skills)
+        profile_data = p
+        payload = ProfileIn(
+            email=p["email"],
+            college=p["college"],
+            branch=p["branch"],
+            year=p["year"],
+            cgpa=p["cgpa"],
+            skills=skills,
+            targetRole=p.get("target_role", ""),
+            projectsCount=p.get("projects_count") or "0",
+            hasInternship=p.get("has_internship") or "no",
+            internshipMonths=p.get("internship_months") or "",
+            hackathons=p.get("hackathons") or "0",
+            leetcodeCount=p.get("leetcode_count") or "0",
+            openSource=p.get("open_source") or "no",
+            certifications=p.get("certifications") or "0",
+            githubActive=p.get("github_active") or "no",
+        )
+        college_name = p["college"]
+    else:
+        profile = db.query(UserProfile).filter(UserProfile.email == email).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        payload = ProfileIn(
+            email=profile.email,
+            college=profile.college,
+            branch=profile.branch,
+            year=profile.year,
+            cgpa=profile.cgpa,
+            skills=profile.skills,
+            targetRole=profile.target_role,
+            projectsCount=profile.projects_count or "0",
+            hasInternship=profile.has_internship or "no",
+            internshipMonths=profile.internship_months or "",
+            hackathons=profile.hackathons or "0",
+            leetcodeCount=profile.leetcode_count or "0",
+            openSource=profile.open_source or "no",
+            certifications=profile.certifications or "0",
+            githubActive=profile.github_active or "no",
+        )
+        college_name = profile.college
 
     score, college_tier, nirf_stats = nirf_adjusted_score(payload)
 
-    sources = _get_placement_sources(profile.college)
+    sources = _get_placement_sources(college_name)
 
     # Combined score: average of placement_rates across all available sources
     rates: list[float] = []
@@ -2756,11 +2884,10 @@ def get_placement_score_live(email: str, db: Session = Depends(get_db)):
 
     model_last_retrained = None
     try:
-        from database import get_connection, db_type
+        from database import get_connection
         con = get_connection()
-        ph = "%s" if db_type == "supabase" else "?"
         cur = con.cursor()
-        cur.execute(f"SELECT value FROM model_metadata WHERE key = {ph}", ("model_last_retrained",))
+        cur.execute("SELECT value FROM model_metadata WHERE key = ?", ("model_last_retrained",))
         row = cur.fetchone()
         con.close()
         if row and row[0]:
@@ -2808,52 +2935,20 @@ _PDB = Path(__file__).parent / "placeiq.db"
 
 
 def _pdb_conn():
-    """Return a connection that normalises psycopg2 and sqlite3 into the same API.
-
-    Callers may use:
-      with _pdb_conn() as conn:
-          rows = conn.execute("SELECT ... WHERE x = ?", (val,)).fetchall()
-          row["column_name"]   # dict-style access works for both dialects
-          dict(row)            # also works for both
-    The wrapper transparently converts ? → %s for PostgreSQL.
-    """
-    from database import get_connection as _gc, db_type as _dt
-    _raw = _gc()
-    if _dt == "supabase":
-        import psycopg2.extras as _pge
-
-        class _PgWrap:
-            def __init__(self, c):
-                self._c = c
-                self._cur = c.cursor(cursor_factory=_pge.RealDictCursor)
-
-            def execute(self, sql, params=()):
-                self._cur.execute(sql.replace("?", "%s"), params or ())
-                return self._cur
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, *_):
-                if not exc_type:
-                    self._c.commit()
-                else:
-                    self._c.rollback()
-                self._c.close()
-
-        return _PgWrap(_raw)
-    else:
-        import sqlite3 as _sq
-        _raw.row_factory = _sq.Row
-        return _raw
+    """Return a sqlite3 connection for local placement data (always SQLite)."""
+    import sqlite3 as _sq
+    conn = _sq.connect(str(_PDB))
+    conn.row_factory = _sq.Row
+    return conn
 
 
 def _ensure_role_cache_table():
-    _pk = "SERIAL PRIMARY KEY" if engine.dialect.name == "postgresql" else "INTEGER PRIMARY KEY"
+    if is_supabase():
+        return  # table already exists in Supabase
     with _pdb_conn() as conn:
-        conn.execute(f"""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS role_trends_cache (
-                id {_pk},
+                id INTEGER PRIMARY KEY,
                 data_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
@@ -3270,12 +3365,11 @@ async def skills_gap(payload: SkillsGapIn):
 
         # Attach last_updated timestamp from skill_demand table if available
         try:
-            from database import get_connection, db_type
+            from database import get_connection
             con = get_connection()
             cur = con.cursor()
-            ph = "%s" if db_type == "supabase" else "?"
             cur.execute(
-                f"SELECT last_updated FROM skill_demand WHERE role = {ph} ORDER BY last_updated DESC LIMIT 1",
+                "SELECT last_updated FROM skill_demand WHERE role = ? ORDER BY last_updated DESC LIMIT 1",
                 (payload.target_role,),
             )
             row = cur.fetchone()
@@ -4163,13 +4257,19 @@ async def refresh_market_insights() -> dict:
     insights = _extract_insights_data(all_articles) if scrape_success else _static_fallback_insights()
 
     try:
-        with engine.begin() as conn:
-            conn.execute(text("DELETE FROM market_insights"))
-            for article in all_articles:
-                conn.execute(text("""
-                    INSERT INTO market_insights (title, summary, source_name, source_url, scraped_at)
-                    VALUES (:title, :summary, :source_name, :source_url, :scraped_at)
-                """), article)
+        if is_supabase():
+            _sb = get_supabase()
+            _sb.table("market_insights").delete().neq("id", 0).execute()
+            if all_articles:
+                _sb.table("market_insights").insert(all_articles).execute()
+        else:
+            with engine.begin() as conn:
+                conn.execute(text("DELETE FROM market_insights"))
+                for article in all_articles:
+                    conn.execute(text("""
+                        INSERT INTO market_insights (title, summary, source_name, source_url, scraped_at)
+                        VALUES (:title, :summary, :source_name, :source_url, :scraped_at)
+                    """), article)
     except Exception as e:
         print(f"[Market Insights] DB store failed: {e}")
 
@@ -4423,22 +4523,37 @@ _CATEGORY_ORDER = {
 async def oncampus_placement_history(college_name: str, year: str = ""):
     """Return real campus placement drive records grouped by year and category."""
     try:
-        with engine.connect() as conn:
-            q = "SELECT academic_year FROM campus_placements WHERE college_name = :c GROUP BY academic_year ORDER BY academic_year DESC"
-            years_rows = conn.execute(text(q), {"c": college_name}).fetchall()
-            available_years = [r[0] for r in years_rows]
+        if is_supabase():
+            _sb = get_supabase()
+            years_data = _sb.table("campus_placements").select("academic_year").eq("college_name", college_name).execute().data or []
+            available_years = sorted(set(r["academic_year"] for r in years_data if r.get("academic_year")), reverse=True)
             if not available_years:
                 return {"found": False, "college_name": college_name, "years": [], "data": {}}
-
             target_year = year if year in available_years else available_years[0]
-
-            rows = conn.execute(text("""
-                SELECT company_name, visit_date, role, category, ctc, ctc_min, ctc_max,
-                       eligibility_percent, students_applied, students_selected, source
-                FROM campus_placements
-                WHERE college_name = :c AND academic_year = :y
-                ORDER BY category, visit_date
-            """), {"c": college_name, "y": target_year}).fetchall()
+            raw_rows = _sb.table("campus_placements").select(
+                "company_name,visit_date,role,category,ctc,ctc_min,ctc_max,eligibility_percent,students_applied,students_selected,source"
+            ).eq("college_name", college_name).eq("academic_year", target_year).order("category").order("visit_date").execute().data or []
+            rows = [
+                (r["company_name"], r["visit_date"], r["role"], r["category"], r["ctc"],
+                 r["ctc_min"], r["ctc_max"], r["eligibility_percent"], r["students_applied"],
+                 r["students_selected"], r["source"])
+                for r in raw_rows
+            ]
+        else:
+            with engine.connect() as conn:
+                q = "SELECT academic_year FROM campus_placements WHERE college_name = :c GROUP BY academic_year ORDER BY academic_year DESC"
+                years_rows = conn.execute(text(q), {"c": college_name}).fetchall()
+                available_years = [r[0] for r in years_rows]
+                if not available_years:
+                    return {"found": False, "college_name": college_name, "years": [], "data": {}}
+                target_year = year if year in available_years else available_years[0]
+                rows = conn.execute(text("""
+                    SELECT company_name, visit_date, role, category, ctc, ctc_min, ctc_max,
+                           eligibility_percent, students_applied, students_selected, source
+                    FROM campus_placements
+                    WHERE college_name = :c AND academic_year = :y
+                    ORDER BY category, visit_date
+                """), {"c": college_name, "y": target_year}).fetchall()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -5433,21 +5548,36 @@ def colleges_list():
 def cache_stats():
     """Return AI cache hit/miss stats showing how many Groq calls are being saved."""
     try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(
-                "SELECT endpoint, cache_hits, cache_misses, groq_calls_saved, last_reset FROM ai_cache_stats"
-            )).fetchall()
+        if is_supabase():
+            _sb = get_supabase()
+            rows = _sb.table("ai_cache_stats").select("endpoint,cache_hits,cache_misses,groq_calls_saved,last_reset").execute().data or []
             stats = [
                 {
-                    "endpoint": r[0],
-                    "cache_hits": r[1],
-                    "cache_misses": r[2],
-                    "groq_calls_saved": r[3],
-                    "hit_rate_pct": round(r[1] / (r[1] + r[2]) * 100, 1) if (r[1] + r[2]) > 0 else 0,
-                    "last_reset": r[4],
+                    "endpoint": r["endpoint"],
+                    "cache_hits": r.get("cache_hits", 0),
+                    "cache_misses": r.get("cache_misses", 0),
+                    "groq_calls_saved": r.get("groq_calls_saved", 0),
+                    "hit_rate_pct": round(r.get("cache_hits", 0) / (r.get("cache_hits", 0) + r.get("cache_misses", 1)) * 100, 1),
+                    "last_reset": r.get("last_reset"),
                 }
                 for r in rows
             ]
+        else:
+            with engine.connect() as conn:
+                rows = conn.execute(text(
+                    "SELECT endpoint, cache_hits, cache_misses, groq_calls_saved, last_reset FROM ai_cache_stats"
+                )).fetchall()
+                stats = [
+                    {
+                        "endpoint": r[0],
+                        "cache_hits": r[1],
+                        "cache_misses": r[2],
+                        "groq_calls_saved": r[3],
+                        "hit_rate_pct": round(r[1] / (r[1] + r[2]) * 100, 1) if (r[1] + r[2]) > 0 else 0,
+                        "last_reset": r[4],
+                    }
+                    for r in rows
+                ]
         total_saved = sum(s["groq_calls_saved"] for s in stats)
         return {"stats": stats, "total_groq_calls_saved": total_saved}
     except Exception as e:
@@ -5564,13 +5694,19 @@ def _is_non_english(text: str) -> bool:
 
 def _get_translation_cache(text_hash: str) -> dict | None:
     try:
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT translated_title, translated_description FROM translation_cache WHERE original_text_hash = :h"),
-                {"h": text_hash},
-            ).fetchone()
-            if row:
-                return {"title": row[0], "description": row[1]}
+        if is_supabase():
+            _sb = get_supabase()
+            rows = _sb.table("translation_cache").select("translated_title,translated_description").eq("original_text_hash", text_hash).limit(1).execute().data or []
+            if rows:
+                return {"title": rows[0]["translated_title"], "description": rows[0]["translated_description"]}
+        else:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT translated_title, translated_description FROM translation_cache WHERE original_text_hash = :h"),
+                    {"h": text_hash},
+                ).fetchone()
+                if row:
+                    return {"title": row[0], "description": row[1]}
     except Exception:
         pass
     return None
@@ -5578,15 +5714,22 @@ def _get_translation_cache(text_hash: str) -> dict | None:
 
 def _set_translation_cache(text_hash: str, title: str, description: str):
     try:
-        with engine.begin() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO translation_cache (original_text_hash, translated_title, translated_description, translated_at)
-                    VALUES (:h, :t, :d, :ts)
-                    ON CONFLICT(original_text_hash) DO NOTHING
-                """),
-                {"h": text_hash, "t": title, "d": description, "ts": datetime.now(timezone.utc).isoformat()},
-            )
+        if is_supabase():
+            _sb = get_supabase()
+            _sb.table("translation_cache").upsert(
+                {"original_text_hash": text_hash, "translated_title": title, "translated_description": description, "translated_at": datetime.now(timezone.utc).isoformat()},
+                on_conflict="original_text_hash",
+            ).execute()
+        else:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO translation_cache (original_text_hash, translated_title, translated_description, translated_at)
+                        VALUES (:h, :t, :d, :ts)
+                        ON CONFLICT(original_text_hash) DO NOTHING
+                    """),
+                    {"h": text_hash, "t": title, "d": description, "ts": datetime.now(timezone.utc).isoformat()},
+                )
     except Exception as e:
         print(f"[TranslationCache] set error: {e}")
 
@@ -6253,6 +6396,24 @@ class AlumniSubmitIn(BaseModel):
 
 @app.post("/api/referral/submit")
 def referral_submit(payload: AlumniSubmitIn, db: Session = Depends(get_db)):
+    if is_supabase():
+        _sb = get_supabase()
+        data = {
+            "name": payload.name.strip(),
+            "college": payload.college.strip(),
+            "branch": payload.branch.strip(),
+            "graduation_year": payload.graduation_year.strip(),
+            "company": payload.company.strip(),
+            "role": payload.role.strip(),
+            "linkedin_url": payload.linkedin_url.strip(),
+            "open_to_referrals": payload.open_to_referrals,
+            "verified": False,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        result = _sb.table("alumni").insert(data).execute()
+        inserted_id = result.data[0]["id"] if result.data else None
+        return {"id": inserted_id, "message": "Successfully added to alumni network"}
+
     record = Alumni(
         name=payload.name.strip(),
         college=payload.college.strip(),
@@ -6278,6 +6439,36 @@ def referral_list(
     branch: str = "",
     db: Session = Depends(get_db),
 ):
+    if is_supabase():
+        _sb = get_supabase()
+        all_rows = _sb.table("alumni").select("*").execute().data or []
+        total = len(all_rows)
+        college_count = len(set(r.get("college") for r in all_rows if r.get("college")))
+
+        filtered = _sb.table("alumni").select("*").eq("open_to_referrals", True).order("submitted_at", desc=True).limit(50)
+        if college:
+            filtered = filtered.eq("college", college)
+        if branch:
+            filtered = filtered.eq("branch", branch)
+        records = filtered.execute().data or []
+        if company:
+            records = [r for r in records if company.lower() in (r.get("company") or "").lower()]
+
+        return {
+            "alumni": [
+                {
+                    "id": r.get("id"), "name": r.get("name"), "college": r.get("college"),
+                    "branch": r.get("branch"), "graduation_year": r.get("graduation_year"),
+                    "company": r.get("company"), "role": r.get("role"),
+                    "linkedin_url": r.get("linkedin_url"), "open_to_referrals": r.get("open_to_referrals"),
+                    "verified": r.get("verified"), "submitted_at": r.get("submitted_at"),
+                }
+                for r in records
+            ],
+            "total": total,
+            "college_count": college_count,
+        }
+
     total = db.query(Alumni).count()
     college_count = db.query(Alumni.college).distinct().count()
 
@@ -6671,11 +6862,19 @@ async def pyq_sourced(company: str):
     """Return sourced (non-AI) PYQ data for a company from the pyq_questions table + metadata."""
     meta = _PYQ_COMPANY_META.get(company, {})
     try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("""
-                SELECT round_type, question_text, difficulty, topic, source_url, source_name, year, verified
-                FROM pyq_questions WHERE company = :c ORDER BY round_type, id
-            """), {"c": company}).fetchall()
+        if is_supabase():
+            _sb = get_supabase()
+            raw = _sb.table("pyq_questions").select(
+                "round_type,question_text,difficulty,topic,source_url,source_name,year,verified"
+            ).eq("company", company).order("round_type").order("id").execute().data or []
+            rows = [(r["round_type"], r["question_text"], r["difficulty"], r["topic"],
+                     r["source_url"], r["source_name"], r["year"], r["verified"]) for r in raw]
+        else:
+            with engine.connect() as conn:
+                rows = conn.execute(text("""
+                    SELECT round_type, question_text, difficulty, topic, source_url, source_name, year, verified
+                    FROM pyq_questions WHERE company = :c ORDER BY round_type, id
+                """), {"c": company}).fetchall()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -6800,13 +6999,19 @@ async def pyq_explanation(payload: ExplanationIn):
         raise HTTPException(status_code=503, detail="AI service not configured")
 
     try:
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT explanation FROM pyq_explanations WHERE question_id = :qid"),
-                {"qid": payload.question_id},
-            ).fetchone()
-            if row:
-                return {"explanation": row[0]}
+        if is_supabase():
+            _sb = get_supabase()
+            rows = _sb.table("pyq_explanations").select("explanation").eq("question_id", payload.question_id).limit(1).execute().data or []
+            if rows:
+                return {"explanation": rows[0]["explanation"]}
+        else:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT explanation FROM pyq_explanations WHERE question_id = :qid"),
+                    {"qid": payload.question_id},
+                ).fetchone()
+                if row:
+                    return {"explanation": row[0]}
     except Exception as e:
         print(f"[pyq_explanation] DB read error: {e}")
 
@@ -6825,15 +7030,22 @@ async def pyq_explanation(payload: ExplanationIn):
         explanation = (completion.choices[0].message.content or "").strip()
 
         try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text("DELETE FROM pyq_explanations WHERE question_id = :qid"),
-                    {"qid": payload.question_id},
-                )
-                conn.execute(
-                    text("INSERT INTO pyq_explanations (question_id, explanation, generated_at) VALUES (:qid, :exp, :ts)"),
-                    {"qid": payload.question_id, "exp": explanation, "ts": datetime.now(timezone.utc).isoformat()},
-                )
+            if is_supabase():
+                _sb = get_supabase()
+                _sb.table("pyq_explanations").upsert(
+                    {"question_id": payload.question_id, "explanation": explanation, "generated_at": datetime.now(timezone.utc).isoformat()},
+                    on_conflict="question_id",
+                ).execute()
+            else:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("DELETE FROM pyq_explanations WHERE question_id = :qid"),
+                        {"qid": payload.question_id},
+                    )
+                    conn.execute(
+                        text("INSERT INTO pyq_explanations (question_id, explanation, generated_at) VALUES (:qid, :exp, :ts)"),
+                        {"qid": payload.question_id, "exp": explanation, "ts": datetime.now(timezone.utc).isoformat()},
+                    )
         except Exception as e:
             print(f"[pyq_explanation] DB write error: {e}")
 
@@ -6966,17 +7178,27 @@ async def coding_stats(leetcode: str = "", codechef: str = "", codeforces: str =
             return None
         uname = username.strip()
         try:
-            with engine.connect() as conn:
-                row = conn.execute(
-                    text("SELECT stats_json, cached_at FROM coding_stats_cache WHERE platform = :p AND username = :u"),
-                    {"p": platform, "u": uname},
-                ).fetchone()
-                if row:
-                    cached_at = datetime.fromisoformat(row[1])
+            if is_supabase():
+                _sb = get_supabase()
+                rows = _sb.table("coding_stats_cache").select("stats_json,cached_at").eq("platform", platform).eq("username", uname).limit(1).execute().data or []
+                if rows:
+                    cached_at = datetime.fromisoformat(rows[0]["cached_at"])
                     if cached_at.tzinfo is None:
                         cached_at = cached_at.replace(tzinfo=timezone.utc)
                     if datetime.now(timezone.utc) - cached_at <= timedelta(hours=6):
-                        return json.loads(row[0])
+                        return json.loads(rows[0]["stats_json"])
+            else:
+                with engine.connect() as conn:
+                    row = conn.execute(
+                        text("SELECT stats_json, cached_at FROM coding_stats_cache WHERE platform = :p AND username = :u"),
+                        {"p": platform, "u": uname},
+                    ).fetchone()
+                    if row:
+                        cached_at = datetime.fromisoformat(row[1])
+                        if cached_at.tzinfo is None:
+                            cached_at = cached_at.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) - cached_at <= timedelta(hours=6):
+                            return json.loads(row[0])
         except Exception as e:
             print(f"[coding_stats] Cache read ({platform}): {e}")
 
@@ -6986,15 +7208,22 @@ async def coding_stats(leetcode: str = "", codechef: str = "", codeforces: str =
             stats = {"error": str(e)}
 
         try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text("DELETE FROM coding_stats_cache WHERE platform = :p AND username = :u"),
-                    {"p": platform, "u": uname},
-                )
-                conn.execute(
-                    text("INSERT INTO coding_stats_cache (platform, username, stats_json, cached_at) VALUES (:p, :u, :s, :t)"),
-                    {"p": platform, "u": uname, "s": json.dumps(stats), "t": datetime.now(timezone.utc).isoformat()},
-                )
+            if is_supabase():
+                _sb = get_supabase()
+                _sb.table("coding_stats_cache").upsert(
+                    {"platform": platform, "username": uname, "stats_json": json.dumps(stats), "cached_at": datetime.now(timezone.utc).isoformat()},
+                    on_conflict="platform,username",
+                ).execute()
+            else:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("DELETE FROM coding_stats_cache WHERE platform = :p AND username = :u"),
+                        {"p": platform, "u": uname},
+                    )
+                    conn.execute(
+                        text("INSERT INTO coding_stats_cache (platform, username, stats_json, cached_at) VALUES (:p, :u, :s, :t)"),
+                        {"p": platform, "u": uname, "s": json.dumps(stats), "t": datetime.now(timezone.utc).isoformat()},
+                    )
         except Exception as e:
             print(f"[coding_stats] Cache write ({platform}): {e}")
 
@@ -7026,6 +7255,13 @@ class StarredRemoveIn(BaseModel):
 @app.post("/api/starred/add")
 async def starred_add(body: StarredAddIn):
     try:
+        if is_supabase():
+            _sb = get_supabase()
+            _sb.table("starred_companies").upsert(
+                {"user_email": body.user_email, "company_name": body.company_name, "college_name": body.college_name},
+                on_conflict="user_email,company_name",
+            ).execute()
+            return {"status": "starred"}
         with engine.begin() as conn:
             conn.execute(
                 text("INSERT INTO starred_companies (user_email, company_name, college_name) VALUES (:email, :company, :college)"),
@@ -7041,6 +7277,10 @@ async def starred_add(body: StarredAddIn):
 
 @app.delete("/api/starred/remove")
 async def starred_remove(body: StarredRemoveIn):
+    if is_supabase():
+        _sb = get_supabase()
+        _sb.table("starred_companies").delete().eq("user_email", body.user_email).eq("company_name", body.company_name).execute()
+        return {"status": "removed"}
     with engine.begin() as conn:
         conn.execute(
             text("DELETE FROM starred_companies WHERE user_email = :email AND company_name = :company"),
@@ -7051,6 +7291,10 @@ async def starred_remove(body: StarredRemoveIn):
 
 @app.get("/api/starred/list")
 async def starred_list(email: str):
+    if is_supabase():
+        _sb = get_supabase()
+        rows = _sb.table("starred_companies").select("company_name,college_name,starred_at").eq("user_email", email).order("starred_at", desc=True).execute().data or []
+        return {"starred": [{"company_name": r["company_name"], "college_name": r.get("college_name"), "starred_at": str(r.get("starred_at"))} for r in rows]}
     with engine.connect() as conn:
         rows = conn.execute(
             text("SELECT company_name, college_name, starred_at FROM starred_companies WHERE user_email = :email ORDER BY starred_at DESC"),
@@ -7061,6 +7305,10 @@ async def starred_list(email: str):
 
 @app.get("/api/starred/check")
 async def starred_check(email: str, company: str):
+    if is_supabase():
+        _sb = get_supabase()
+        rows = _sb.table("starred_companies").select("user_email").eq("user_email", email).eq("company_name", company).limit(1).execute().data or []
+        return {"starred": len(rows) > 0}
     with engine.connect() as conn:
         row = conn.execute(
             text("SELECT 1 FROM starred_companies WHERE user_email = :email AND company_name = :company LIMIT 1"),
