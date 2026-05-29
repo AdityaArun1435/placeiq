@@ -20,6 +20,9 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
@@ -1979,6 +1982,8 @@ def _load_market_cache() -> dict | None:
 
 app = FastAPI(title="PlaceIQ API")
 
+limiter = Limiter(key_func=get_remote_address)
+
 _scheduler = AsyncIOScheduler()
 
 
@@ -2261,6 +2266,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/health")
@@ -2614,7 +2621,8 @@ def _dict_to_profile_out(d: dict) -> ProfileOut:
 
 
 @app.post("/api/user/profile", response_model=ProfileOut)
-def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def save_profile(request: Request, payload: ProfileIn, db: Session = Depends(get_db)):
     score, reasoning, college_tier = groq_score(payload)
 
     if is_supabase():
@@ -2693,7 +2701,8 @@ def save_profile(payload: ProfileIn, db: Session = Depends(get_db)):
 
 
 @app.get("/api/user/profile/{email}", response_model=ProfileOut)
-def get_profile(email: str, db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+def get_profile(request: Request, email: str, db: Session = Depends(get_db)):
     if is_supabase():
         _sb = get_supabase()
         rows = _sb.table("user_profiles").select("*").eq("email", email).limit(1).execute().data
@@ -2707,7 +2716,8 @@ def get_profile(email: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/placement/probability")
-def placement_probability(payload: ProfileIn):
+@limiter.limit("60/minute")
+def placement_probability(request: Request, payload: ProfileIn):
     """
     Returns placement probability score using XGBoost ML model.
     Uses Groq to score skill relevance (0-25 bonus) for the deterministic component.
@@ -2812,7 +2822,8 @@ def placement_probability(payload: ProfileIn):
 
 
 @app.get("/api/placement/score/{email}")
-def get_placement_score_live(email: str, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def get_placement_score_live(request: Request, email: str, db: Session = Depends(get_db)):
     """
     Re-compute placement score from stored profile using live NIRF data.
     Also returns all available placement sources for the college.
@@ -2907,7 +2918,8 @@ def get_placement_score_live(email: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/placement/sources")
-def get_placement_sources_for_college(college: str = ""):
+@limiter.limit("60/minute")
+def get_placement_sources_for_college(request: Request, college: str = ""):
     """Return all placement_sources records for a college (for multi-source display)."""
     if not college:
         raise HTTPException(status_code=400, detail="college query parameter required")
@@ -3004,7 +3016,8 @@ def _fetch_market_roles() -> list:
 
 
 @app.get("/api/placement/colleges")
-def placement_colleges():
+@limiter.limit("60/minute")
+def placement_colleges(request: Request):
     """Unique college names and their data_tier."""
     with _pdb_conn() as conn:
         rows = conn.execute(
@@ -3014,7 +3027,8 @@ def placement_colleges():
 
 
 @app.get("/api/placement/stats/{college_name}")
-def placement_stats(college_name: str):
+@limiter.limit("60/minute")
+def placement_stats(request: Request, college_name: str):
     """College stats: college_stats table first, fallback to placement_records aggregation."""
     from urllib.parse import unquote
     college_name = unquote(college_name)
@@ -3045,7 +3059,8 @@ def placement_stats(college_name: str):
 
 
 @app.get("/api/placement/companies/{college_name}")
-def placement_companies(college_name: str, year: str = ""):
+@limiter.limit("60/minute")
+def placement_companies(request: Request, college_name: str, year: str = ""):
     """All placement_records for the given college, optionally filtered by year."""
     from urllib.parse import unquote
     college_name = unquote(college_name)
@@ -3064,7 +3079,8 @@ def placement_companies(college_name: str, year: str = ""):
 
 
 @app.get("/api/placement/market/ctc-trends")
-def placement_ctc_trends():
+@limiter.limit("60/minute")
+def placement_ctc_trends(request: Request):
     """Average CTC per year across all records (excludes avg_2022_2024 synthetic year)."""
     with _pdb_conn() as conn:
         rows = conn.execute("""
@@ -3080,7 +3096,8 @@ def placement_ctc_trends():
 
 
 @app.get("/api/placement/market/top-companies")
-def placement_top_companies():
+@limiter.limit("60/minute")
+def placement_top_companies(request: Request):
     """Top 20 companies by total avg_headcount across all records."""
     with _pdb_conn() as conn:
         rows = conn.execute("""
@@ -3104,7 +3121,8 @@ def placement_top_companies():
 
 
 @app.get("/api/placement/market/top-roles")
-def placement_top_roles():
+@limiter.limit("60/minute")
+def placement_top_roles(request: Request):
     """Top job roles by total headcount, market roles from Groq, and category tier breakdown."""
     with _pdb_conn() as conn:
         roles = conn.execute("""
@@ -3334,7 +3352,8 @@ async def analyse_resume(
 
 
 @app.post("/api/skills/gap")
-async def skills_gap(payload: SkillsGapIn):
+@limiter.limit("10/minute")
+async def skills_gap(request: Request, payload: SkillsGapIn):
     from ml.skill_extractor import get_skill_gap_analysis
 
     # Fetch combined college data if college is provided; use authoritative tier
@@ -3484,7 +3503,8 @@ async def skills_trending():
 
 
 @app.post("/api/companies/match")
-async def companies_match(payload: CompanyMatchIn):
+@limiter.limit("30/minute")
+async def companies_match(request: Request, payload: CompanyMatchIn):
     """
     Pure data company matching — zero Groq. Scores computed from skill overlap,
     college tier, CGPA, and placement history.
@@ -3790,7 +3810,8 @@ async def companies_match(payload: CompanyMatchIn):
 
 
 @app.post("/api/roadmap/generate")
-async def generate_roadmap(body: RoadmapIn):
+@limiter.limit("10/minute")
+async def generate_roadmap(request: Request, body: RoadmapIn):
     # Build cache key from profile factors
     cache_key = hashlib.md5(
         "|".join([
@@ -3911,7 +3932,8 @@ async def generate_roadmap(body: RoadmapIn):
 
 
 @app.post("/api/roadmap/chat")
-async def roadmap_chat(body: RoadmapChatIn):
+@limiter.limit("10/minute")
+async def roadmap_chat(request: Request, body: RoadmapChatIn):
     roadmap_json = json.dumps(body.current_roadmap, indent=2)
     profile_json = json.dumps(body.profile, indent=2)
 
@@ -4755,7 +4777,8 @@ def _parse_offcampus_days_ago(created_str: str) -> tuple[int | None, str | None]
 
 
 @app.post("/api/offcampus/jobs")
-async def offcampus_jobs(payload: OffCampusJobsIn):
+@limiter.limit("30/minute")
+async def offcampus_jobs(request: Request, payload: OffCampusJobsIn):
     cache_key = hashlib.md5(
         f"{payload.target_role}|{payload.location}|{payload.remote_only}|{payload.page}".encode()
     ).hexdigest()
@@ -5074,7 +5097,8 @@ class ColdEmailIn(BaseModel):
 
 
 @app.post("/api/coldemail/generate")
-async def generate_cold_email(payload: ColdEmailIn):
+@limiter.limit("10/minute")
+async def generate_cold_email(request: Request, payload: ColdEmailIn):
     if _groq is None:
         raise HTTPException(status_code=503, detail="AI service not configured. Add GROQ_API_KEY to .env")
 
@@ -6217,7 +6241,8 @@ def _generate_ai_internships() -> list[dict]:
 
 
 @app.get("/api/internships/list")
-async def internships_list(skills: str = ""):
+@limiter.limit("30/minute")
+async def internships_list(request: Request, skills: str = ""):
     cached = _load_internships_cache()
     raw_jobs: list = []
     by_source: dict = {}
