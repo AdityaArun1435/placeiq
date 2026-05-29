@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /login
+Disallow: /dashboard
+Disallow: /onboarding
+Sitemap: https://placeiq.in/sitemap.xml
