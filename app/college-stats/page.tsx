@@ -40,7 +40,7 @@ type PlacementRecord = {
   data_tier: string;
 };
 
-const API = "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://placeiq-backend-e7ik.onrender.com";
 
 const TIER1_COLLEGE_NAMES = new Set([
   "iit bombay", "iit delhi", "iit madras", "iit kanpur", "iit kharagpur",
@@ -67,6 +67,7 @@ export default function CollegeStatsPage() {
 
   const [loadingColleges, setLoadingColleges] = useState(true);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [collegesError, setCollegesError] = useState(false);
 
   const [companySearch, setCompanySearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -94,9 +95,32 @@ export default function CollegeStatsPage() {
         }));
       })
       .then(setColleges)
-      .catch(() => {})
+      .catch(() => setCollegesError(true))
       .finally(() => setLoadingColleges(false));
   }, [status]);
+
+  // Auto-select college from localStorage with case-insensitive fuzzy match
+  useEffect(() => {
+    if (colleges.length === 0 || selectedA) return;
+    try {
+      const raw = localStorage.getItem("placeiq_profile");
+      if (!raw) return;
+      const profile = JSON.parse(raw);
+      const savedCollege: string | undefined = profile?.college;
+      if (!savedCollege) return;
+      const normalized = savedCollege.toLowerCase().trim();
+      let match = colleges.find(c => c.college_name.toLowerCase().trim() === normalized);
+      if (!match) {
+        match = colleges.find(c =>
+          c.college_name.toLowerCase().includes(normalized) ||
+          normalized.includes(c.college_name.toLowerCase().trim())
+        );
+      }
+      if (match) setSelectedA(match.college_name);
+    } catch {
+      // ignore localStorage errors
+    }
+  }, [colleges]);
 
   useEffect(() => {
     if (!selectedA) return;
@@ -167,9 +191,19 @@ export default function CollegeStatsPage() {
     <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
 
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold">College Stats</h2>
-          <p className="text-muted mt-1">Browse placement data across {colleges.length} colleges</p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold">College Stats</h2>
+            <p className="text-muted mt-1">Browse placement data across {colleges.length} colleges</p>
+          </div>
+          {selectedA && (
+            <button
+              onClick={() => { setSelectedA(""); setStatsA([]); setRecordsA([]); setExpandedRow(null); setCompanySearch(""); setCategoryFilter("All"); }}
+              className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-theme text-muted hover:text-main hover:border-blue-500 transition"
+            >
+              Change college
+            </button>
+          )}
         </div>
 
         {/* College Selector */}
@@ -179,6 +213,8 @@ export default function CollegeStatsPage() {
               <label className="text-xs text-faint uppercase tracking-widest mb-2 block">Select College</label>
               {loadingColleges ? (
                 <div className="h-10 bg-elevated rounded-lg animate-pulse" />
+              ) : collegesError ? (
+                <p className="text-sm text-red-400 py-2">Unable to load college data. Please try again.</p>
               ) : (
                 <select
                   value={selectedA}
