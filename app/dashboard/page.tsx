@@ -167,11 +167,14 @@ function getDaysToSeason() {
 
 function getProfileStrength(profile: Profile): number {
   let score = 0;
-  if (profile.cgpa > 0) score += 20;
-  if (profile.skills?.length > 0) score += 20;
-  if (profile.hasInternship === "yes") score += 20;
-  if (Number(profile.leetcodeCount) > 0) score += 20;
-  if (Number(profile.projectsCount) > 0) score += 20;
+  if (profile.college) score += 15;
+  if (profile.branch) score += 10;
+  if (profile.cgpa > 0) score += 10;
+  if ((profile.skills?.length ?? 0) >= 3) score += 20;
+  if (Number(profile.projectsCount) >= 1) score += 15;
+  if (profile.hasInternship === "yes") score += 15;
+  if (Number(profile.leetcodeCount) > 0) score += 10;
+  if (profile.targetRole) score += 5;
   return score;
 }
 
@@ -333,6 +336,7 @@ export default function Dashboard() {
   const [companyMatchLoading, setCompanyMatchLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [cardEntered, setCardEntered] = useState(false);
+  const [scoreNonce, setScoreNonce] = useState(0);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -368,6 +372,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!profile?.email) return;
+    const cacheKey = `placeiq_score_${profile.email}`;
+    if (scoreNonce === 0) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+            setLiveScore(data);
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+    }
     let isMounted = true;
     setScoreLoading(true);
     fetch(`${config.apiUrl}/api/placement/probability`, {
@@ -392,11 +409,17 @@ export default function Dashboard() {
       }),
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (!isMounted) return; if (data) setLiveScore(data); })
+      .then((data) => {
+        if (!isMounted) return;
+        if (data) {
+          setLiveScore(data);
+          try { localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() })); } catch { /* ignore */ }
+        }
+      })
       .catch((e) => { if (!isMounted) return; console.error("Dashboard error:", e); })
       .finally(() => { if (isMounted) setScoreLoading(false); });
     return () => { isMounted = false; };
-  }, [profile]);
+  }, [profile, scoreNonce]);
 
   useEffect(() => {
     if (!profile) return;
@@ -423,6 +446,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!profile) return;
+    try {
+      const cached = localStorage.getItem("placeiq_companies");
+      if (cached) {
+        const companies = JSON.parse(cached);
+        if (Array.isArray(companies) && companies.length > 0) {
+          setCompanyCount(companies.length);
+          setCompanyMatches(
+            companies
+              .sort((a: { match_score?: number }, b: { match_score?: number }) => (b.match_score ?? 0) - (a.match_score ?? 0))
+              .slice(0, 3)
+              .map((c: { name: string; type: string }) => ({ name: c.name, type: c.type }))
+          );
+          return;
+        }
+      }
+    } catch { /* ignore */ }
     let isMounted = true;
     setCompanyMatchLoading(true);
     (async () => {
@@ -468,7 +507,7 @@ export default function Dashboard() {
   const daysToSeason = getDaysToSeason();
   const profileStrength = profile ? getProfileStrength(profile) : 0;
 
-  if (status === "loading") return <LoadingScreen />;
+  if (status === "loading" || (status === "authenticated" && profileLoading)) return <LoadingScreen message="Loading your profile..." />;
 
   return (
     <main
@@ -575,8 +614,22 @@ export default function Dashboard() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
             <ScoreRing score={displayScore} loading={profileLoading || scoreLoading} />
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
-                Placement Score
+              <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                  Placement Score
+                </div>
+                {!scoreLoading && (
+                  <button
+                    onClick={() => {
+                      try { localStorage.removeItem(`placeiq_score_${profile?.email}`); } catch { /* ignore */ }
+                      setScoreNonce(n => n + 1);
+                    }}
+                    style={{ fontSize: 10, color: "var(--text-tertiary)", background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px", borderRadius: 4, textDecoration: "underline" }}
+                    title="Clear cached score and fetch fresh"
+                  >
+                    Recalculate
+                  </button>
+                )}
               </div>
               {tierStyle && displayTier && (
                 <span
