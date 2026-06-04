@@ -7341,3 +7341,305 @@ async def starred_check(email: str, company: str):
             {"email": email, "company": company},
         ).fetchone()
     return {"starred": row is not None}
+
+
+# =================================================================
+# PART 2 — ROLE-BASED PERSONALIZATION ENDPOINTS
+# =================================================================
+
+import json as _json_mod
+from role_config import ROLE_CONFIG, TIER_2_FRIENDLY
+from urllib.parse import unquote
+import random as _random_mod
+import hashlib as _hl_mod
+
+
+def _get_role_cfg(role_name: str) -> dict:
+    decoded = unquote(role_name)
+    return ROLE_CONFIG.get(decoded, ROLE_CONFIG["Software Engineer"])
+
+
+@app.get("/api/role/config/{role_name}")
+async def role_config_endpoint(role_name: str):
+    return _get_role_cfg(role_name)
+
+
+@app.get("/api/role/skill-gap")
+async def role_skill_gap(role: str = "Software Engineer", user_skills: str = ""):
+    cfg = ROLE_CONFIG.get(role, ROLE_CONFIG["Software Engineer"])
+    skills_list = [s.strip().lower() for s in user_skills.split(",") if s.strip()] if user_skills else []
+    core = cfg["core_skills"]
+    good = cfg.get("good_to_have", [])
+    has_core = [s for s in core if any(s.lower() in u or u in s.lower() for u in skills_list)]
+    missing_critical = [s for s in core if s not in has_core]
+    missing_good = [s for s in good if not any(s.lower() in u or u in s.lower() for u in skills_list)]
+    has_skills = has_core + [s for s in good if s not in missing_good]
+    match_pct = round((len(has_core) / len(core)) * 100, 1) if core else 0
+    return {
+        "role": role,
+        "missing_critical": missing_critical,
+        "missing_good": missing_good,
+        "has_skills": has_skills,
+        "match_percentage": match_pct,
+        "resources": cfg.get("resources", {}),
+        "core_skills": core,
+        "good_to_have": good,
+    }
+
+
+@app.get("/api/role/roadmap/{role_name}")
+async def role_roadmap(
+    role_name: str,
+    user_skills: str = "",
+    cgpa: float = 0.0,
+    college_tier: int = 2,
+    weeks_to_placement: int = 12,
+):
+    cfg = _get_role_cfg(role_name)
+    role = unquote(role_name)
+    skills_list = [s.strip().lower() for s in user_skills.split(",") if s.strip()] if user_skills else []
+    core = cfg["core_skills"]
+    has_core = [s for s in core if any(s.lower() in u or u in s.lower() for u in skills_list)]
+    match_pct = (len(has_core) / len(core)) * 100 if core else 0
+    if match_pct < 30:
+        focus, focus_text = "skill_building", "Focus heavily on building your core skills before applying."
+    elif match_pct < 70:
+        focus, focus_text = "balanced", "Balanced approach: build skills and work on projects simultaneously."
+    else:
+        focus, focus_text = "projects_and_applications", "You have strong core skills — focus on projects, mock interviews, and applications."
+    weeks = max(4, weeks_to_placement)
+    p1 = min(int(weeks * 0.35), 5)
+    p2 = min(int(weeks * 0.35), 5)
+    cache_key = f"roadmap_{role}_{round(match_pct)}_{cgpa}_{college_tier}_{weeks}"
+    if is_supabase():
+        _sb = get_supabase()
+        try:
+            cached = _sb.table("roadmap_cache").select("content,created_at").eq("cache_key", cache_key).limit(1).execute().data
+            if cached:
+                created = datetime.fromisoformat(cached[0]["created_at"].replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) - created < timedelta(days=7):
+                    return _json_mod.loads(cached[0]["content"])
+        except Exception:
+            pass
+    groq_text = focus_text
+    try:
+        prompt = (
+            f"A student is preparing for {role} roles at Indian companies. "
+            f"CGPA: {cgpa}, Tier: {college_tier}, Weeks: {weeks}. {round(match_pct)}% core skills. "
+            f"{focus_text} Write a 2-sentence personalized roadmap intro."
+        )
+        gc = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+        resp = gc.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "user", "content": prompt}], max_tokens=150)
+        groq_text = resp.choices[0].message.content.strip()
+    except Exception:
+        pass
+    result = {
+        "role": role, "match_percentage": round(match_pct, 1), "focus": focus, "personalized_intro": groq_text,
+        "phase_1": {"weeks": f"Weeks 1-{p1}", "label": "Foundation", "tasks": cfg["roadmap_30"]},
+        "phase_2": {"weeks": f"Weeks {p1+1}-{p1+p2}", "label": "Build", "tasks": cfg["roadmap_60"]},
+        "phase_3": {"weeks": f"Weeks {p1+p2+1}-{weeks}", "label": "Apply", "tasks": cfg["roadmap_90"]},
+        "missing_critical": [s for s in core if s not in has_core],
+        "resources": cfg.get("resources", {}), "top_companies": cfg.get("top_companies", []),
+    }
+    if is_supabase():
+        try:
+            _sb2 = get_supabase()
+            _sb2.table("roadmap_cache").upsert({"cache_key": cache_key, "content": _json_mod.dumps(result), "created_at": datetime.now(timezone.utc).isoformat()}).execute()
+        except Exception:
+            pass
+    return result
+
+
+@app.get("/api/role/daily-problem/{role_name}")
+async def role_daily_problem(role_name: str):
+    cfg = _get_role_cfg(role_name)
+    role = unquote(role_name)
+    tags = cfg.get("daily_problem_tags", ["array"])
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    seed_val = int(_hl_mod.md5(f"{role}{today_str}".encode()).hexdigest(), 16) % (2**31)
+    _random_mod.seed(seed_val)
+    chosen_tag = _random_mod.choice(tags)
+    tag_map = {
+        "array": ("Two Sum", "Easy", "two-sum"),
+        "string": ("Valid Anagram", "Easy", "valid-anagram"),
+        "tree": ("Binary Tree Level Order Traversal", "Medium", "binary-tree-level-order-traversal"),
+        "graph": ("Number of Islands", "Medium", "number-of-islands"),
+        "dp": ("Climbing Stairs", "Easy", "climbing-stairs"),
+        "database": ("Second Highest Salary", "Medium", "second-highest-salary"),
+        "math": ("Reverse Integer", "Medium", "reverse-integer"),
+        "statistics": ("Find Median from Data Stream", "Hard", "find-median-from-data-stream"),
+        "hash-table": ("Group Anagrams", "Medium", "group-anagrams"),
+        "bit-manipulation": ("Single Number", "Easy", "single-number"),
+        "design": ("LRU Cache", "Medium", "lru-cache"),
+        "matrix": ("Spiral Matrix", "Medium", "spiral-matrix"),
+        "simulation": ("Game of Life", "Medium", "game-of-life"),
+        "network": ("Network Delay Time", "Medium", "network-delay-time"),
+    }
+    title, diff, slug = tag_map.get(chosen_tag, ("Two Sum", "Easy", "two-sum"))
+    why_map = {
+        "Software Engineer": "Array problems are the most common in SDE interviews at FAANG and Indian product companies.",
+        "Data Scientist": "SQL and statistics problems directly test data manipulation skills in DS interviews.",
+        "ML Engineer": "Math and matrix problems are core to ML algorithm interviews at AI companies.",
+        "Frontend Developer": "Hash table and string problems test JS fundamentals asked in frontend coding rounds.",
+        "Backend Developer": "Tree and graph traversal is essential for backend coding and system design rounds.",
+        "Full Stack Developer": "Array and string problems are the entry point for full-stack developer coding tests.",
+        "DevOps Engineer": "Graph problems test network topology knowledge relevant for DevOps roles.",
+        "Cloud Engineer": "Graph and design problems map to cloud architecture thinking in cloud interviews.",
+        "Product Manager": "SQL problems are asked in PM technical screening rounds at top product companies.",
+        "Business Analyst": "SQL problems are core to BA technical assessments at consulting and tech firms.",
+        "Cybersecurity Analyst": "Bit manipulation tests low-level thinking critical for security engineering roles.",
+        "Embedded Systems Engineer": "Bit manipulation is directly tested in embedded systems and firmware coding rounds.",
+        "QA Engineer": "Array and string problems form the basis of SDET coding assessments at top companies.",
+        "Research & Development": "DP and graph problems are standard in research engineer interviews at AI labs.",
+    }
+    return {
+        "title": title, "difficulty": diff,
+        "url": f"https://leetcode.com/problems/{slug}/",
+        "tag": chosen_tag,
+        "why_relevant_for_role": why_map.get(role, f"This problem type is frequently tested in {role} interviews."),
+        "date": today_str,
+    }
+
+
+@app.get("/api/role/companies/{role_name}")
+async def role_companies_endpoint(role_name: str, college_tier: int = 2):
+    cfg = _get_role_cfg(role_name)
+    companies = list(cfg.get("top_companies", []))
+    if college_tier == 2:
+        tier1_only = {"Google", "Microsoft"}
+        filtered = [c for c in companies if c not in tier1_only]
+        for t2 in TIER_2_FRIENDLY:
+            if t2 not in filtered:
+                filtered.append(t2)
+        return {"companies": filtered[:12], "college_tier": 2}
+    return {"companies": companies, "college_tier": 1}
+
+
+# --- Tech News ---
+
+_tech_news_cache_store: dict = {"data": [], "fetched_at": None}
+_TECH_NEWS_TTL_HRS = 6
+_TECH_NEWS_SOURCES = [
+    {"url": "https://openai.com/blog/rss.xml", "name": "OpenAI"},
+    {"url": "https://blog.google/technology/ai/rss/", "name": "Google AI"},
+    {"url": "https://blogs.nvidia.com/feed/", "name": "NVIDIA"},
+    {"url": "https://huggingface.co/blog/feed.xml", "name": "HuggingFace"},
+    {"url": "https://github.blog/feed/", "name": "GitHub"},
+    {"url": "https://www.thehindu.com/sci-tech/technology/feeder/default.rss", "name": "The Hindu Tech"},
+    {"url": "https://economictimes.indiatimes.com/tech/rss.cms", "name": "Economic Times Tech"},
+    {"url": "https://indianexpress.com/section/technology/feed/", "name": "Indian Express Tech"},
+]
+
+
+def _parse_rss_feeds() -> list:
+    try:
+        import feedparser
+    except ImportError:
+        return []
+    articles = []
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    for source in _TECH_NEWS_SOURCES:
+        try:
+            feed = feedparser.parse(source["url"])
+            for entry in (feed.entries or [])[:8]:
+                title = getattr(entry, "title", "") or ""
+                link = getattr(entry, "link", "") or ""
+                if not title or not link:
+                    continue
+                pub = None
+                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                    import time as _t_mod
+                    pub = datetime.fromtimestamp(_t_mod.mktime(entry.published_parsed), tz=timezone.utc)
+                if pub and pub < cutoff:
+                    continue
+                articles.append({"title": title, "link": link, "source_name": source["name"], "published_date": pub.isoformat() if pub else None})
+        except Exception:
+            continue
+    seen: set = set()
+    unique = []
+    for a in articles:
+        key = a["title"].lower()[:60]
+        if key not in seen:
+            seen.add(key)
+            unique.append(a)
+    unique.sort(key=lambda x: x["published_date"] or "", reverse=True)
+    return unique[:15]
+
+
+@app.get("/api/market/tech-news")
+async def market_tech_news():
+    global _tech_news_cache_store
+    now = datetime.now(timezone.utc)
+    if _tech_news_cache_store["fetched_at"]:
+        age = (now - _tech_news_cache_store["fetched_at"]).total_seconds() / 3600
+        if age < _TECH_NEWS_TTL_HRS and _tech_news_cache_store["data"]:
+            return {"articles": _tech_news_cache_store["data"], "cached": True, "fetched_at": _tech_news_cache_store["fetched_at"].isoformat()}
+    articles = _parse_rss_feeds()
+    _tech_news_cache_store = {"data": articles, "fetched_at": now}
+    return {"articles": articles, "cached": False, "fetched_at": now.isoformat()}
+
+
+# --- Aptitude Question of the Day ---
+
+_aptitude_question_cache: dict = {}
+
+
+@app.get("/api/role/aptitude-question/{role_name}")
+async def role_aptitude_question(role_name: str):
+    cfg = _get_role_cfg(role_name)
+    role = unquote(role_name)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    cache_key = f"aptitude_{role}_{today_str}"
+    if cache_key in _aptitude_question_cache:
+        return _aptitude_question_cache[cache_key]
+    if is_supabase():
+        _sb = get_supabase()
+        try:
+            rows = _sb.table("role_aptitude_cache").select("content").eq("cache_key", cache_key).limit(1).execute().data
+            if rows:
+                result = _json_mod.loads(rows[0]["content"])
+                _aptitude_question_cache[cache_key] = result
+                return result
+        except Exception:
+            pass
+    apt_topics = cfg.get("aptitude_focus", ["Logical Reasoning"])
+    seed_val = int(_hl_mod.md5(cache_key.encode()).hexdigest(), 16) % (2**31)
+    _random_mod.seed(seed_val)
+    topic = _random_mod.choice(apt_topics)
+    question_data = {
+        "question": "A train travels 120 km in 2 hours. What is its speed in m/s?",
+        "options": ["A. 16.67 m/s", "B. 33.33 m/s", "C. 60 m/s", "D. 120 m/s"],
+        "correct": "A", "topic": topic, "role": role,
+        "explanation": "Speed = 60 km/h = 60 x (5/18) = 16.67 m/s. Multiply km/h by 5/18 to get m/s.",
+    }
+    try:
+        prompt = (
+            f"Generate 1 aptitude MCQ for a student preparing for {role} interviews. "
+            f"Topic: {topic}. "
+            f"Return ONLY valid JSON with keys: question, options (array of 4 strings starting A. B. C. D.), correct (one letter), explanation (2 sentences). No markdown."
+        )
+        gc = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+        resp = gc.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "user", "content": prompt}], max_tokens=300)
+        raw = re.sub(r"```json|```", "", resp.choices[0].message.content.strip()).strip()
+        parsed = _json_mod.loads(raw)
+        question_data = {
+            "question": parsed.get("question", question_data["question"]),
+            "options": parsed.get("options", question_data["options"]),
+            "correct": parsed.get("correct", question_data["correct"]),
+            "explanation": parsed.get("explanation", question_data["explanation"]),
+            "topic": topic, "role": role,
+        }
+    except Exception:
+        pass
+    _aptitude_question_cache[cache_key] = question_data
+    if is_supabase():
+        _sb2 = get_supabase()
+        try:
+            _sb2.table("role_aptitude_cache").upsert({
+                "cache_key": cache_key,
+                "content": _json_mod.dumps(question_data),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception:
+            pass
+    return question_data

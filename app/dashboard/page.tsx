@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Zap, Building2, Map as MapIcon, Globe, GraduationCap, Briefcase,
   Users, ClipboardList, TrendingUp, FileText, FileSearch,
-  BookOpen, BarChart2, Database, School, Star,
+  BookOpen, BarChart2, Database, School, Star, Calendar, Flame,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import config from "@/lib/config";
@@ -116,6 +116,7 @@ const FEATURE_GROUPS: FeatureGroup[] = [
   {
     label: "Track & Prepare",
     features: [
+      { path: "/daily", name: "Daily Prep", Icon: Calendar, description: "Your daily problem, checklist, tech news, and aptitude question — all in one place." },
       { path: "/tracker", name: "Application Tracker", Icon: ClipboardList, description: "Track every company through: Saved, Applied, Interview, Offer, Rejected." },
       { path: "/progress", name: "Progress Tracker", Icon: TrendingUp, description: "Track which skills you have learned. Watch your placement score improve." },
       { path: "/pyq", name: "Previous Year Questions", Icon: FileText, description: "Interview questions by company and round — Aptitude, Coding, Technical, HR." },
@@ -337,6 +338,7 @@ export default function Dashboard() {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [cardEntered, setCardEntered] = useState(false);
   const [scoreNonce, setScoreNonce] = useState(0);
+  const [prepStreak, setPrepStreak] = useState(0);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -501,6 +503,25 @@ export default function Dashboard() {
     return () => cancelAnimationFrame(timer);
   }, []);
 
+  // Load prep streak from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("placeiq_daily_solved");
+      if (!raw) return;
+      const data: Record<string, string> = JSON.parse(raw);
+      let streak = 0;
+      const today = new Date();
+      for (let i = 0; i < 365; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        if (data[key]) streak++;
+        else break;
+      }
+      setPrepStreak(streak);
+    } catch {}
+  }, []);
+
   const displayScore = liveScore?.nirf_stats?.score_breakdown?.final_score ?? liveScore?.score ?? profile?.placementScore;
   const displayTier = liveScore?.college_tier ?? profile?.collegeTier;
   const tierStyle = displayTier ? TIER_STYLES[displayTier] : null;
@@ -582,6 +603,58 @@ export default function Dashboard() {
             >
               {getHourGreeting()}, {session?.user?.name?.split(" ")?.[0] ?? "there"}
             </h1>
+
+            {/* Prep streak indicator */}
+            {prepStreak > 0 ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  marginBottom: 6,
+                  padding: "3px 10px",
+                  background: "rgba(249,115,22,0.08)",
+                  border: "1px solid rgba(249,115,22,0.2)",
+                  borderRadius: 20,
+                }}
+              >
+                <Flame size={13} style={{ color: "#f97316", flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "#f97316", fontFamily: "var(--font-sans)", fontWeight: 500 }}>
+                  {prepStreak} day prep streak
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => router.push("/daily")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  marginBottom: 6,
+                  padding: "3px 10px",
+                  background: "transparent",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 20,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "var(--text-tertiary)",
+                  fontFamily: "var(--font-sans)",
+                  transition: "color 150ms ease, border-color 150ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "var(--text-primary)";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-default)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "var(--text-tertiary)";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-subtle)";
+                }}
+              >
+                <Flame size={12} />
+                Start your streak today →
+              </button>
+            )}
+
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>
               {profile
                 ? `${profile.college} · ${profile.branch} · ${getGraduationYear(profile.year ?? "")}`

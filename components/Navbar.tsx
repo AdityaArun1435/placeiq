@@ -1,12 +1,13 @@
 "use client";
 
+import React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Calendar } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 
-const NAV_LINKS = [
+const NAV_LINKS: { label: string; path: string; icon?: React.ReactNode }[] = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Skills", path: "/skills" },
   { label: "Companies", path: "/companies" },
@@ -21,6 +22,7 @@ const NAV_LINKS = [
   { label: "Referral", path: "/referral" },
   { label: "Starred", path: "/starred" },
   { label: "Progress", path: "/progress" },
+  { label: "Daily Prep", path: "/daily", icon: <Calendar size={12} /> },
   { label: "Resources", path: "/resources" },
   { label: "Company Directory", path: "/company-directory" },
   { label: "College Stats", path: "/college-stats" },
@@ -139,6 +141,9 @@ export default function Navbar() {
                   transition: `color var(--duration-fast) var(--ease-out)`,
                   whiteSpace: "nowrap",
                   borderRadius: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "var(--text-primary)";
@@ -147,6 +152,7 @@ export default function Navbar() {
                   if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "var(--text-secondary)";
                 }}
               >
+                {link.icon}
                 {link.label}
                 {isActive && <span className="nav-underline" />}
               </button>

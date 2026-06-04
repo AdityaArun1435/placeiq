@@ -463,10 +463,20 @@ export default function Internships() {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
 
+  const [internshipKeywords, setInternshipKeywords] = useState<string[]>([]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("placeiq_profile");
-      if (raw) setProfile(JSON.parse(raw));
+      if (raw) {
+        const p = JSON.parse(raw);
+        setProfile(p);
+        const targetRole = p.targetRole || "Software Engineer";
+        fetch(`${config.apiUrl}/api/role/config/${encodeURIComponent(targetRole)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => { if (data?.internship_keywords) setInternshipKeywords(data.internship_keywords); })
+          .catch(() => {});
+      }
     } catch {}
     // Restore cached listings immediately so they show while re-fetching
     try {
@@ -648,10 +658,20 @@ export default function Internships() {
   return (
     <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
-        <h2 className="text-3xl font-bold mb-1">Internships</h2>
-        <p className="text-muted mb-8">
+        <h2 className="text-3xl font-bold mb-1">
+          {profile?.targetRole ? `Internships for ${profile.targetRole}` : "Internships"}
+        </h2>
+        <p className="text-muted mb-3">
           Live listings · AI strategy · Major programs — all in one place
         </p>
+        {internshipKeywords.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            <span className="text-xs text-faint">Role keywords:</span>
+            {internshipKeywords.slice(0, 4).map(kw => (
+              <span key={kw} className="text-xs px-2.5 py-1 rounded-full border border-theme text-muted">{kw}</span>
+            ))}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-2 mb-8 border-b border-theme pb-0">

@@ -549,27 +549,52 @@ export default function MarketPage() {
             )}
 
             {/* Hottest Roles Right Now */}
-            {(insights?.hot_roles ?? []).length > 0 && (
-              <section>
-                <h3 className="text-xl font-semibold mb-1">Hottest Roles Right Now</h3>
-                <p className="text-faint text-sm mb-4">
-                  Job roles getting the most coverage in hiring news this week
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {(insights?.hot_roles ?? []).slice(0, 8).map(r => (
-                    <div
-                      key={r.role}
-                      className="bg-surface border border-theme rounded-2xl p-5"
-                    >
-                      <p className="font-semibold text-main mb-1 text-sm">{r.role}</p>
-                      <p className="text-xs text-faint">
-                        {r.article_count} mention{r.article_count !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {(() => {
+              const FALLBACK_ROLES = [
+                { role: "ML Engineer", avg_salary: "15-28 LPA", demand: "Very High", why: "Generative AI adoption is driving massive demand across all sectors" },
+                { role: "Software Engineer", avg_salary: "12-20 LPA", demand: "Very High", why: "Core engineering demand at startups and MNCs remains highest in India" },
+                { role: "Data Scientist", avg_salary: "10-18 LPA", demand: "High", why: "Data-driven decisions are core to every Indian startup and enterprise" },
+                { role: "Backend Developer", avg_salary: "10-20 LPA", demand: "Very High", why: "India's fintech and SaaS boom is driving non-stop backend hiring" },
+                { role: "DevOps Engineer", avg_salary: "10-22 LPA", demand: "High", why: "Cloud migration across Indian enterprises is creating strong DevOps demand" },
+                { role: "Product Manager", avg_salary: "14-25 LPA", demand: "High", why: "Product-led growth companies are aggressively hiring APMs from top colleges" },
+              ];
+              const DEMAND_STYLE: Record<string, string> = {
+                "Very High": "bg-green-500/15 text-green-400 border-green-500/30",
+                "High": "bg-blue-500/15 text-blue-400 border-blue-500/30",
+                "Medium": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+              };
+              const marketRoles = topRolesData?.market_roles ?? [];
+              const displayRoles = marketRoles.length > 0
+                ? marketRoles.slice(0, 6).map(r => ({
+                    role: r.role_name,
+                    avg_salary: r.avg_salary_lpa ? `${r.avg_salary_lpa} LPA` : "Market rate",
+                    demand: r.demand_level >= 70 ? "Very High" : r.demand_level >= 40 ? "High" : "Medium",
+                    why: `Demand score: ${r.demand_level}/100 · YoY growth: ${r.yoy_growth_percent > 0 ? "+" : ""}${r.yoy_growth_percent}%`,
+                  }))
+                : FALLBACK_ROLES;
+              return (
+                <section>
+                  <h3 className="text-xl font-semibold mb-1">Hottest Roles Right Now</h3>
+                  <p className="text-faint text-sm mb-4">
+                    Most in-demand roles in India&apos;s tech job market — with avg salaries and demand indicators
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {displayRoles.map((r, i) => (
+                      <div key={i} className="bg-surface border border-theme rounded-2xl p-5">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="font-bold text-main text-sm leading-snug">{r.role}</p>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${DEMAND_STYLE[r.demand] ?? DEMAND_STYLE["Medium"]}`}>
+                            {r.demand}
+                          </span>
+                        </div>
+                        <p className="text-xs text-green-400 font-medium mb-2">{r.avg_salary}</p>
+                        <p className="text-xs text-faint leading-relaxed">{r.why}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Companies Actively Hiring */}
             {(insights?.hiring_companies ?? []).length > 0 && (

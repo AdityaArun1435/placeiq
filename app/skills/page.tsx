@@ -244,6 +244,17 @@ function sortItems(items: SkillItem[]): SkillItem[] {
   });
 }
 
+type RoleGap = {
+  role: string;
+  missing_critical: string[];
+  missing_good: string[];
+  has_skills: string[];
+  match_percentage: number;
+  resources: Record<string, string>;
+  core_skills: string[];
+  good_to_have: string[];
+};
+
 export default function SkillGap() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -254,6 +265,9 @@ export default function SkillGap() {
   const [result, setResult] = useState<SkillGapResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [roleGap, setRoleGap] = useState<RoleGap | null>(null);
+  const [roleGapLoading, setRoleGapLoading] = useState(false);
 
   const [trendingSkills, setTrendingSkills] = useState<TrendingSkill[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
@@ -290,6 +304,15 @@ export default function SkillGap() {
     if (profile && !hasFetched.current) {
       hasFetched.current = true;
       analyse(profile);
+      // Fetch role-based skill gap
+      const role = profile.targetRole || "Software Engineer";
+      const skillsJoined = (profile.skills || []).join(",");
+      setRoleGapLoading(true);
+      fetch(`${config.apiUrl}/api/role/skill-gap?role=${encodeURIComponent(role)}&user_skills=${encodeURIComponent(skillsJoined)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setRoleGap(data); })
+        .catch(() => {})
+        .finally(() => setRoleGapLoading(false));
     }
   }, [profile]);
 
@@ -420,6 +443,91 @@ export default function SkillGap() {
             </div>
           )}
         </section>
+
+        <div className="border-t border-theme mb-10" />
+
+        {/* Role-Based Skill Gap Section */}
+        {(roleGap || roleGapLoading) && (
+          <section className="mb-10">
+            <h2 className="text-2xl font-bold mb-1">
+              Skill Gap for {profile?.targetRole || "Software Engineer"}
+            </h2>
+            <p className="text-faint text-sm mb-4">Based on what companies actually require for this role.</p>
+
+            {roleGapLoading && (
+              <div className="flex items-center gap-3 py-6">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-muted text-sm">Loading role requirements...</span>
+              </div>
+            )}
+
+            {roleGap && !roleGapLoading && (
+              <div className="space-y-5">
+                {/* Match percentage bar */}
+                <div className="bg-surface border border-theme rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-main">Core Skill Match</span>
+                    <span className="text-sm font-bold" style={{ color: roleGap.match_percentage >= 70 ? "var(--accent-green)" : roleGap.match_percentage >= 30 ? "var(--accent-amber)" : "#ef4444" }}>
+                      {roleGap.match_percentage}%
+                    </span>
+                  </div>
+                  <div style={{ height: 8, background: "var(--border-default)", borderRadius: 9999, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 9999,
+                      width: `${roleGap.match_percentage}%`,
+                      background: roleGap.match_percentage >= 70 ? "var(--accent-green)" : roleGap.match_percentage >= 30 ? "var(--accent-amber)" : "#ef4444",
+                      transition: "width 0.8s ease-out",
+                    }} />
+                  </div>
+                  <p className="text-xs text-faint mt-2">{roleGap.has_skills.length} of {roleGap.core_skills.length} core skills matched</p>
+                </div>
+
+                {/* Missing Critical */}
+                {roleGap.missing_critical.length > 0 && (
+                  <div className="bg-surface border border-theme rounded-xl p-5">
+                    <h4 className="text-sm font-semibold mb-3" style={{ color: "#ef4444" }}>Must Learn — Core Requirements</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {roleGap.missing_critical.map(skill => (
+                        <span key={skill} className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>
+                          Must Learn: {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Missing Good to Have */}
+                {roleGap.missing_good.length > 0 && (
+                  <div className="bg-surface border border-theme rounded-xl p-5">
+                    <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--accent-amber)" }}>Good to Have — Get an Edge</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {roleGap.missing_good.map(skill => (
+                        <span key={skill} className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: "rgba(245,158,11,0.1)", color: "var(--accent-amber)", border: "1px solid rgba(245,158,11,0.3)" }}>
+                          Good to Have: {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Role Resources */}
+                {Object.keys(roleGap.resources).length > 0 && (
+                  <div className="bg-surface border border-theme rounded-xl p-5">
+                    <h4 className="text-sm font-semibold mb-3 text-main">Curated Resources for {profile?.targetRole || "your role"}</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(roleGap.resources).map(([key, url]) => (
+                        <a key={key} href={url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs px-3 py-1.5 rounded-lg border border-theme text-muted hover:text-main hover:border-gray-500 transition capitalize">
+                          {key.replace(/_/g, " ")} →
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="border-t border-theme mb-10" />
 

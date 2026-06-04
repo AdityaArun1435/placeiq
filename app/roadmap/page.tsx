@@ -139,6 +139,9 @@ export default function RoadmapPage() {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [error, setError] = useState("");
+
+  type RoleRoadmap = { role: string; match_percentage: number; personalized_intro: string; phase_1: { weeks: string; label: string; tasks: string[] }; phase_2: { weeks: string; label: string; tasks: string[] }; phase_3: { weeks: string; label: string; tasks: string[] }; missing_critical: string[] };
+  const [roleRoadmap, setRoleRoadmap] = useState<RoleRoadmap | null>(null);
   const [collegeSalary, setCollegeSalary] = useState<CollegeSalaryData | null>(null);
 
   // Chat state
@@ -183,6 +186,14 @@ export default function RoadmapPage() {
     if (profile && !hasFetched.current) {
       hasFetched.current = true;
       generate(profile);
+      // Fetch role-specific roadmap
+      const role = profile.targetRole || "Software Engineer";
+      const skillsJoined = (profile.skills || []).join(",");
+      const tierNum = profile.collegeTier?.includes("1") ? 1 : 2;
+      fetch(`${config.apiUrl}/api/role/roadmap/${encodeURIComponent(role)}?user_skills=${encodeURIComponent(skillsJoined)}&cgpa=${profile.cgpa}&college_tier=${tierNum}&weeks_to_placement=12`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setRoleRoadmap(data); })
+        .catch(() => {});
     }
     if (profile?.college) {
       fetch(`${config.apiUrl}/api/placement/sources?college=${encodeURIComponent(profile.college)}`)
@@ -476,6 +487,32 @@ export default function RoadmapPage() {
                 <span className="text-xs text-faint bg-elevated px-2.5 py-1 rounded-full shrink-0">
                   {collegeSalary.sources_count} source{collegeSalary.sources_count !== 1 ? "s" : ""}
                 </span>
+              </div>
+            )}
+
+            {/* Role-specific roadmap milestones */}
+            {roleRoadmap && (
+              <div className="bg-surface border border-theme rounded-2xl p-5">
+                <p className="text-xs text-faint uppercase tracking-widest mb-3">Role-Specific Plan · {roleRoadmap.role}</p>
+                {roleRoadmap.personalized_intro && (
+                  <p className="text-sm text-muted leading-relaxed mb-4 italic">{roleRoadmap.personalized_intro}</p>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[roleRoadmap.phase_1, roleRoadmap.phase_2, roleRoadmap.phase_3].map((phase, i) => (
+                    <div key={i} className="bg-primary-bg border border-theme rounded-xl p-4">
+                      <p className={`text-xs font-semibold uppercase tracking-widest mb-2 ${["text-blue-400", "text-purple-400", "text-green-400"][i]}`}>
+                        {phase.label} · {phase.weeks}
+                      </p>
+                      <ul className="space-y-1.5">
+                        {phase.tasks.map((t, j) => (
+                          <li key={j} className="text-xs text-muted flex gap-2">
+                            <span className="text-faint mt-0.5">·</span><span>{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

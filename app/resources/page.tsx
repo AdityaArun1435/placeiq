@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import LoadingScreen from '@/components/LoadingScreen'
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Zap, Play, GraduationCap, BookOpen, Building2, Settings2, FileText, Mic, type LucideIcon } from "lucide-react";
 
 type Resource = { label: string; url: string; desc: string };
@@ -98,10 +98,31 @@ const SECTIONS: Section[] = [
 export default function Resources() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [targetRole, setTargetRole] = useState("Software Engineer");
+  const [roleResources, setRoleResources] = useState<Record<string, string>>({});
+  const [roleResourcesLoading, setRoleResourcesLoading] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("placeiq_profile");
+      if (raw) {
+        const p = JSON.parse(raw);
+        const role = p.targetRole || "Software Engineer";
+        setTargetRole(role);
+        setRoleResourcesLoading(true);
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://placeiq-backend-e7ik.onrender.com";
+        fetch(`${apiUrl}/api/role/config/${encodeURIComponent(role)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => { if (data?.resources) setRoleResources(data.resources); })
+          .catch(() => {})
+          .finally(() => setRoleResourcesLoading(false));
+      }
+    } catch {}
+  }, []);
 
   if (status === "loading") return <LoadingScreen />;
 
@@ -109,7 +130,31 @@ export default function Resources() {
     <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-6xl mx-auto px-8 py-10">
         <h2 className="text-3xl font-bold mb-2">Placement Resources</h2>
-        <p className="text-muted mb-10">Curated free resources trusted by placed students across India</p>
+        <p className="text-muted mb-6">Curated free resources trusted by placed students across India</p>
+
+        {/* Curated for your role */}
+        {(Object.keys(roleResources).length > 0 || roleResourcesLoading) && (
+          <div className="bg-surface border border-theme rounded-2xl p-5 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold uppercase tracking-widest text-blue-400">Curated for {targetRole}</span>
+            </div>
+            {roleResourcesLoading ? (
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-muted text-sm">Loading role resources...</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(roleResources).map(([key, url]) => (
+                  <a key={key} href={url} target="_blank" rel="noopener noreferrer"
+                    className="text-sm px-4 py-2 rounded-lg border border-theme text-muted hover:text-main hover:border-gray-500 transition capitalize bg-primary-bg">
+                    {key.replace(/_/g, " ")} →
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-10">
           {SECTIONS.map(section => (

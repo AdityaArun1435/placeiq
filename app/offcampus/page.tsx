@@ -139,13 +139,21 @@ export default function OffCampus() {
     if (status === "unauthenticated") router.push("/login");
   }, [status]);
 
+  const [roleKeywords, setRoleKeywords] = useState<string[]>([]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("placeiq_profile");
       if (raw) {
         const p = JSON.parse(raw);
         setProfile(p);
-        setRole(p.targetRole || "");
+        const targetRole = p.targetRole || "Software Engineer";
+        setRole(targetRole);
+        // Fetch role keywords from config
+        fetch(`${config.apiUrl}/api/role/config/${encodeURIComponent(targetRole)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => { if (data?.job_keywords) setRoleKeywords(data.job_keywords); })
+          .catch(() => {});
       }
     } catch {}
   }, []);
@@ -326,11 +334,24 @@ export default function OffCampus() {
   return (
     <main className="min-h-screen bg-primary-bg text-main">
       <div className="max-w-5xl mx-auto px-8 py-10">
-        <h2 className="text-3xl font-bold mb-2">Off Campus Jobs</h2>
-        <p className="text-muted mb-8">
+        <h2 className="text-3xl font-bold mb-2">
+          {profile?.targetRole ? `Jobs matched for ${profile.targetRole}` : "Off Campus Jobs"}
+        </h2>
+        <p className="text-muted mb-3">
           Live jobs from Adzuna · Remotive · Arbeitnow · The Muse · Jobicy — sorted by company quality & relevance
           {profile?.skills?.length ? ` (${profile.skills.length} skills)` : ""}
         </p>
+        {roleKeywords.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            <span className="text-xs text-faint">Search by:</span>
+            {roleKeywords.slice(0, 5).map(kw => (
+              <button key={kw} onClick={() => setRole(kw)}
+                className="text-xs px-2.5 py-1 rounded-full border border-theme text-muted hover:text-main hover:border-gray-500 transition">
+                {kw}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Search form */}
         <div className="bg-surface border border-theme rounded-2xl p-6 mb-8">
